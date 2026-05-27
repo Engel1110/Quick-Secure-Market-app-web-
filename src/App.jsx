@@ -9,6 +9,8 @@ import {
   PackageCheck,
   Search,
   Bell,
+  Star,
+  BarChart3,
   Eye,
   X,
   MessageCircle,
@@ -122,18 +124,23 @@ export default function App() {
 
   const nav = [
     ["inicio", "Inicio", Home],
+    ["dashboard", "Dashboard", UserCheck],
     ["catalogo", "Catálogo", Grid3X3],
     ["seguridad", "Seguridad", ShieldCheck],
     ["almacen", "Almacén QSM", Warehouse],
     ["funciona", "Cómo funciona", HelpCircle],
     ["perfiles", "Perfiles", Users],
     ["seguimiento", "Seguimiento", PackageCheck],
+    ["disputas", "Disputas", ShieldCheck],
+    ["producto", "Producto", PackageCheck],
     ["admin", "Admin", ShieldCheck],
   ];
 
   return (
     <div className="min-h-screen bg-[#050b18] text-white">
       <div className="fixed inset-0 -z-10 bg-[radial-gradient(circle_at_20%_20%,rgba(37,99,235,.25),transparent_35%),radial-gradient(circle_at_80%_40%,rgba(14,165,233,.15),transparent_35%)]" />
+      <div className="fixed left-10 top-32 -z-10 h-56 w-56 animate-pulse rounded-full bg-cyan-400/10 blur-3xl" />
+      <div className="fixed bottom-10 right-10 -z-10 h-72 w-72 animate-pulse rounded-full bg-purple-500/10 blur-3xl" />
 
       <header className="sticky top-0 z-50 border-b border-white/10 bg-[#050b18]/90 backdrop-blur-xl">
         <div className="mx-auto flex max-w-[1500px] items-center justify-between px-6 py-4">
@@ -218,6 +225,9 @@ export default function App() {
           </div>
         </section>}
 
+        {/* DASHBOARD */}
+        {screen === "dashboard" && <DashboardModes userMode={userMode} setUserMode={setUserMode} />}
+
         {/* CATALOGO */}
         {screen === "catalogo" && <section><SectionTitle title="Catálogo de productos" subtitle="Cada categoría tiene productos de prueba, fotos, precio y estado certificado." /><div className="grid gap-6 lg:grid-cols-3">{catalog.map(group => <Card key={group.name} className="p-6"><div className="mb-5 flex items-center justify-between"><div className="flex items-center gap-3"><group.icon className="text-cyan-300"/><h3 className="text-2xl font-black">{group.name}</h3></div><span className="text-xs text-cyan-300">Ver todo →</span></div><div className="grid grid-cols-2 gap-3">{group.items.map(item => <ProductCard key={item[0]} item={item}/>)}</div></Card>)}</div></section>}
 
@@ -235,6 +245,12 @@ export default function App() {
 
         {/* SEGUIMIENTO */}
         {screen === "seguimiento" && <TrackingBlock />}
+
+        {/* DISPUTAS */}
+        {screen === "disputas" && <DisputesBlock />}
+
+        {/* PRODUCTO COMPLETO */}
+        {screen === "producto" && <ProductDetailBlock />}
 
         {/* PANEL ADMIN */}
         {screen === "admin" && <AdminPanel />}
@@ -378,6 +394,79 @@ function AIWidget({ onClose }) {
         </div>
       </Card>
     </div>
+  );
+}
+
+function DashboardModes({ userMode, setUserMode }) {
+  const buyer = ["Pedidos activos", "Historial de compras", "Productos favoritos", "Tracking live", "Disputas", "Nivel de confianza"];
+  const seller = ["Productos publicados", "Ventas completadas", "Dinero retenido/liberado", "Reputación", "Productos en revisión", "Analytics simples"];
+  const data = userMode === "comprador" ? buyer : seller;
+  return (
+    <section>
+      <SectionTitle title="Dashboard comprador y vendedor" subtitle="La plataforma cambia la experiencia según el rol del usuario, pero mantiene el mismo régimen de seguridad para todos." />
+      <div className="mb-6 flex gap-3">
+        <Button onClick={() => setUserMode("comprador")} variant={userMode === "comprador" ? "default" : "outline"}>Modo comprador</Button>
+        <Button onClick={() => setUserMode("vendedor")} variant={userMode === "vendedor" ? "default" : "outline"}>Modo vendedor</Button>
+      </div>
+      <div className="grid gap-6 lg:grid-cols-[1fr_.8fr]">
+        <Card className="p-8">
+          <h3 className="text-3xl font-black">Vista de {userMode}</h3>
+          <div className="mt-6 grid gap-4 md:grid-cols-2">
+            {data.map((item, i) => (
+              <div key={item} className="rounded-2xl border border-white/10 bg-white/5 p-5 transition hover:-translate-y-1 hover:border-cyan-300/40">
+                <p className="text-sm text-cyan-300">Módulo {i + 1}</p>
+                <h4 className="mt-2 text-xl font-black">{item}</h4>
+              </div>
+            ))}
+          </div>
+        </Card>
+        <Card className="p-8">
+          <h3 className="text-2xl font-black">Reputación avanzada</h3>
+          <div className="mt-6 space-y-4">
+            {["⭐ 4.9 vendedor premium", "🟢 Muy confiable", "🛡️ 100 ventas verificadas", "🏆 Top Seller RD"].map(x => <div key={x} className="rounded-2xl bg-white/5 p-4 text-slate-200">{x}</div>)}
+          </div>
+          <div className="mt-6 rounded-[2rem] bg-emerald-500/10 p-6">
+            <p className="text-sm text-emerald-300">Nivel de confianza</p>
+            <p className="mt-2 text-5xl font-black">97%</p>
+            <div className="mt-4 h-3 overflow-hidden rounded-full bg-white/10"><div className="h-full w-[97%] animate-pulse rounded-full bg-emerald-400" /></div>
+          </div>
+        </Card>
+      </div>
+    </section>
+  );
+}
+
+function ProductDetailBlock() {
+  return (
+    <section>
+      <SectionTitle title="Página completa del producto" subtitle="Vista profesional con imágenes, descripción, estado, certificación QSM, QR, vendedor, score IA e historial." />
+      <div className="grid gap-8 lg:grid-cols-[.9fr_1.1fr]">
+        <Card className="overflow-hidden"><img src={catalog[0].items[0][2]} className="h-[420px] w-full object-cover" /></Card>
+        <Card className="p-8">
+          <div className="flex items-start justify-between gap-4"><div><h3 className="text-4xl font-black">iPhone 13 Pro</h3><p className="mt-2 text-slate-300">128GB · Sierra Blue · Usado en buen estado · Certificado</p></div><span className="rounded-full bg-emerald-500/20 px-4 py-2 text-sm font-black text-emerald-300">QSM VERIFIED</span></div>
+          <p className="mt-6 text-4xl font-black">RD$ 45,000</p>
+          <div className="mt-6 grid gap-4 md:grid-cols-3">
+            <div className="rounded-2xl bg-white/5 p-4"><p className="text-xs text-slate-400">Score IA</p><p className="text-2xl font-black text-emerald-300">92%</p></div>
+            <div className="rounded-2xl bg-white/5 p-4"><p className="text-xs text-slate-400">Riesgo</p><p className="text-2xl font-black text-emerald-300">Bajo</p></div>
+            <div className="rounded-2xl bg-white/5 p-4"><p className="text-xs text-slate-400">Código</p><p className="text-2xl font-black text-cyan-300">QSM-8842</p></div>
+          </div>
+          <div className="mt-6 rounded-2xl border border-white/10 bg-white/5 p-5"><h4 className="font-black">Historial de propiedad</h4><p className="mt-2 text-sm text-slate-300">Usuario A → QuickSecure Warehouse → Juan Pérez</p></div>
+          <div className="mt-6 grid gap-4 md:grid-cols-[1fr_auto]"><Button>Comprar con pago protegido</Button><Button variant="outline">Ver QR certificado</Button></div>
+        </Card>
+      </div>
+    </section>
+  );
+}
+
+function DisputesBlock() {
+  return (
+    <section>
+      <SectionTitle title="Sistema de disputas y escrow" subtitle="El dinero queda retenido hasta que el comprador confirma el producto con PIN. Si hay problema, el caso pasa a revisión." />
+      <div className="grid gap-6 md:grid-cols-4">
+        {["Producto no coincide", "Producto llegó dañado", "PIN incorrecto", "Entrega incompleta"].map(x => <Card key={x} className="p-6"><ShieldCheck className="text-amber-300"/><h3 className="mt-4 text-xl font-black">{x}</h3><p className="mt-2 text-sm text-slate-300">Pago retenido hasta revisión administrativa.</p></Card>)}
+      </div>
+      <Card className="mt-8 p-8"><h3 className="text-3xl font-black">Flujo escrow</h3><div className="mt-6 grid gap-4 md:grid-cols-7">{["Paga", "Dinero congelado", "Vendedor entrega", "QSM certifica", "Comprador recibe", "PIN correcto", "Pago liberado"].map((x,i)=><div key={x} className="rounded-2xl bg-white/5 p-4 text-center"><span className="text-cyan-300">{i+1}</span><p className="mt-2 text-sm font-bold">{x}</p></div>)}</div></Card>
+    </section>
   );
 }
 
