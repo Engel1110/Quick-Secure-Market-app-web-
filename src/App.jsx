@@ -326,25 +326,63 @@ function AuthModal({ mode, setMode, onClose }) {
           <button onClick={() => setMode("register")} className={`rounded-xl py-3 text-sm font-bold ${isRegister ? "bg-blue-600" : "text-slate-300"}`}>Registrarse</button>
         </div>
         {isRegister ? (
-          <div className="mt-6 grid gap-4 md:grid-cols-2">
-            <input className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 outline-none focus:border-blue-400" placeholder="Nombre real *" />
-            <input className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 outline-none focus:border-blue-400" placeholder="Apellido real *" />
-            <input className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 outline-none focus:border-blue-400" placeholder="Correo electrónico *" />
-            <input className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 outline-none focus:border-blue-400" placeholder="Teléfono *" />
-            <input className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 outline-none focus:border-blue-400" placeholder="Cédula de identidad *" />
-            <input className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 outline-none focus:border-blue-400" placeholder="Provincia / ubicación *" />
-            <div className="rounded-2xl border border-dashed border-cyan-300/30 bg-cyan-400/5 p-4 md:col-span-2">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="font-black">Foto de perfil obligatoria *</p>
-                  <p className="mt-1 text-sm text-slate-300">Debe coincidir con la selfie y el documento para activar la cuenta.</p>
-                </div>
-                <Button>Seleccionar foto</Button>
+          <div className="mt-6 space-y-5">
+            <div className="rounded-2xl border border-cyan-300/20 bg-cyan-400/5 p-4">
+              <p className="font-black text-cyan-200">Registro seguro obligatorio</p>
+              <p className="mt-1 text-sm leading-6 text-slate-300">
+                Todos los usuarios pueden comprar y vender, pero deben completar la validación de identidad antes de publicar, comprar o recibir pagos.
+              </p>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <input className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 outline-none focus:border-blue-400" placeholder="Nombre real *" />
+              <input className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 outline-none focus:border-blue-400" placeholder="Apellido real *" />
+              <input className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 outline-none focus:border-blue-400" placeholder="Correo electrónico *" />
+              <input className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 outline-none focus:border-blue-400" placeholder="Teléfono *" />
+              <input className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 outline-none focus:border-blue-400" placeholder="Cédula de identidad *" />
+              <input className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 outline-none focus:border-blue-400" placeholder="Provincia / ubicación *" />
+              <select className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 outline-none focus:border-blue-400">
+                <option>Género *</option>
+                <option>Masculino</option>
+                <option>Femenino</option>
+                <option>Prefiero no decirlo</option>
+              </select>
+              <input className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 outline-none focus:border-blue-400" placeholder="Dirección de referencia *" />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="rounded-2xl border border-dashed border-cyan-300/30 bg-cyan-400/5 p-4">
+                <p className="font-black">Documento frontal *</p>
+                <p className="mt-1 text-sm text-slate-300">Foto clara de la cédula o ID por delante.</p>
+                <Button className="mt-4" variant="outline">Subir frontal</Button>
+              </div>
+              <div className="rounded-2xl border border-dashed border-cyan-300/30 bg-cyan-400/5 p-4">
+                <p className="font-black">Documento trasero *</p>
+                <p className="mt-1 text-sm text-slate-300">Foto clara de la cédula o ID por detrás.</p>
+                <Button className="mt-4" variant="outline">Subir trasero</Button>
+              </div>
+              <div className="rounded-2xl border border-dashed border-cyan-300/30 bg-cyan-400/5 p-4">
+                <p className="font-black">Selfie de validación *</p>
+                <p className="mt-1 text-sm text-slate-300">Debe coincidir con el documento registrado.</p>
+                <Button className="mt-4" variant="outline">Tomar selfie</Button>
+              </div>
+              <div className="rounded-2xl border border-dashed border-cyan-300/30 bg-cyan-400/5 p-4">
+                <p className="font-black">Foto de perfil obligatoria *</p>
+                <p className="mt-1 text-sm text-slate-300">Debe coincidir con la selfie y el documento.</p>
+                <Button className="mt-4" variant="outline">Seleccionar foto</Button>
               </div>
             </div>
-            <input type="password" className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 outline-none focus:border-blue-400" placeholder="Contraseña *" />
-            <input type="password" className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 outline-none focus:border-blue-400" placeholder="Confirmar contraseña *" />
-            <Button onClick={onClose} className="md:col-span-2">Crear cuenta demo</Button>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <input type="password" className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 outline-none focus:border-blue-400" placeholder="Contraseña *" />
+              <input type="password" className="rounded-2xl border border-white/10 bg-white/5 px-4 py-4 outline-none focus:border-blue-400" placeholder="Confirmar contraseña *" />
+            </div>
+
+            <div className="rounded-2xl bg-emerald-500/10 p-4 text-sm leading-6 text-emerald-200">
+              Después del registro, la cuenta queda pendiente de aprobación. La plataforma puede solicitar selfie diaria; si el usuario no confirma su identidad, su cuenta y productos quedan limitados.
+            </div>
+
+            <Button onClick={onClose} className="w-full">Crear cuenta demo</Button>
           </div>
         ) : (
           <div className="mt-6 space-y-4">
