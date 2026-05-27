@@ -95,11 +95,19 @@ const profiles = [
 
 function ProductCard({ item }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-slate-950/50 p-3">
-      <img src={item[2]} alt={item[0]} className="h-32 w-full rounded-xl object-cover" />
+    <div className="group relative overflow-hidden rounded-2xl border border-white/10 bg-slate-950/50 p-3 transition duration-300 hover:-translate-y-2 hover:border-cyan-300/50 hover:shadow-[0_0_35px_rgba(34,211,238,.18)]">
+      <div className="absolute right-3 top-3 z-10 rounded-full bg-emerald-500/20 px-2 py-1 text-[10px] font-black text-emerald-300">QSM VERIFIED</div>
+      <img src={item[2]} alt={item[0]} className="h-32 w-full rounded-xl object-cover transition duration-700 group-hover:scale-110" />
       <h4 className="mt-3 text-sm font-black text-white">{item[0]}</h4>
       <p className="mt-2 font-black text-white">{item[1]}</p>
-      <span className="mt-2 inline-flex rounded-full bg-emerald-500/20 px-2 py-1 text-xs font-bold text-emerald-300">Certificado</span>
+      <div className="mt-2 flex items-center justify-between">
+        <span className="inline-flex rounded-full bg-emerald-500/20 px-2 py-1 text-xs font-bold text-emerald-300">Certificado</span>
+        <span className="text-xs text-amber-300">★ 4.8</span>
+      </div>
+      <div className="mt-3 grid grid-cols-[1fr_auto] items-center gap-2 rounded-xl bg-white/5 p-2 text-xs text-slate-300">
+        <span>Código único</span>
+        <span className="font-black text-cyan-300">QSM-{Math.floor(Math.random() * 9000 + 1000)}</span>
+      </div>
     </div>
   );
 }
@@ -109,6 +117,7 @@ export default function App() {
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState("login");
   const [showAI, setShowAI] = useState(false);
+  const [userMode, setUserMode] = useState("comprador");
   const allProducts = useMemo(() => catalog.flatMap(c => c.items.map(i => ({ category: c.name, item: i }))), []);
 
   const nav = [
@@ -119,6 +128,7 @@ export default function App() {
     ["funciona", "Cómo funciona", HelpCircle],
     ["perfiles", "Perfiles", Users],
     ["seguimiento", "Seguimiento", PackageCheck],
+    ["admin", "Admin", ShieldCheck],
   ];
 
   return (
@@ -225,6 +235,9 @@ export default function App() {
 
         {/* SEGUIMIENTO */}
         {screen === "seguimiento" && <TrackingBlock />}
+
+        {/* PANEL ADMIN */}
+        {screen === "admin" && <AdminPanel />}
       </main>
     </div>
   );
@@ -240,7 +253,49 @@ function HowBlock() { const steps=[["Publicas","El vendedor publica su producto 
 
 function WarehouseBlock() { return <section><SectionTitle title="Almacén Quick Secure (QSM)" subtitle="Centro físico donde se reciben, certifican, almacenan y entregan productos."/><div className="grid gap-6 lg:grid-cols-4"><Card className="overflow-hidden"><img src={img.delivery} className="h-44 w-full object-cover"/><div className="p-5"><h3 className="font-black">Recepción segura</h3><p className="mt-2 text-sm text-slate-300">Recibimos el producto del vendedor.</p></div></Card><Card className="overflow-hidden"><img src={img.verify} className="h-44 w-full object-cover"/><div className="p-5"><h3 className="font-black">Verificación experta</h3><p className="mt-2 text-sm text-slate-300">Revisamos, probamos y certificamos.</p></div></Card><Card className="overflow-hidden"><img src={img.warehouse} className="h-44 w-full object-cover"/><div className="p-5"><h3 className="font-black">Almacenamiento</h3><p className="mt-2 text-sm text-slate-300">Guardamos el producto de forma segura.</p></div></Card><Card className="overflow-hidden"><img src={img.delivery} className="h-44 w-full object-cover"/><div className="p-5"><h3 className="font-black">Entrega o envío</h3><p className="mt-2 text-sm text-slate-300">Retiro en almacén o envío a domicilio.</p></div></Card></div><Card className="mt-6 p-8"><div className="grid gap-6 md:grid-cols-3"><div><Truck className="text-cyan-300"/><h3 className="mt-3 font-black">Envío a domicilio</h3><p className="mt-2 text-sm text-slate-300">El comprador puede pagar un monto adicional de envío y seguro.</p></div><div><Lock className="text-cyan-300"/><h3 className="mt-3 font-black">PIN de seguridad</h3><p className="mt-2 text-sm text-slate-300">El comprador confirma la entrega con un código único.</p></div><div><CreditCard className="text-cyan-300"/><h3 className="mt-3 font-black">Pago al vendedor</h3><p className="mt-2 text-sm text-slate-300">El dinero se libera cuando el producto fue entregado correctamente.</p></div></div></Card></section>; }
 
-function TrackingBlock() { return <section><SectionTitle title="Seguimiento de tu producto" subtitle="Vista para comprador y vendedor durante el proceso de compra, certificación y entrega."/><Card className="p-8"><div className="grid gap-6 md:grid-cols-5">{["Comprado","En almacén QSM","Certificado","En camino","Entregado con PIN"].map((s,i)=><div key={s} className="text-center"><div className={`mx-auto flex h-16 w-16 items-center justify-center rounded-full ${i<4 ? "bg-emerald-500" : "bg-blue-600"}`}><CheckCircle2/></div><h3 className="mt-3 font-black">{s}</h3><p className="mt-2 text-xs text-slate-400">Paso {i+1}</p></div>)}</div></Card></section>; }
+function TrackingBlock() {
+  return (
+    <section>
+      <SectionTitle title="Seguimiento de tu producto" subtitle="Vista para comprador y vendedor durante el proceso de compra, certificación, envío, PIN y liberación del pago." />
+      <div className="grid gap-6 lg:grid-cols-[1.3fr_.7fr]">
+        <Card className="p-8">
+          <div className="grid gap-6 md:grid-cols-5">
+            {["Comprado", "En almacén QSM", "Certificado", "En camino", "Entregado con PIN"].map((s, i) => (
+              <div key={s} className="relative text-center">
+                {i < 4 && <div className="absolute left-1/2 top-8 hidden h-1 w-full bg-gradient-to-r from-emerald-400 to-blue-500 md:block" />}
+                <div className={`relative mx-auto flex h-16 w-16 items-center justify-center rounded-full ${i < 4 ? "bg-emerald-500" : "bg-blue-600"} shadow-[0_0_30px_rgba(34,197,94,.25)]`}><CheckCircle2 /></div>
+                <h3 className="mt-3 font-black">{s}</h3>
+                <p className="mt-2 text-xs text-slate-400">Estado live · Paso {i + 1}</p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-8 rounded-[2rem] border border-cyan-300/20 bg-cyan-400/5 p-6">
+            <h3 className="text-2xl font-black">Mapa de entrega demo</h3>
+            <div className="mt-4 h-72 overflow-hidden rounded-[2rem] border border-white/10 bg-[radial-gradient(circle_at_20%_20%,rgba(59,130,246,.3),transparent_20%),linear-gradient(135deg,rgba(15,23,42,.9),rgba(2,6,23,.9))] p-6">
+              <div className="relative h-full w-full">
+                <div className="absolute left-[15%] top-[30%] rounded-2xl bg-white/10 px-4 py-3 text-sm">Vendedor</div>
+                <div className="absolute left-[45%] top-[50%] rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black">Almacén QSM</div>
+                <div className="absolute right-[10%] top-[22%] rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black">Comprador</div>
+                <div className="absolute left-[24%] top-[44%] h-1 w-[25%] rotate-12 bg-cyan-400" />
+                <div className="absolute right-[24%] top-[39%] h-1 w-[25%] -rotate-12 bg-emerald-400" />
+                <Truck className="absolute left-[63%] top-[38%] animate-pulse text-cyan-300" />
+              </div>
+            </div>
+          </div>
+        </Card>
+        <Card className="p-8">
+          <h3 className="text-2xl font-black">Resumen de orden</h3>
+          <div className="mt-6 space-y-4 text-sm text-slate-300">
+            <div className="rounded-2xl bg-white/5 p-4"><b className="text-white">Producto:</b> iPhone 13 Pro certificado</div>
+            <div className="rounded-2xl bg-white/5 p-4"><b className="text-white">PIN:</b> <span className="text-2xl font-black tracking-widest text-cyan-300">4829</span></div>
+            <div className="rounded-2xl bg-white/5 p-4"><b className="text-white">Pago:</b> Retenido hasta confirmar entrega</div>
+            <div className="rounded-2xl bg-white/5 p-4"><b className="text-white">Seguro:</b> Envío a domicilio protegido</div>
+          </div>
+        </Card>
+      </div>
+    </section>
+  );
+}
 
 function AuthModal({ mode, setMode, onClose }) {
   const isRegister = mode === "register";
@@ -288,23 +343,81 @@ function AuthModal({ mode, setMode, onClose }) {
 }
 
 function AIWidget({ onClose }) {
+  const alerts = [
+    ["Precio sospechoso", "Este iPhone está 48% por debajo del promedio. Riesgo medio/alto."],
+    ["Imagen reutilizada", "La foto coincide con otra publicación detectada en internet."],
+    ["Cuenta nueva", "El vendedor fue creado hace 2 días y requiere verificación adicional."],
+  ];
   return (
-    <div className="fixed bottom-6 right-6 z-[90] w-[min(420px,calc(100vw-2rem))]">
+    <div className="fixed bottom-6 right-6 z-[90] w-[min(460px,calc(100vw-2rem))]">
       <Card className="border-purple-400/30 bg-[#120b2a] p-5 shadow-[0_0_60px_rgba(168,85,247,.25)]">
         <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-sm font-bold text-purple-300">IA Quick Secure</p>
-            <h3 className="text-2xl font-black">Sofia Secure</h3>
+          <div className="flex items-center gap-4">
+            <div className="relative flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-cyan-300 to-blue-700 text-4xl shadow-[0_0_40px_rgba(34,211,238,.35)] animate-pulse">🤖</div>
+            <div>
+              <p className="text-sm font-bold text-purple-300">IA Quick Secure</p>
+              <h3 className="text-2xl font-black">Sofia Secure</h3>
+              <p className="text-xs text-emerald-300">Monitoreo antifraude activo</p>
+            </div>
           </div>
           <button onClick={onClose} className="rounded-xl p-2 hover:bg-white/10"><X size={18}/></button>
         </div>
         <div className="mt-4 rounded-2xl bg-white/5 p-4 text-sm leading-6 text-slate-300">
-          Hola 👋 Soy tu asistente inteligente. Puedo explicarte cómo registrarte, cómo validar tu producto, cómo funciona el PIN de entrega, el pago protegido y el almacén QSM.
+          Hola 👋 Analizo precios, imágenes, reputación, identidad y comportamiento para proteger compradores y vendedores.
+        </div>
+        <div className="mt-4 space-y-3">
+          {alerts.map(([title, text]) => (
+            <div key={title} className="rounded-2xl border border-red-400/20 bg-red-500/10 p-3">
+              <p className="font-black text-red-200">{title}</p>
+              <p className="mt-1 text-xs leading-5 text-slate-300">{text}</p>
+            </div>
+          ))}
         </div>
         <div className="mt-4 grid gap-2">
           {["¿Por qué este producto es más barato?", "¿Cómo valido mi identidad?", "¿Cómo funciona el almacén QSM?", "¿Cuándo recibe el dinero el vendedor?"].map(q => <button key={q} className="rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left text-sm text-slate-200 hover:bg-white/10">{q}</button>)}
         </div>
       </Card>
     </div>
+  );
+}
+
+function AdminPanel() {
+  const metrics = [["Usuarios bloqueados", "14"], ["Productos en revisión", "32"], ["Reportes de fraude", "8"], ["Disputas abiertas", "5"]];
+  return (
+    <section>
+      <SectionTitle title="Panel administrador antifraude" subtitle="Control central para revisar usuarios, productos, métricas, reportes y certificaciones visuales." />
+      <div className="grid gap-6 md:grid-cols-4">
+        {metrics.map(([label, value]) => (
+          <Card key={label} className="p-6 transition hover:-translate-y-1 hover:border-cyan-300/40">
+            <p className="text-sm text-slate-400">{label}</p>
+            <p className="mt-3 text-5xl font-black text-white">{value}</p>
+          </Card>
+        ))}
+      </div>
+      <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_.8fr]">
+        <Card className="p-8">
+          <h3 className="text-2xl font-black">Cola de revisión</h3>
+          <div className="mt-5 space-y-3">
+            {["Cuenta nueva sin selfie diaria", "Producto duplicado por IMEI", "Precio fuera del promedio", "Disputa por entrega incompleta"].map((x, i) => (
+              <div key={x} className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 p-4">
+                <span>{x}</span><span className={`rounded-full px-3 py-1 text-xs font-black ${i < 2 ? "bg-red-500/20 text-red-300" : "bg-amber-500/20 text-amber-300"}`}>{i < 2 ? "Alto" : "Medio"}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+        <Card className="p-8">
+          <h3 className="text-2xl font-black">Certificación visual</h3>
+          <div className="mt-6 rounded-[2rem] border border-emerald-300/30 bg-emerald-500/10 p-6 text-center">
+            <ShieldCheck className="mx-auto text-emerald-300" size={54}/>
+            <p className="mt-3 text-3xl font-black">QSM VERIFIED</p>
+            <p className="mt-2 text-sm text-slate-300">Producto revisado, certificado y trazable.</p>
+            <div className="mx-auto mt-5 grid h-28 w-28 grid-cols-4 gap-1 rounded-xl bg-white p-2">
+              {Array.from({length:16}).map((_,i)=><div key={i} className={`${i%3===0 ? "bg-black" : "bg-slate-300"} rounded-sm`} />)}
+            </div>
+            <p className="mt-3 text-xs text-cyan-300">QR demo · QSM-8842-DR</p>
+          </div>
+        </Card>
+      </div>
+    </section>
   );
 }
