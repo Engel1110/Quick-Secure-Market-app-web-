@@ -21,6 +21,7 @@ import {
   Footprints,
   Star,
   BarChart3,
+  Bell,
   X,
   Bot,
   MapPin,
@@ -50,6 +51,8 @@ function Button({ className = "", variant = "default", children, ...props }) {
     </button>
   );
 }
+
+const landingBg = "/qsm-company.png";
 
 const img = {
   warehouse:
@@ -153,6 +156,162 @@ function ProductCard({ item }) {
         <span className="font-black text-cyan-300">QSM-{Math.floor(Math.random() * 9000 + 1000)}</span>
       </div>
     </div>
+  );
+}
+
+function PublicLanding({ onLogin }) {
+  const [adminUser, setAdminUser] = useState("");
+  const [adminPass, setAdminPass] = useState("");
+  const [error, setError] = useState("");
+  const [publicTab, setPublicTab] = useState("login");
+
+  const handleAdminLogin = () => {
+    if (adminUser.trim().toLowerCase() === "admin" && adminPass.trim().toLowerCase() === "admin") {
+      setError("");
+      onLogin();
+      return;
+    }
+    setError("Usuario o contraseña incorrectos. Demo: admin / admin");
+  };
+
+  const scrollTo = (id) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
+
+  return (
+    <div className="relative min-h-screen overflow-x-hidden bg-[#050b18] text-white">
+      <section id="inicio" className="relative min-h-screen overflow-hidden">
+        <img
+          src={landingBg}
+          onError={(e) => {
+            e.currentTarget.src = img.warehouse;
+          }}
+          className="absolute inset-0 h-full w-full scale-105 object-cover opacity-75"
+          alt="Quick Secure Market empresa"
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/45 to-black/20" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#050b18] via-transparent to-black/30" />
+
+        <header className="relative z-10 mx-auto flex max-w-[1700px] items-center justify-between px-8 py-6">
+          <button onClick={() => scrollTo("inicio")} className="flex items-center gap-3">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-cyan-400/30 bg-black/30 backdrop-blur">
+              <ShieldCheck className="text-cyan-300" />
+            </div>
+            <div className="text-left">
+              <h1 className="text-3xl font-black text-white">QSM</h1>
+              <p className="text-xs text-slate-300">Quick Secure Market</p>
+            </div>
+          </button>
+          <nav className="hidden items-center gap-8 text-sm font-bold text-slate-100 md:flex">
+            <button onClick={() => scrollTo("inicio")} className="text-cyan-300">Inicio</button>
+            <button onClick={() => scrollTo("nosotros")} className="hover:text-cyan-300">Nosotros</button>
+            <button onClick={() => scrollTo("servicios")} className="hover:text-cyan-300">Servicios</button>
+            <button onClick={() => scrollTo("contacto")} className="hover:text-cyan-300">Contacto</button>
+            <button onClick={() => setPublicTab("register")} className="rounded-xl border border-cyan-400/50 px-6 py-3 hover:bg-cyan-400/10">Registrarse</button>
+          </nav>
+        </header>
+
+        <main className="relative z-10 mx-auto grid min-h-[calc(100vh-120px)] max-w-[1700px] items-center gap-10 px-8 pb-12 lg:grid-cols-[1fr_470px]">
+          <section className="max-w-2xl">
+            <h2 className="text-5xl font-black leading-tight md:text-7xl">
+              Comercio seguro, <span className="text-cyan-300">confianza total</span>
+            </h2>
+            <p className="mt-6 text-xl leading-9 text-slate-100">
+              Plataforma especializada en compra, venta, almacén QSM, certificación de productos, envío protegido e inteligencia artificial antifraude.
+            </p>
+            <div className="mt-8 space-y-4 text-sm font-bold text-slate-100">
+              {[
+                [ShieldCheck, "Verificación de productos"],
+                [Warehouse, "Almacén seguro (QSM)"],
+                [Lock, "Protección en cada compra"],
+              ].map(([Icon, text]) => (
+                <div key={text} className="flex items-center gap-3"><Icon className="text-cyan-300" size={20} />{text}</div>
+              ))}
+            </div>
+            <div className="mt-10 grid max-w-xl gap-3 sm:grid-cols-3">
+              {[["10K+", "Productos disponibles"], ["5K+", "Clientes registrados"], ["98%", "Satisfacción garantizada"]].map(([num, label]) => (
+                <div key={label} className="rounded-2xl border border-white/15 bg-black/35 p-5 backdrop-blur">
+                  <p className="text-3xl font-black text-cyan-300">{num}</p>
+                  <p className="mt-1 text-xs text-slate-200">{label}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="rounded-[2rem] border border-white/15 bg-[#10131a]/85 p-8 shadow-[0_0_90px_rgba(34,211,238,.22)] backdrop-blur-xl">
+            <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-[1.5rem] border border-cyan-400/30 bg-cyan-400/10">
+              <ShieldCheck className="h-10 w-10 text-white" />
+            </div>
+            <h3 className="text-center text-2xl font-black">Bienvenido a<br />Quick Secure Market</h3>
+            <div className="mt-7 grid grid-cols-2 border-b border-white/10 text-sm font-bold">
+              <button onClick={() => setPublicTab("login")} className={`pb-3 ${publicTab === "login" ? "border-b-2 border-cyan-300 text-cyan-300" : "text-slate-400"}`}>Iniciar sesión</button>
+              <button onClick={() => setPublicTab("register")} className={`pb-3 ${publicTab === "register" ? "border-b-2 border-cyan-300 text-cyan-300" : "text-slate-400"}`}>Registrarse</button>
+            </div>
+
+            {publicTab === "login" ? (
+              <div className="mt-6 space-y-4">
+                <input value={adminUser} onChange={(e) => setAdminUser(e.target.value)} className="w-full rounded-xl border border-white/10 bg-white/5 px-5 py-4 outline-none focus:border-cyan-300" placeholder="Usuario" />
+                <input value={adminPass} onChange={(e) => setAdminPass(e.target.value)} onKeyDown={(e) => e.key === "Enter" && handleAdminLogin()} type="password" className="w-full rounded-xl border border-white/10 bg-white/5 px-5 py-4 outline-none focus:border-cyan-300" placeholder="Contraseña" />
+                {error && <p className="text-sm text-red-300">{error}</p>}
+                <button onClick={handleAdminLogin} className="w-full rounded-xl bg-cyan-500 px-5 py-4 font-black text-slate-950 transition hover:bg-cyan-300">Iniciar sesión</button>
+                <button onClick={() => { setAdminUser("admin"); setAdminPass("admin"); }} className="w-full rounded-xl border border-white/10 bg-white/5 px-5 py-4 text-sm font-bold hover:bg-white/10">Cuenta de administrador</button>
+              </div>
+            ) : (
+              <div className="mt-6 space-y-3">
+                <input className="w-full rounded-xl border border-white/10 bg-white/5 px-5 py-3 outline-none focus:border-cyan-300" placeholder="Nombre y apellido real *" />
+                <input className="w-full rounded-xl border border-white/10 bg-white/5 px-5 py-3 outline-none focus:border-cyan-300" placeholder="Cédula / ID *" />
+                <input className="w-full rounded-xl border border-white/10 bg-white/5 px-5 py-3 outline-none focus:border-cyan-300" placeholder="Correo electrónico *" />
+                <button className="w-full rounded-xl border border-dashed border-cyan-300/30 bg-cyan-400/5 px-5 py-3 text-sm font-bold">Subir documento frontal y trasero *</button>
+                <button className="w-full rounded-xl border border-dashed border-cyan-300/30 bg-cyan-400/5 px-5 py-3 text-sm font-bold">Selfie + foto de perfil obligatoria *</button>
+                <button className="w-full rounded-xl bg-cyan-500 px-5 py-4 font-black text-slate-950 transition hover:bg-cyan-300">Enviar registro para revisión</button>
+              </div>
+            )}
+            <p className="mt-5 text-center text-xs text-slate-400">Plataforma 100% segura y verificada</p>
+          </section>
+        </main>
+      </section>
+
+      <section id="nosotros" className="relative z-10 mx-auto max-w-[1700px] px-8 py-16">
+        <div className="grid gap-6 lg:grid-cols-3">
+          <Card className="p-8"><h3 className="text-2xl font-black">Nosotros</h3><p className="mt-3 text-slate-300">Quick Secure Market conecta compradores y vendedores con certificación física, pago protegido y control antifraude.</p></Card>
+          <Card className="p-8"><h3 className="text-2xl font-black">Misión</h3><p className="mt-3 text-slate-300">Reducir estafas digitales y aumentar la confianza en el comercio electrónico dominicano.</p></Card>
+          <Card className="p-8"><h3 className="text-2xl font-black">Visión</h3><p className="mt-3 text-slate-300">Convertirnos en el ecosistema de compra y venta segura más confiable de RD.</p></Card>
+        </div>
+      </section>
+
+      <section id="servicios" className="relative z-10 mx-auto max-w-[1700px] px-8 py-8">
+        <h2 className="mb-6 text-4xl font-black">Servicios principales</h2>
+        <div className="grid gap-6 md:grid-cols-4">
+          {[[PackageCheck, "Certificación"], [Warehouse, "Almacén QSM"], [CreditCard, "Pago protegido"], [Bot, "IA antifraude"]].map(([Icon, title]) => (
+            <Card key={title} className="p-6"><Icon className="text-cyan-300" /><h3 className="mt-4 text-xl font-black">{title}</h3><p className="mt-2 text-sm text-slate-300">Servicio diseñado para proteger cada transacción.</p></Card>
+          ))}
+        </div>
+      </section>
+
+      <footer id="contacto" className="relative z-10 mt-10 border-t border-white/10 bg-black/30 px-8 py-10 backdrop-blur">
+        <div className="mx-auto flex max-w-[1700px] flex-col justify-between gap-4 md:flex-row md:items-center">
+          <p className="text-sm text-slate-300">© 2026 Quick Secure Market · Santo Domingo, RD</p>
+          <p className="text-sm text-cyan-300">soporte@quicksecuremarket.com</p>
+        </div>
+      </footer>
+    </div>
+  );
+}
+
+function AdminDashboardHome({ setScreen }) {
+  const stats = [["1,245", "Productos totales"], ["3,428", "Usuarios registrados"], ["856", "Órdenes completadas"], ["24", "Disputas abiertas"], ["RD$ 4.2M", "Ventas este mes"]];
+  return (
+    <section>
+      <div className="mb-8 flex items-center justify-between">
+        <div><p className="text-cyan-300 font-bold">QSM Admin</p><h2 className="text-4xl font-black">Dashboard</h2></div>
+        <Button onClick={() => setScreen("catalogo")}>Ver catálogo</Button>
+      </div>
+      <div className="grid gap-5 md:grid-cols-5">
+        {stats.map(([n,l]) => <Card key={l} className="p-6"><p className="text-3xl font-black">{n}</p><p className="mt-1 text-sm text-slate-400">{l}</p></Card>)}
+      </div>
+      <div className="mt-8 grid gap-6 lg:grid-cols-[1.1fr_.9fr]">
+        <Card className="p-8"><h3 className="text-2xl font-black">Ventas mensuales</h3><div className="mt-8 h-72 rounded-2xl bg-gradient-to-t from-cyan-500/20 to-transparent p-6"><div className="h-full rounded-xl border-b border-l border-cyan-300/30" /></div></Card>
+        <Card className="p-8"><h3 className="text-2xl font-black">Órdenes recientes</h3><div className="mt-5 space-y-3">{["#QSM-1001 Juan Pérez RD$ 45,000", "#QSM-1002 María García RD$ 32,500", "#QSM-1003 Luis Rodríguez RD$ 18,900", "#QSM-1004 Ana Martínez RD$ 27,800"].map(x => <div key={x} className="rounded-xl bg-white/5 p-4 text-sm">{x}</div>)}</div></Card>
+      </div>
+    </section>
   );
 }
 
@@ -450,6 +609,7 @@ function ProductDetailBlock() {
 }
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [screen, setScreen] = useState("inicio");
   const [authOpen, setAuthOpen] = useState(false);
   const [authMode, setAuthMode] = useState("login");
@@ -464,21 +624,25 @@ export default function App() {
   const allProducts = useMemo(() => catalog.flatMap((c) => c.items.map((i) => ({ category: c.name, item: i }))), []);
 
   const nav = [
-    ["inicio", "Inicio", Home],
-    ["dashboard", "Dashboard", UserCheck],
+    ["inicio", "Dashboard", Home],
     ["catalogo", "Catálogo", Grid3X3],
-    ["seguridad", "Seguridad", ShieldCheck],
+    ["seguimiento", "Órdenes", PackageCheck],
+    ["producto", "Productos", PackageCheck],
     ["almacen", "Almacén QSM", Warehouse],
-    ["funciona", "Cómo funciona", HelpCircle],
-    ["perfiles", "Perfiles", Users],
-    ["seguimiento", "Seguimiento", PackageCheck],
+    ["perfiles", "Usuarios", Users],
+    ["perfiles", "Perfiles registrados", Users],
+    ["seguridad", "Verificaciones", ShieldCheck],
+    ["admin", "Reportes", BarChart3],
     ["disputas", "Disputas", AlertTriangle],
-    ["producto", "Producto", PackageCheck],
-    ["admin", "Admin", ShieldCheck],
+    ["dashboard", "Configuración", UserCheck],
   ];
 
   if (loading) {
     return <LoaderScreen />;
+  }
+
+  if (!isAuthenticated) {
+    return <PublicLanding onLogin={() => { setIsAuthenticated(true); setScreen("catalogo"); }} />;
   }
 
   return (
@@ -487,36 +651,47 @@ export default function App() {
       <div className="fixed left-10 top-32 -z-10 h-56 w-56 animate-pulse rounded-full bg-cyan-400/10 blur-3xl" />
       <div className="fixed bottom-10 right-10 -z-10 h-72 w-72 animate-pulse rounded-full bg-purple-500/10 blur-3xl" />
 
-      <header className="sticky top-0 z-50 border-b border-white/10 bg-[#050b18]/95 backdrop-blur-xl">
-        <div className="mx-auto flex min-h-[88px] max-w-[1700px] flex-wrap items-center justify-between gap-4 px-6 py-3">
-          <div className="flex min-w-[250px] items-center gap-3">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-cyan-400/20 bg-blue-500/15 shadow-lg shadow-cyan-500/10">
-              <ShieldCheck className="h-6 w-6 text-cyan-300" />
+      <div className="flex min-h-screen">
+        <aside className="sticky top-0 hidden h-screen w-64 shrink-0 border-r border-white/10 bg-[#07111f]/95 p-5 backdrop-blur-xl xl:block">
+          <div className="mb-8 flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-cyan-400/20 bg-blue-500/15">
+              <ShieldCheck className="text-cyan-300" />
             </div>
-            <div className="leading-tight">
-              <h1 className="text-2xl font-black leading-none tracking-tight text-cyan-300">Quick Secure Market</h1>
-              <p className="mt-1 max-w-[220px] text-xs leading-snug text-slate-400">Comercio seguro, compradores protegidos</p>
+            <div>
+              <h2 className="text-2xl font-black text-white">QSM</h2>
+              <p className="text-xs text-cyan-300">ADMIN</p>
             </div>
           </div>
-
-          <nav className="order-3 flex w-full items-center gap-2 overflow-x-auto rounded-2xl border border-white/10 bg-white/5 px-3 py-2 backdrop-blur-md xl:order-none xl:w-auto xl:max-w-[850px]">
-            {nav.map(([key, label, Icon]) => (
-              <button key={key} onClick={() => setScreen(key)} className={`flex shrink-0 items-center gap-2 rounded-xl px-4 py-3 text-sm font-bold transition ${screen === key ? "bg-blue-600 text-white" : "text-slate-300 hover:bg-white/10"}`}>
-                <Icon size={15} />{label}
+          <p className="mb-4 text-xs font-bold uppercase tracking-widest text-slate-500">Menu principal</p>
+          <nav className="space-y-2">
+            {nav.map(([key, label, Icon], index) => (
+              <button key={`${label}-${index}`} onClick={() => setScreen(key)} className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left text-sm font-bold transition ${screen === key ? "bg-cyan-500 text-slate-950" : "text-slate-300 hover:bg-white/10"}`}>
+                <Icon size={17} />{label}
               </button>
             ))}
           </nav>
+          <button onClick={() => setIsAuthenticated(false)} className="mt-8 flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-bold text-red-300 hover:bg-red-500/10">Salir</button>
+        </aside>
 
-          <div className="flex min-w-[320px] items-center justify-end gap-3">
-            <Button onClick={() => { setAuthMode("login"); setAuthOpen(true); }} variant="outline" className="h-11 rounded-xl">Iniciar sesión</Button>
-            <Button onClick={() => { setAuthMode("register"); setAuthOpen(true); }} className="h-11 rounded-xl">Registrarse</Button>
-            <button onClick={() => setScreen("perfiles")} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 backdrop-blur-md hover:bg-white/10">
-              <img src={profiles[0][3]} className="h-11 w-11 rounded-full border border-cyan-400/30 object-cover" />
-              <div className="hidden text-left md:block"><p className="text-sm font-bold text-white">Juan Pérez</p><p className="text-xs text-emerald-400">Comprador verificado</p></div>
-            </button>
-          </div>
-        </div>
-      </header>
+        <div className="min-w-0 flex-1">
+          <header className="sticky top-0 z-50 border-b border-white/10 bg-[#050b18]/95 backdrop-blur-xl">
+            <div className="mx-auto flex min-h-[82px] max-w-[1700px] items-center justify-between gap-4 px-6 py-3">
+              <div className="flex items-center gap-4">
+                <button className="rounded-xl border border-white/10 bg-white/5 p-3 xl:hidden"><Grid3X3 size={18} /></button>
+                <div>
+                  <h1 className="text-2xl font-black">{screen === "inicio" ? "Dashboard" : screen.charAt(0).toUpperCase() + screen.slice(1)}</h1>
+                  <p className="text-xs text-slate-400">Panel administrativo Quick Secure Market</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <button className="relative rounded-xl border border-white/10 bg-white/5 p-3"><Bell size={18} /><span className="absolute -right-1 -top-1 rounded-full bg-red-500 px-1.5 text-xs">12</span></button>
+                <button onClick={() => setScreen("perfiles")} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 backdrop-blur-md hover:bg-white/10">
+                  <img src={profiles[0][3]} className="h-11 w-11 rounded-full border border-cyan-400/30 object-cover" />
+                  <div className="hidden text-left md:block"><p className="text-sm font-bold text-white">Admin</p><p className="text-xs text-slate-400">Administrador</p></div>
+                </button>
+              </div>
+            </div>
+          </header>
 
       {authOpen && <AuthModal mode={authMode} setMode={setAuthMode} onClose={() => setAuthOpen(false)} />}
       {showAI && <AIWidget onClose={() => setShowAI(false)} />}
@@ -569,6 +744,8 @@ export default function App() {
       </button>
 
       <FooterBlock />
+        </div>
+      </div>
     </div>
   );
 }
