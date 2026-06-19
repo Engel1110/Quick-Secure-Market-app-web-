@@ -1,0 +1,148 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./quicksecure.db"
+}
+
+model User {
+  id               Int      @id @default(autoincrement())
+  firstName        String
+  lastName         String
+  email            String   @unique
+  password         String
+  phone            String?
+  documentId       String?
+  role             String   @default("USER")
+  buyerEnabled     Boolean  @default(true)
+  sellerEnabled    Boolean  @default(true)
+  isVerified       Boolean  @default(false)
+  trustScore       Int      @default(50)
+  status           String   @default("PENDING")
+  createdAt        DateTime @default(now())
+
+  products         Product[]
+  buyerOrders      Order[]  @relation("BuyerOrders")
+  sellerOrders     Order[]  @relation("SellerOrders")
+  reviewsGiven     Review[] @relation("ReviewsGiven")
+  reviewsReceived  Review[] @relation("ReviewsReceived")
+  notifications    Notification[]
+}
+
+model Product {
+  id                 Int      @id @default(autoincrement())
+  title              String
+  description        String
+  price              Float
+  category           String
+  condition          String
+  imageUrl           String?
+  qsmCode            String   @unique
+  photoHash          String?  @unique
+
+  verificationStatus String   @default("PENDING")
+  cameraRequired     Boolean  @default(false)
+  resaleAllowed      Boolean  @default(false)
+  previousQsmCode    String?
+
+  certified          Boolean  @default(false)
+  status             String   @default("PENDING")
+
+  sellerId           Int
+  createdAt          DateTime @default(now())
+
+  seller             User     @relation(fields: [sellerId], references: [id])
+  orders             Order[]
+  warehouse          Warehouse?
+  fraudAlerts        FraudAlert[]
+  fraudExplanation   FraudExplanation?
+}
+
+model Order {
+  id             Int      @id @default(autoincrement())
+  productId      Int
+  buyerId        Int
+  sellerId       Int
+  status         String   @default("PENDING")
+  totalAmount    Float
+  reserveFee     Float    @default(0)
+  deliveryPin    String
+  paymentStatus  String   @default("HELD")
+  createdAt      DateTime @default(now())
+
+  product         Product @relation(fields: [productId], references: [id])
+  buyer           User    @relation("BuyerOrders", fields: [buyerId], references: [id])
+  seller          User    @relation("SellerOrders", fields: [sellerId], references: [id])
+  dispute         Dispute?
+}
+
+model Warehouse {
+  id          Int      @id @default(autoincrement())
+  productId   Int      @unique
+  received    Boolean  @default(false)
+  inspected   Boolean  @default(false)
+  certified   Boolean  @default(false)
+  stored      Boolean  @default(false)
+  shipped     Boolean  @default(false)
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  product     Product @relation(fields: [productId], references: [id])
+}
+
+model Review {
+  id          Int      @id @default(autoincrement())
+  rating      Int
+  comment     String?
+  reviewerId  Int
+  reviewedId  Int
+  createdAt   DateTime @default(now())
+
+  reviewer    User @relation("ReviewsGiven", fields: [reviewerId], references: [id])
+  reviewed    User @relation("ReviewsReceived", fields: [reviewedId], references: [id])
+}
+
+model Dispute {
+  id          Int      @id @default(autoincrement())
+  orderId     Int      @unique
+  reason      String
+  status      String   @default("OPEN")
+  resolution  String?
+  createdAt   DateTime @default(now())
+
+  order       Order @relation(fields: [orderId], references: [id])
+}
+
+model FraudAlert {
+  id          Int      @id @default(autoincrement())
+  productId   Int
+  type        String
+  level       String
+  message     String
+  createdAt   DateTime @default(now())
+
+  product     Product @relation(fields: [productId], references: [id])
+}
+
+model FraudExplanation {
+  id         Int      @id @default(autoincrement())
+  productId  Int      @unique
+  reason     String
+  comment    String?
+  createdAt  DateTime @default(now())
+
+  product    Product  @relation(fields: [productId], references: [id])
+}
+
+model Notification {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  title       String
+  message     String
+  read        Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  user        User @relation(fields: [userId], references: [id])
+}

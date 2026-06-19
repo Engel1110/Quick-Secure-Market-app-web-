@@ -1,0 +1,42 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./quicksecure.db"
+}
+
+model User {
+  id         Int       @id @default(autoincrement())
+  firstName  String
+  lastName   String
+  email      String    @unique
+  password   String
+
+  role       String    @default("USER")
+
+  isVerified Boolean   @default(false)
+
+  createdAt  DateTime  @default(now())
+
+  products   Product[]
+}
+
+model Product {
+  id          Int       @id @default(autoincrement())
+  title       String
+  description String
+  price       Float
+
+  category    String
+
+  condition   String
+
+  certified   Boolean  @default(false)
+
+  sellerId    Int
+  seller       User @relation(fields: [sellerId], references: [id])
+
+  createdAt   DateTime @default(now())
+}
