@@ -72,4 +72,9 @@ Crear la plataforma de comercio electrónico más segura de República Dominican
 
 ---
 
-Proyecto de tesis desarrollado por Engel Feliz.
+Proyecto de tesis desarrollado por:
+
+
+• Christopher Rivera García — 2024-0831
+• Engel Feliz — 2022-1980
+• Rusbert Montero — 2023-0331 
