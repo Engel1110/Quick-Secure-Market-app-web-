@@ -1,192 +1,326 @@
-const prisma = require("../utils/prisma");
+const mongoose = require("mongoose");
+const validator = require("validator");
+
+const Dispute = require("../models/Dispute");
+const Order = require("../models/Order");
+const Payment = require("../models/Payment");
+
+const { createNotification } = require("../services/notification.service");
+
+const allowedActions = ["REFUND_BUYER", "RELEASE_TO_SELLER", "REJECT_DISPUTE"];
+
+const isValidObjectId = (id) => {
+  return mongoose.Types.ObjectId.isValid(id);
+};
+
+const sanitizeText = (value) => {
+  return validator.escape(String(value || "").trim());
+};
 
 const createDispute = async (req, res) => {
   try {
-    const { orderId, reason, evidence } = req.body;
+    const { orderId, reason, description, evidence } = req.body;
 
-    if (!orderId || !reason) {
+    if (!orderId || !reason || !description) {
       return res.status(400).json({
-        message: "orderId y reason son obligatorios"
+        success: false,
+        message: "orderId, reason y description son obligatorios"
       });
     }
 
-    const order = await prisma.order.findUnique({
-      where: { id: Number(orderId) }
-    });
+    if (!isValidObjectId(orderId)) {
+      return res.status(400).json({
+        success: false,
+        message: "orderId no es válido"
+      });
+    }
+
+    const order = await Order.findById(orderId);
 
     if (!order) {
       return res.status(404).json({
+        success: false,
         message: "Orden no encontrada"
       });
     }
 
-    if (order.buyerId !== req.user.id && order.sellerId !== req.user.id) {
+    if (order.buyer.toString() !== req.user._id.toString()) {
       return res.status(403).json({
-        message: "Solo comprador o vendedor pueden abrir disputa"
+        success: false,
+        message: "Solo el comprador puede abrir una disputa"
       });
     }
 
-    const dispute = await prisma.dispute.create({
-      data: {
-        orderId: Number(orderId),
-        reason,
-        resolution: evidence || null,
-        status: "OPEN"
-      },
-      include: {
-        order: true
-      }
+    if (order.status === "COMPLETED" || order.escrowStatus === "RELEASED") {
+      return res.status(400).json({
+        success: false,
+        message: "No puedes abrir disputa sobre una orden ya completada"
+      });
+    }
+
+    if (order.status === "CANCELLED" || order.escrowStatus === "REFUNDED") {
+      return res.status(400).json({
+        success: false,
+        message: "No puedes abrir disputa sobre una orden cancelada o reembolsada"
+      });
+    }
+
+    const existingDispute = await Dispute.findOne({ order: orderId });
+
+    if (existingDispute) {
+      return res.status(400).json({
+        success: false,
+        message: "Esta orden ya tiene una disputa abierta"
+      });
+    }
+
+    const safeEvidence = Array.isArray(evidence)
+      ? evidence.slice(0, 10).map((item) => sanitizeText(item))
+      : [];
+
+    const dispute = await Dispute.create({
+      order: order._id,
+      buyer: order.buyer,
+      seller: order.seller,
+      product: order.product,
+      reason: sanitizeText(reason),
+      description: sanitizeText(description),
+      evidence: safeEvidence,
+      status: "OPEN"
     });
 
-    await prisma.order.update({
-      where: { id: Number(orderId) },
-      data: {
-        status: "DISPUTE",
-        paymentStatus: "HELD"
-      }
-    });
+    order.status = "DISPUTED";
+    order.escrowStatus = "HELD";
+    await order.save();
+
+    await createNotification(
+      order.seller,
+      "DISPUTE_OPENED",
+      "Disputa abierta",
+      "El comprador abrió una disputa en una orden. El pago queda retenido hasta revisión."
+    );
+
+    await createNotification(
+      order.buyer,
+      "DISPUTE_OPENED",
+      "Disputa creada correctamente",
+      "Tu disputa fue creada y Quick Secure Market revisará el caso."
+    );
 
     return res.status(201).json({
-      message: "Disputa abierta correctamente. El pago queda retenido hasta revisión QSM.",
+      success: true,
+      message:
+        "Disputa creada correctamente. El pago queda retenido hasta revisión de Quick Secure Market.",
       dispute
     });
   } catch (error) {
-    console.error(error);
     return res.status(500).json({
-      message: "Error creando disputa"
+      success: false,
+      message: "Error creando disputa",
+      error: error.message
     });
   }
 };
 
 const getMyDisputes = async (req, res) => {
   try {
-    const disputes = await prisma.dispute.findMany({
-      where: {
-        order: {
-          OR: [
-            { buyerId: req.user.id },
-            { sellerId: req.user.id }
-          ]
-        }
-      },
-      include: {
-        order: {
-          include: {
-            product: true,
-            buyer: true,
-            seller: true
-          }
-        }
-      },
-      orderBy: {
-        createdAt: "desc"
-      }
-    });
+    const disputes = await Dispute.find({
+      $or: [{ buyer: req.user._id }, { seller: req.user._id }]
+    })
+      .populate("order")
+      .populate("product", "title price category condition")
+      .populate("buyer", "firstName lastName email trustScore isVerified")
+      .populate("seller", "firstName lastName email trustScore isVerified")
+      .sort({ createdAt: -1 });
 
     return res.json({
+      success: true,
+      message: "Disputas obtenidas correctamente",
       count: disputes.length,
       disputes
     });
   } catch (error) {
-    console.error(error);
     return res.status(500).json({
-      message: "Error obteniendo disputas"
+      success: false,
+      message: "Error obteniendo disputas",
+      error: error.message
     });
   }
 };
 
 const getAllDisputes = async (req, res) => {
   try {
-    const disputes = await prisma.dispute.findMany({
-      include: {
-        order: {
-          include: {
-            product: true,
-            buyer: true,
-            seller: true
-          }
-        }
-      },
-      orderBy: {
-        createdAt: "desc"
-      }
-    });
+    const disputes = await Dispute.find()
+      .populate("order")
+      .populate("product", "title price category condition")
+      .populate("buyer", "firstName lastName email trustScore isVerified")
+      .populate("seller", "firstName lastName email trustScore isVerified")
+      .sort({ createdAt: -1 });
 
     return res.json({
+      success: true,
+      message: "Todas las disputas obtenidas correctamente",
       count: disputes.length,
       disputes
     });
   } catch (error) {
-    console.error(error);
     return res.status(500).json({
-      message: "Error obteniendo disputas"
+      success: false,
+      message: "Error obteniendo todas las disputas",
+      error: error.message
     });
   }
 };
 
 const resolveDispute = async (req, res) => {
   try {
-    const disputeId = Number(req.params.id);
-    const { resolution, action } = req.body;
+    const { disputeId } = req.params;
+    const { action, adminNotes } = req.body;
 
-    if (!resolution || !action) {
+    if (!disputeId || !isValidObjectId(disputeId)) {
       return res.status(400).json({
-        message: "resolution y action son obligatorios"
+        success: false,
+        message: "disputeId no es válido"
       });
     }
 
-    const dispute = await prisma.dispute.findUnique({
-      where: { id: disputeId },
-      include: { order: true }
-    });
+    if (!action || !allowedActions.includes(action)) {
+      return res.status(400).json({
+        success: false,
+        message: "Acción no válida"
+      });
+    }
+
+    const dispute = await Dispute.findById(disputeId);
 
     if (!dispute) {
       return res.status(404).json({
+        success: false,
         message: "Disputa no encontrada"
       });
     }
 
-    let paymentStatus = dispute.order.paymentStatus;
-    let orderStatus = "DELIVERED";
+    if (["RESOLVED", "REFUNDED", "REJECTED"].includes(dispute.status)) {
+      return res.status(400).json({
+        success: false,
+        message: "Esta disputa ya fue resuelta"
+      });
+    }
+
+    const order = await Order.findById(dispute.order);
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Orden relacionada no encontrada"
+      });
+    }
+
+    if (order.escrowStatus !== "HELD") {
+      return res.status(400).json({
+        success: false,
+        message: "Esta orden no tiene fondos retenidos para resolver"
+      });
+    }
+
+    const payment = await Payment.findOne({ order: order._id });
 
     if (action === "REFUND_BUYER") {
-      paymentStatus = "REFUNDED";
-      orderStatus = "REFUNDED";
+      dispute.status = "REFUNDED";
+      order.status = "CANCELLED";
+      order.escrowStatus = "REFUNDED";
+
+      if (payment && payment.status === "HELD") {
+        payment.status = "REFUNDED";
+        payment.notes = "Pago reembolsado al comprador por resolución de disputa.";
+        await payment.save();
+      }
+
+      await createNotification(
+        dispute.buyer,
+        "DISPUTE_RESOLVED",
+        "Disputa resuelta a tu favor",
+        "Quick Secure Market aprobó el reembolso de esta orden."
+      );
+
+      await createNotification(
+        dispute.seller,
+        "DISPUTE_RESOLVED",
+        "Disputa resuelta",
+        "Quick Secure Market resolvió la disputa y aprobó el reembolso al comprador."
+      );
     }
 
     if (action === "RELEASE_TO_SELLER") {
-      paymentStatus = "RELEASED";
-      orderStatus = "DELIVERED";
+      dispute.status = "RESOLVED";
+      order.status = "COMPLETED";
+      order.escrowStatus = "RELEASED";
+
+      if (payment && payment.status === "HELD") {
+        payment.status = "RELEASED";
+        payment.notes = "Pago liberado al vendedor por resolución de disputa.";
+        await payment.save();
+      }
+
+      await createNotification(
+        dispute.seller,
+        "PAYMENT_RELEASED",
+        "Pago liberado",
+        "Quick Secure Market liberó el pago de la orden a tu favor."
+      );
+
+      await createNotification(
+        dispute.buyer,
+        "DISPUTE_RESOLVED",
+        "Disputa resuelta",
+        "Quick Secure Market resolvió la disputa y liberó el pago al vendedor."
+      );
     }
 
-    const updatedDispute = await prisma.dispute.update({
-      where: { id: disputeId },
-      data: {
-        status: "RESOLVED",
-        resolution
-      },
-      include: {
-        order: true
-      }
-    });
+    if (action === "REJECT_DISPUTE") {
+      dispute.status = "REJECTED";
+      order.status = "COMPLETED";
+      order.escrowStatus = "RELEASED";
 
-    await prisma.order.update({
-      where: { id: dispute.orderId },
-      data: {
-        status: orderStatus,
-        paymentStatus
+      if (payment && payment.status === "HELD") {
+        payment.status = "RELEASED";
+        payment.notes = "Pago liberado al vendedor porque la disputa fue rechazada.";
+        await payment.save();
       }
-    });
+
+      await createNotification(
+        dispute.buyer,
+        "DISPUTE_RESOLVED",
+        "Disputa rechazada",
+        "Quick Secure Market rechazó la disputa después de revisar el caso."
+      );
+
+      await createNotification(
+        dispute.seller,
+        "PAYMENT_RELEASED",
+        "Pago liberado",
+        "La disputa fue rechazada y el pago fue liberado a tu favor."
+      );
+    }
+
+    dispute.adminNotes = adminNotes ? sanitizeText(adminNotes) : "";
+
+    await dispute.save();
+    await order.save();
 
     return res.json({
-      message: "Disputa resuelta correctamente",
+      success: true,
+      message: "Disputa resuelta correctamente por el administrador",
       action,
-      dispute: updatedDispute
+      dispute,
+      order,
+      payment: payment || null
     });
   } catch (error) {
-    console.error(error);
     return res.status(500).json({
-      message: "Error resolviendo disputa"
+      success: false,
+      message: "Error resolviendo disputa",
+      error: error.message
     });
   }
 };

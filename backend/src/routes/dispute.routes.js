@@ -1,4 +1,9 @@
 const express = require("express");
+const router = express.Router();
+
+const authMiddleware = require("../middleware/auth.middleware");
+const requireRole = require("../middleware/role.middleware");
+
 const {
   createDispute,
   getMyDisputes,
@@ -6,13 +11,30 @@ const {
   resolveDispute
 } = require("../controllers/dispute.controller");
 
-const { protect, adminOnly } = require("../middleware/auth.middleware");
+router.post(
+  "/",
+  authMiddleware,
+  createDispute
+);
 
-const router = express.Router();
+router.get(
+  "/my-disputes",
+  authMiddleware,
+  getMyDisputes
+);
 
-router.post("/", protect, createDispute);
-router.get("/my-disputes", protect, getMyDisputes);
-router.get("/", protect, adminOnly, getAllDisputes);
-router.put("/:id/resolve", protect, adminOnly, resolveDispute);
+router.get(
+  "/admin/all",
+  authMiddleware,
+  requireRole("ADMIN", "SENIOR_ADMIN", "AUDITOR"),
+  getAllDisputes
+);
+
+router.put(
+  "/admin/:disputeId/resolve",
+  authMiddleware,
+  requireRole("ADMIN", "SENIOR_ADMIN"),
+  resolveDispute
+);
 
 module.exports = router;

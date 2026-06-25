@@ -1,356 +1,293 @@
-const prisma = require("../utils/prisma");
+const mongoose = require("mongoose");
+const validator = require("validator");
 
-const {
-  generateQsmCode,
-  generatePhotoHash
-} = require("../utils/qsmCodeGenerator");
+const Product = require("../models/Product");
 
-const { analyzeProductRisk } = require("../utils/fraudEngine");
+const allowedConditions = [
+  "NEW",
+  "LIKE_NEW",
+  "USED_GOOD",
+  "USED_DETAILS",
+  "FOR_PARTS"
+];
+
+const allowedQualities = [
+  "EXCELLENT",
+  "GOOD",
+  "FAIR",
+  "DAMAGED",
+  "UNKNOWN"
+];
+
+const allowedSpecialPriceReasons = [
+  "NONE",
+  "URGENT_MONEY",
+  "MOVING",
+  "BOUGHT_ANOTHER",
+  "NO_LONGER_USED",
+  "MEDICAL_EXPENSE",
+  "BUSINESS_LIQUIDATION",
+  "OTHER"
+];
+
+const sanitizeText = (value) => {
+  return validator.escape(String(value || "").trim());
+};
+
+const isValidObjectId = (id) => {
+  return mongoose.Types.ObjectId.isValid(id);
+};
 
 const createProduct = async (req, res) => {
   try {
-    const { title, description, price, category, condition, imageUrl } = req.body;
-
-    if (!title || !description || !price || !category || !condition) {
-      return res.status(400).json({
-        message: "Título, descripción, precio, categoría y condición son obligatorios"
-      });
-    }
-
-    const photoHash = imageUrl ? generatePhotoHash(imageUrl) : null;
-
-    if (photoHash) {
-      const existingImage = await prisma.product.findUnique({
-        where: { photoHash }
-      });
-
-      if (existingImage) {
-        await prisma.fraudAlert.create({
-          data: {
-            productId: existingImage.id,
-            type: "REUSED_IMAGE",
-            level: "HIGH",
-            message: "Intento de reutilizar una imagen ya registrada en QSM."
-          }
-        });
-
-        return res.status(400).json({
-          message: "Esta imagen ya fue utilizada en otro producto. Debes tomar una foto real nueva desde la app."
-        });
-      }
-    }
-
-    const seller = await prisma.user.findUnique({
-      where: { id: req.user.id }
-    });
-
-    const riskAlerts = analyzeProductRisk({
-      title,
-      category,
-      price,
-      condition,
-      seller
-    });
-
-    const product = await prisma.product.create({
-      data: {
-        title,
-        description,
-        price: Number(price),
-        category,
-        condition,
-        imageUrl,
-        qsmCode: generateQsmCode(category, title),
-        photoHash,
-        verificationStatus: "PENDING",
-        cameraRequired: true,
-        resaleAllowed: false,
-        certified: false,
-        status: "PENDING",
-        sellerId: req.user.id
-      },
-      include: {
-        seller: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-            isVerified: true,
-            trustScore: true,
-            status: true
-          }
-        },
-        fraudAlerts: true
-      }
-    });
-
-    if (riskAlerts.length > 0) {
-      await prisma.fraudAlert.createMany({
-        data: riskAlerts.map((alert) => ({
-          productId: product.id,
-          type: alert.type,
-          level: alert.level,
-          message: alert.message
-        }))
-      });
-    }
-
-    const productWithAlerts = await prisma.product.findUnique({
-      where: { id: product.id },
-      include: {
-        seller: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-            isVerified: true,
-            trustScore: true,
-            status: true
-          }
-        },
-        fraudAlerts: true
-      }
-    });
-
-    return res.status(201).json({
-      message: "Producto creado correctamente y enviado a verificación QSM",
-      product: productWithAlerts
-    });
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({
-      message: "Error creando producto"
-    });
-  }
-};
-
-const getProducts = async (req, res) => {
-  try {
-    const products = await prisma.product.findMany({
-      orderBy: {
-        createdAt: "desc"
-      },
-      include: {
-        seller: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            isVerified: true,
-            trustScore: true,
-            status: true
-          }
-        },
-        fraudAlerts: true
-      }
-    });
-
-    return res.json({
-      count: products.length,
-      products
-    });
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({
-      message: "Error obteniendo productos"
-    });
-  }
-};
-
-const getProductById = async (req, res) => {
-  try {
-    const productId = Number(req.params.id);
-
-    const product = await prisma.product.findUnique({
-      where: { id: productId },
-      include: {
-        seller: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            isVerified: true,
-            trustScore: true,
-            status: true,
-            createdAt: true
-          }
-        },
-        warehouse: true,
-        fraudAlerts: true
-      }
-    });
-
-    if (!product) {
-      return res.status(404).json({
-        message: "Producto no encontrado"
-      });
-    }
-
-    return res.json({
-      product
-    });
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({
-      message: "Error obteniendo producto"
-    });
-  }
-};
-
-const getMyProducts = async (req, res) => {
-  try {
-    const products = await prisma.product.findMany({
-      where: {
-        sellerId: req.user.id
-      },
-      orderBy: {
-        createdAt: "desc"
-      },
-      include: {
-        fraudAlerts: true,
-        warehouse: true
-      }
-    });
-
-    return res.json({
-      count: products.length,
-      products
-    });
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({
-      message: "Error obteniendo mis productos"
-    });
-  }
-};
-
-const updateProduct = async (req, res) => {
-  try {
-    const productId = Number(req.params.id);
-
-    const product = await prisma.product.findUnique({
-      where: { id: productId }
-    });
-
-    if (!product) {
-      return res.status(404).json({
-        message: "Producto no encontrado"
-      });
-    }
-
-    if (product.sellerId !== req.user.id && req.user.role !== "ADMIN") {
-      return res.status(403).json({
-        message: "No tienes permiso para editar este producto"
-      });
-    }
-
     const {
       title,
       description,
       price,
       category,
       condition,
-      imageUrl,
-      status,
-      certified,
-      verificationStatus,
-      resaleAllowed,
-      previousQsmCode
+      quality,
+      specialPriceReason,
+      specialPriceExplanation,
+      images
     } = req.body;
 
-    let photoHash = product.photoHash;
-
-    if (imageUrl && imageUrl !== product.imageUrl) {
-      photoHash = generatePhotoHash(imageUrl);
-
-      const existingImage = await prisma.product.findFirst({
-        where: {
-          photoHash,
-          id: {
-            not: productId
-          }
-        }
+    if (!title || !description || !price || !category) {
+      return res.status(400).json({
+        success: false,
+        message: "Título, descripción, precio y categoría son obligatorios"
       });
-
-      if (existingImage) {
-        await prisma.fraudAlert.create({
-          data: {
-            productId: existingImage.id,
-            type: "REUSED_IMAGE",
-            level: "HIGH",
-            message: "Intento de actualizar producto usando una imagen ya registrada en QSM."
-          }
-        });
-
-        return res.status(400).json({
-          message: "Esta imagen ya fue utilizada en otro producto. Debes usar una imagen nueva."
-        });
-      }
     }
 
-    const updatedProduct = await prisma.product.update({
-      where: { id: productId },
-      data: {
-        title: title ?? product.title,
-        description: description ?? product.description,
-        price: price ? Number(price) : product.price,
-        category: category ?? product.category,
-        condition: condition ?? product.condition,
-        imageUrl: imageUrl ?? product.imageUrl,
-        photoHash,
-        status: status ?? product.status,
-        certified: certified ?? product.certified,
-        verificationStatus: verificationStatus ?? product.verificationStatus,
-        resaleAllowed: resaleAllowed ?? product.resaleAllowed,
-        previousQsmCode: previousQsmCode ?? product.previousQsmCode
-      }
+    const numericPrice = Number(price);
+
+    if (Number.isNaN(numericPrice) || numericPrice <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "El precio debe ser un número válido mayor que cero"
+      });
+    }
+
+    if (condition && !allowedConditions.includes(condition)) {
+      return res.status(400).json({
+        success: false,
+        message: "Condición del producto no válida"
+      });
+    }
+
+    if (quality && !allowedQualities.includes(quality)) {
+      return res.status(400).json({
+        success: false,
+        message: "Calidad del producto no válida"
+      });
+    }
+
+    if (
+      specialPriceReason &&
+      !allowedSpecialPriceReasons.includes(specialPriceReason)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Motivo de precio especial no válido"
+      });
+    }
+
+    const safeImages = Array.isArray(images)
+      ? images.slice(0, 8).map((item) => sanitizeText(item))
+      : [];
+
+    const product = await Product.create({
+      title: sanitizeText(title),
+      description: sanitizeText(description),
+      price: numericPrice,
+      category: sanitizeText(category),
+      condition: condition || "USED_GOOD",
+      quality: quality || "UNKNOWN",
+      specialPriceReason: specialPriceReason || "NONE",
+      specialPriceExplanation: specialPriceExplanation
+        ? sanitizeText(specialPriceExplanation)
+        : "",
+      images: safeImages,
+      seller: req.user._id,
+      status: "ACTIVE",
+      riskLevel: "LOW",
+      confidenceScore: 70,
+      evidenceRequired: []
     });
 
-    return res.json({
-      message: "Producto actualizado correctamente",
-      product: updatedProduct
+    return res.status(201).json({
+      success: true,
+      message: "Producto creado correctamente",
+      product
     });
   } catch (error) {
-    console.error(error);
     return res.status(500).json({
-      message: "Error actualizando producto"
+      success: false,
+      message: "Error creando producto",
+      error: error.message
     });
   }
 };
 
-const deleteProduct = async (req, res) => {
+const getProducts = async (req, res) => {
   try {
-    const productId = Number(req.params.id);
+    const products = await Product.find({
+      status: { $ne: "DISABLED" }
+    })
+      .populate("seller", "firstName lastName email trustScore isVerified")
+      .sort({ createdAt: -1 });
 
-    const product = await prisma.product.findUnique({
-      where: { id: productId }
+    return res.json({
+      success: true,
+      count: products.length,
+      products
     });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Error obteniendo productos",
+      error: error.message
+    });
+  }
+};
+
+const improveProductEvidence = async (req, res) => {
+  try {
+    const { productId } = req.params;
+
+    if (!isValidObjectId(productId)) {
+      return res.status(400).json({
+        success: false,
+        message: "productId no es válido"
+      });
+    }
+
+    const {
+      images,
+      quality,
+      specialPriceExplanation,
+      hasVideo,
+      hasSerialNumber,
+      hasInvoice
+    } = req.body;
+
+    const product = await Product.findById(productId);
 
     if (!product) {
       return res.status(404).json({
+        success: false,
         message: "Producto no encontrado"
       });
     }
 
-    if (product.sellerId !== req.user.id && req.user.role !== "ADMIN") {
+    if (product.seller.toString() !== req.user._id.toString()) {
       return res.status(403).json({
-        message: "No tienes permiso para eliminar este producto"
+        success: false,
+        message: "No tienes permiso para modificar este producto"
       });
     }
 
-    await prisma.product.delete({
-      where: { id: productId }
-    });
+    if (images) {
+      if (!Array.isArray(images)) {
+        return res.status(400).json({
+          success: false,
+          message: "images debe ser un arreglo"
+        });
+      }
+
+      product.images = images.slice(0, 8).map((item) => sanitizeText(item));
+    }
+
+    if (quality) {
+      if (!allowedQualities.includes(quality)) {
+        return res.status(400).json({
+          success: false,
+          message: "Calidad del producto no válida"
+        });
+      }
+
+      product.quality = quality;
+    }
+
+    if (specialPriceExplanation) {
+      product.specialPriceExplanation = sanitizeText(specialPriceExplanation);
+    }
+
+    let confidenceScore = 50;
+    let evidenceRequired = [];
+
+    if (product.images && product.images.length >= 3) {
+      confidenceScore += 15;
+    } else {
+      evidenceRequired.push("Agregar al menos 3 fotos reales del producto");
+    }
+
+    if (Boolean(hasVideo)) {
+      confidenceScore += 15;
+    } else {
+      evidenceRequired.push("Agregar un video corto funcionando");
+    }
+
+    if (Boolean(hasSerialNumber)) {
+      confidenceScore += 10;
+    } else {
+      evidenceRequired.push("Agregar número de serie visible");
+    }
+
+    if (Boolean(hasInvoice)) {
+      confidenceScore += 10;
+    } else {
+      evidenceRequired.push("Agregar factura o comprobante si aplica");
+    }
+
+    if (product.quality && product.quality !== "UNKNOWN") {
+      confidenceScore += 10;
+    } else {
+      evidenceRequired.push("Indicar la calidad real del equipo");
+    }
+
+    if (
+      product.specialPriceExplanation &&
+      product.specialPriceExplanation.length >= 40
+    ) {
+      confidenceScore += 10;
+    } else {
+      evidenceRequired.push("Explicar mejor el motivo del precio bajo");
+    }
+
+    if (confidenceScore > 100) confidenceScore = 100;
+    if (confidenceScore < 0) confidenceScore = 0;
+
+    if (confidenceScore >= 85) product.riskLevel = "LOW";
+    else if (confidenceScore >= 65) product.riskLevel = "MEDIUM";
+    else product.riskLevel = "HIGH";
+
+    product.confidenceScore = confidenceScore;
+    product.evidenceRequired = evidenceRequired;
+
+    await product.save();
 
     return res.json({
-      message: "Producto eliminado correctamente"
+      success: true,
+      message: "Evidencias actualizadas correctamente",
+      resultado: {
+        nivelDeRiesgo:
+          product.riskLevel === "LOW"
+            ? "Bajo"
+            : product.riskLevel === "MEDIUM"
+            ? "Medio"
+            : "Alto",
+        codigoInternoRiesgo: product.riskLevel,
+        puntajeDeConfianza: product.confidenceScore,
+        evidenciasPendientes: product.evidenceRequired
+      },
+      product
     });
   } catch (error) {
-    console.error(error);
     return res.status(500).json({
-      message: "Error eliminando producto"
+      success: false,
+      message: "Error actualizando evidencias",
+      error: error.message
     });
   }
 };
@@ -358,8 +295,5 @@ const deleteProduct = async (req, res) => {
 module.exports = {
   createProduct,
   getProducts,
-  getProductById,
-  getMyProducts,
-  updateProduct,
-  deleteProduct
+  improveProductEvidence
 };

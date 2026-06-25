@@ -1,14 +1,14 @@
 const express = require("express");
-const {
-  explainFraudAlert,
-  getProductFraudInfo
-} = require("../controllers/fraud.controller");
-
-const { protect } = require("../middleware/auth.middleware");
-
 const router = express.Router();
 
-router.post("/explain", protect, explainFraudAlert);
-router.get("/product/:productId", getProductFraudInfo);
+const authMiddleware = require("../middleware/auth.middleware");
+
+const {
+  createFraudAlertForProduct,
+  getFraudAlerts
+} = require("../controllers/fraud.controller");
+
+router.post("/analyze-product", authMiddleware, createFraudAlertForProduct);
+router.get("/alerts", authMiddleware, getFraudAlerts);
 
 module.exports = router;
