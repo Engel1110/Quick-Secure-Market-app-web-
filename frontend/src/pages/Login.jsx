@@ -1,8 +1,12 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+
 
 function Login() {
   const navigate = useNavigate();
+
+  const { login } = useAuth();
 
   const [form, setForm] = useState({
     email: "",
@@ -18,30 +22,48 @@ function Login() {
     });
   };
 
-  const handleLogin = (e) => {
+const handleLogin = async (e) => {
+
     e.preventDefault();
+
     setError("");
 
     if (!form.email || !form.password) {
-      setError("Debes completar correo y contraseña.");
-      return;
+
+        setError("Debes completar correo y contraseña.");
+
+        return;
+
     }
 
-    const user = {
-      id: Date.now(),
-      firstName: form.email.includes("admin") ? "Admin" : "Engel",
-      lastName: form.email.includes("admin") ? "QSM" : "Feliz",
-      email: form.email,
-      role: form.email.includes("admin") ? "ADMIN" : "USER",
-      trustScore: form.email.includes("admin") ? 100 : 60,
-      kycStatus: form.email.includes("admin") ? "VERIFIED" : "PENDING_REVIEW"
-    };
+    try {
 
-    localStorage.setItem("qsm_user", JSON.stringify(user));
-    localStorage.setItem("qsm_token", "demo-token");
+        const response = await login(
+            form.email,
+            form.password
+        );
 
-    navigate("/dashboard");
-  };
+        console.log(response);
+
+        navigate("/dashboard");
+
+    }
+
+    catch (err) {
+
+        console.error(err);
+
+        setError(
+
+            err.response?.data?.message ||
+
+            "Correo o contraseña incorrectos."
+
+        );
+
+    }
+
+};
 
   const handleGoogleDemo = () => {
     const user = {

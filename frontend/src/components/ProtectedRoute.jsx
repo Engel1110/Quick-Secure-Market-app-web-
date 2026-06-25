@@ -1,15 +1,24 @@
 import { Navigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 function ProtectedRoute({ children, requireAdmin = false }) {
-  const token = localStorage.getItem("qsm_token");
-  const user = JSON.parse(localStorage.getItem("qsm_user"));
+  const { user, token, loading } = useAuth();
 
-  if (!token || !user) {
-    return <Navigate to="/" />;
+  if (loading) {
+    return null;
   }
 
-  if (requireAdmin && user.role !== "ADMIN") {
-    return <Navigate to="/dashboard" />;
+  if (!token || !user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (
+    requireAdmin &&
+    user.role !== "ADMIN" &&
+    user.role !== "SENIOR_ADMIN" &&
+    user.role !== "FOUNDER"
+  ) {
+    return <Navigate to="/dashboard" replace />;
   }
 
   return children;

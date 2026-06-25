@@ -1,45 +1,46 @@
 import { Link, useNavigate } from "react-router-dom";
 import Topbar from "../components/Topbar";
 import AiAssistant from "../components/AiAssistant";
+import { useAuth } from "../context/AuthContext";
 
 function Dashboard() {
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
+  
 
-  const user = JSON.parse(localStorage.getItem("qsm_user")) || {
+  const currentUser = user || {
     firstName: "Usuario",
     lastName: "QSM",
     email: "usuario@qsm.com",
     trustScore: 60,
-    kycStatus: "PENDING"
+    verificationStatus: "NOT_STARTED"
   };
 
-  const trustScore = user.trustScore || 60;
-  const kycStatus = user.kycStatus || "PENDING";
-  const isVerified = kycStatus === "VERIFIED";
+  const trustScore = currentUser.trustScore || 60;
+  const kycStatus = currentUser.verificationStatus || currentUser.kycStatus || "NOT_STARTED";
+  const isVerified = currentUser.isVerified || kycStatus === "VERIFIED";
 
-  const logout = () => {
+  const handleLogout = () => {
     localStorage.removeItem("qsm_user");
     localStorage.removeItem("qsm_token");
+    logout();
     navigate("/login");
   };
 
   return (
     <div style={page}>
-      <style>
-        {`
-          * { box-sizing: border-box; }
-
-          html, body, #root {
-            width: 100%;
-            min-height: 100%;
-            margin: 0;
-            padding: 0;
-            overflow-x: hidden;
-            background: #020617;
-            font-family: 'Inter', system-ui, sans-serif;
-          }
-        `}
-      </style>
+      <style>{`
+        * { box-sizing: border-box; }
+        html, body, #root {
+          width: 100%;
+          min-height: 100%;
+          margin: 0;
+          padding: 0;
+          overflow-x: hidden;
+          background: #020617;
+          font-family: 'Inter', system-ui, sans-serif;
+        }
+      `}</style>
 
       <aside style={sidebar}>
         <Link to="/" style={brand}>
@@ -58,8 +59,8 @@ function Dashboard() {
           <Link style={menuItem} to="/orders">📦 Mis órdenes</Link>
           <Link style={menuItem} to="/disputes">⚖ Mis disputas</Link>
           <Link style={menuItem} to="/marketing">📈 Marketing Center</Link>
-          <Link style={menuItem} to="/complete-profile">🧾 Verificación QSM</Link>
-          <button onClick={logout} style={logoutButton}>🚪 Cerrar sesión</button>
+          <Link style={menuItem} to="/complete-profile">🧾 Verificar identidad</Link>
+          <button onClick={handleLogout} style={logoutButton}>🚪 Cerrar sesión</button>
         </nav>
 
         <div style={sideCard}>
@@ -79,7 +80,7 @@ function Dashboard() {
         <section style={hero}>
           <p style={label}>CENTRO DE PROGRESO QSM</p>
           <h1 style={title}>
-            Bienvenido, {user.firstName} {user.lastName} 👋
+            Bienvenido, {currentUser.firstName} {currentUser.lastName} 👋
           </h1>
           <p style={subtitle}>
             Construye tu reputación digital, aumenta tu nivel de confianza y desbloquea
@@ -89,16 +90,16 @@ function Dashboard() {
 
         <Link to="/profile" style={profileCard}>
           <div style={avatar}>
-            {user.profilePhoto ? (
-              <img src={user.profilePhoto} alt="Perfil" style={avatarImg} />
+            {currentUser.profilePhoto ? (
+              <img src={currentUser.profilePhoto} alt="Perfil" style={avatarImg} />
             ) : (
-              user.firstName?.charAt(0) || "U"
+              currentUser.firstName?.charAt(0) || "U"
             )}
           </div>
 
           <div>
-            <strong>{user.firstName} {user.lastName}</strong>
-            <p>{user.email || "usuario@qsm.com"}</p>
+            <strong>{currentUser.firstName} {currentUser.lastName}</strong>
+            <p>{currentUser.email || "usuario@qsm.com"}</p>
             <span style={statusBadge(kycStatus)}>{formatKyc(kycStatus)}</span>
           </div>
         </Link>
@@ -106,8 +107,8 @@ function Dashboard() {
         <section style={statsGrid}>
           <StatCard icon="🛒" title="Órdenes totales" value="12" text="+2 este mes" />
           <StatCard icon="📦" title="Enviadas" value="8" text="66.7% del total" />
-          <StatCard icon="⚖️" title="Disputas abiertas" value="1" text="En revisión" />
-          <StatCard icon="💰" title="Dinero protegido" value="RD$ 45,000" text="Retenido por escrow" />
+          <StatCard icon="⚖️" title="Reclamos abiertos" value="1" text="En revisión" />
+          <StatCard icon="💰" title="Dinero protegido" value="RD$ 45,000" text="Retenido por Pago Protegido" />
         </section>
 
         <section style={levelGrid}>
@@ -119,7 +120,7 @@ function Dashboard() {
             </p>
 
             <div style={scoreBox}>
-              <span>Trust Score</span>
+              <span>Nivel de confianza</span>
               <strong>{trustScore}/100</strong>
             </div>
 
@@ -132,8 +133,8 @@ function Dashboard() {
             <p style={label}>QSM AI RECOMIENDA</p>
             <h2>Completa tu verificación</h2>
             <p>
-              Al validar tu identidad podrás publicar productos, aumentar tu Trust Score
-              y generar mayor confianza frente a compradores.
+              Al validar tu identidad podrás publicar productos, aumentar tu nivel de confianza
+              y generar mayor seguridad frente a compradores.
             </p>
 
             <Link to="/complete-profile" style={primaryButton}>
@@ -149,7 +150,7 @@ function Dashboard() {
           <div style={roadmap}>
             <RoadStep done title="Cuenta creada" text="Ya tienes acceso inicial." />
             <RoadStep active title="Verificación pendiente" text="Sube documento y selfie." />
-            <RoadStep locked title="Comprador protegido" text="Compra usando escrow." />
+            <RoadStep locked title="Comprador protegido" text="Compra usando Pago Protegido." />
             <RoadStep locked title="Vendedor habilitado" text="Publica productos." />
             <RoadStep locked title="Vendedor confiable QSM" text="Accede a más beneficios." />
           </div>
@@ -162,8 +163,8 @@ function Dashboard() {
 
             <div style={capabilitiesGrid}>
               <Capability icon="🛒" title="Explorar productos" text="Busca productos dentro del marketplace." />
-              <Capability icon="💰" title="Comprar protegido" text="Usa escrow para mayor seguridad." />
-              <Capability icon="⚖️" title="Abrir disputas" text="Reporta problemas con evidencia." />
+              <Capability icon="💰" title="Comprar protegido" text="Usa Pago Protegido para mayor seguridad." />
+              <Capability icon="⚖️" title="Abrir reclamos" text="Reporta problemas con evidencia." />
               <Capability icon="🤖" title="Usar QSM AI" text="Recibe orientación dentro de la plataforma." />
             </div>
           </div>
@@ -172,8 +173,8 @@ function Dashboard() {
             <p style={label}>OBJETIVOS PARA DESBLOQUEAR</p>
             <h2>Próximos pasos</h2>
 
-            <Checklist done={!!user.firstName} text="Nombre real registrado" />
-            <Checklist done={!!user.phone} text="Teléfono agregado" />
+            <Checklist done={!!currentUser.firstName} text="Nombre real registrado" />
+            <Checklist done={!!currentUser.phone} text="Teléfono agregado" />
             <Checklist done={kycStatus === "PENDING_REVIEW" || isVerified} text="Documentos enviados" />
             <Checklist done={isVerified} text="Identidad aprobada por QSM" />
             <Checklist done={isVerified} text="Modo vendedor habilitado" />
@@ -230,6 +231,7 @@ function Checklist({ done, text }) {
 
 function formatKyc(status) {
   const map = {
+    NOT_STARTED: "Pendiente",
     PENDING: "Pendiente",
     PENDING_REVIEW: "En revisión",
     VERIFIED: "Verificado",
@@ -256,14 +258,14 @@ const statusBadge = (status) => ({
     status === "VERIFIED"
       ? "rgba(34,197,94,0.18)"
       : status === "REJECTED"
-        ? "rgba(239,68,68,0.18)"
-        : "rgba(245,158,11,0.18)",
+      ? "rgba(239,68,68,0.18)"
+      : "rgba(245,158,11,0.18)",
   color:
     status === "VERIFIED"
       ? "#86efac"
       : status === "REJECTED"
-        ? "#fca5a5"
-        : "#fde68a"
+      ? "#fca5a5"
+      : "#fde68a"
 });
 
 const page = {
