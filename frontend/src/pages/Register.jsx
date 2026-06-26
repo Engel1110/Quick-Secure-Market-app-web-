@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 function Register() {
   const navigate = useNavigate();
+  const { register } = useAuth();
 
   const [form, setForm] = useState({
     firstName: "",
@@ -16,6 +18,7 @@ function Register() {
 
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -26,10 +29,22 @@ function Register() {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
     setMessage("");
+
+    if (
+      !form.firstName ||
+      !form.lastName ||
+      !form.email ||
+      !form.phone ||
+      !form.password ||
+      !form.confirmPassword
+    ) {
+      setError("Debes completar todos los campos.");
+      return;
+    }
 
     if (form.password !== form.confirmPassword) {
       setError("Las contraseñas no coinciden.");
@@ -41,49 +56,34 @@ function Register() {
       return;
     }
 
-    const newUser = {
-      id: Date.now(),
-      firstName: form.firstName,
-      lastName: form.lastName,
-      email: form.email,
-      phone: form.phone,
-      role: "USER",
-      trustScore: 60,
-      kycStatus: "PENDING",
-      status: "PENDING",
-      sellerEnabled: false,
-      buyerEnabled: true
-    };
+    try {
+      setLoading(true);
 
-    localStorage.setItem("qsm_user", JSON.stringify(newUser));
-    localStorage.setItem("qsm_token", "demo-user-token");
+      await register({
+        firstName: form.firstName.trim(),
+        lastName: form.lastName.trim(),
+        email: form.email.trim().toLowerCase(),
+        phone: form.phone.trim(),
+        password: form.password
+      });
 
-    setMessage("Cuenta creada correctamente. Ahora completa tu verificación QSM.");
+      setMessage("Cuenta creada correctamente.");
 
-    setTimeout(() => {
-      navigate("/complete-profile");
-    }, 1200);
+      setTimeout(() => {
+        navigate("/dashboard");
+      }, 700);
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+          "No se pudo crear la cuenta. Verifica los datos e intenta nuevamente."
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleGoogleDemo = () => {
-    const googleUser = {
-      id: Date.now(),
-      firstName: "Usuario",
-      lastName: "Google",
-      email: "usuario@gmail.com",
-      role: "USER",
-      trustScore: 50,
-      kycStatus: "PENDING",
-      status: "PENDING",
-      loginProvider: "GOOGLE",
-      sellerEnabled: false,
-      buyerEnabled: true
-    };
-
-    localStorage.setItem("qsm_user", JSON.stringify(googleUser));
-    localStorage.setItem("qsm_token", "demo-google-token");
-
-    navigate("/complete-profile");
+    setError("Google todavía no está conectado. Usa registro con correo por ahora.");
   };
 
   return (
@@ -139,10 +139,10 @@ function Register() {
             </p>
 
             <div style={benefitsGrid}>
-              <div style={benefitCard}>✅ Identidad verificada</div>
-              <div style={benefitCard}>💰 Escrow Protection</div>
+              <div style={benefitCard}>✅ Identidad protegida</div>
+              <div style={benefitCard}>💰 Pago Protegido</div>
               <div style={benefitCard}>🤖 IA antifraude</div>
-              <div style={benefitCard}>📦 Historial QSM</div>
+              <div style={benefitCard}>📦 Historial de productos</div>
             </div>
           </div>
         </div>
@@ -152,11 +152,11 @@ function Register() {
             <p style={eyebrow}>CREAR CUENTA</p>
             <h2>Registro QSM</h2>
             <p>
-              Usa tu correo o inicia con Google. Luego completarás tu verificación de identidad.
+              Usa tu correo. Luego podrás completar tu verificación de identidad.
             </p>
           </div>
 
-          <button onClick={handleGoogleDemo} style={googleButton}>
+          <button type="button" onClick={handleGoogleDemo} style={googleButton}>
             <span>G</span>
             Continuar con Google
           </button>
@@ -244,8 +244,8 @@ function Register() {
             {error && <p style={errorText}>{error}</p>}
             {message && <p style={successText}>{message}</p>}
 
-            <button type="submit" style={submitButton}>
-              Crear cuenta segura →
+            <button type="submit" style={submitButton} disabled={loading}>
+              {loading ? "Creando cuenta..." : "Crear cuenta segura →"}
             </button>
           </form>
 
@@ -254,7 +254,7 @@ function Register() {
           </p>
 
           <div style={securityNote}>
-            🔒 Después del registro deberás completar tu identidad real:
+            🔒 Después del registro podrás completar tu identidad real:
             documento, dirección y selfie de verificación.
           </div>
         </div>

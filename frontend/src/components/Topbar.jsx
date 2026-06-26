@@ -1,13 +1,29 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 function Topbar() {
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+
   const [showNotifications, setShowNotifications] = useState(false);
   const [showMessages, setShowMessages] = useState(false);
   const [showCart, setShowCart] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
-
   const [activeChat, setActiveChat] = useState(null);
+
+  const currentUser = user || {
+    firstName: "Usuario",
+    lastName: "QSM",
+    email: "usuario@qsm.com",
+    role: "USER",
+    isVerified: false
+  };
+
+  const fullName = `${currentUser.firstName || "Usuario"} ${currentUser.lastName || ""}`.trim();
+  const avatarLetter = currentUser.firstName?.charAt(0)?.toUpperCase() || "U";
+
+  const userStatus = currentUser.isVerified ? "Verificado" : "Pendiente";
 
   const conversations = [
     {
@@ -20,22 +36,28 @@ function Topbar() {
       id: 2,
       name: "María Rodríguez",
       product: "PS5 Digital",
-      lastMessage: "¿Aceptas transferencia?"
+      lastMessage: "¿Aceptas Pago Protegido?"
     }
   ];
+
+  const handleLogout = () => {
+    localStorage.removeItem("qsm_user");
+    localStorage.removeItem("qsm_token");
+    logout();
+    navigate("/login");
+  };
 
   return (
     <>
       <div style={topbar}>
         <div style={searchContainer}>
           <input
-            placeholder="Buscar órdenes, disputas o productos..."
+            placeholder="Buscar compras, reclamos o productos..."
             style={searchInput}
           />
         </div>
 
         <div style={actions}>
-          {/* NOTIFICACIONES */}
           <div style={iconContainer}>
             <button
               style={iconButton}
@@ -43,6 +65,7 @@ function Topbar() {
                 setShowNotifications(!showNotifications);
                 setShowMessages(false);
                 setShowCart(false);
+                setShowProfile(false);
               }}
             >
               🔔
@@ -53,22 +76,13 @@ function Topbar() {
               <div style={dropdown}>
                 <h4>Notificaciones</h4>
 
-                <div style={notificationItem}>
-                  Producto aprobado por QSM
-                </div>
-
-                <div style={notificationItem}>
-                  Nuevo mensaje recibido
-                </div>
-
-                <div style={notificationItem}>
-                  Compra completada
-                </div>
+                <div style={notificationItem}>Producto aprobado por QSM</div>
+                <div style={notificationItem}>Nuevo mensaje recibido</div>
+                <div style={notificationItem}>Compra completada</div>
               </div>
             )}
           </div>
 
-          {/* MENSAJES */}
           <div style={iconContainer}>
             <button
               style={iconButton}
@@ -76,6 +90,7 @@ function Topbar() {
                 setShowMessages(!showMessages);
                 setShowNotifications(false);
                 setShowCart(false);
+                setShowProfile(false);
               }}
             >
               💬
@@ -93,9 +108,7 @@ function Topbar() {
                     onClick={() => setActiveChat(chat)}
                   >
                     <strong>{chat.name}</strong>
-
                     <p>{chat.product}</p>
-
                     <small>{chat.lastMessage}</small>
                   </div>
                 ))}
@@ -103,7 +116,6 @@ function Topbar() {
             )}
           </div>
 
-          {/* CARRITO */}
           <div style={iconContainer}>
             <button
               style={iconButton}
@@ -111,6 +123,7 @@ function Topbar() {
                 setShowCart(!showCart);
                 setShowMessages(false);
                 setShowNotifications(false);
+                setShowProfile(false);
               }}
             >
               🛒
@@ -121,30 +134,32 @@ function Topbar() {
               <div style={dropdown}>
                 <h4>Carrito</h4>
 
-                <div style={notificationItem}>
-                  iPhone 13 Pro
-                </div>
+                <div style={notificationItem}>Producto pendiente de compra</div>
 
-                <Link style={cartButton} to="/checkout">
-                  Ir al checkout
+                <Link style={cartButton} to="/marketplace">
+                  Ir al marketplace
                 </Link>
               </div>
             )}
           </div>
 
-          {/* PERFIL */}
           <div style={profileContainer}>
             <button
               style={profileButton}
-              onClick={() => setShowProfile(!showProfile)}
+              onClick={() => {
+                setShowProfile(!showProfile);
+                setShowNotifications(false);
+                setShowMessages(false);
+                setShowCart(false);
+              }}
             >
-              <div style={avatar}>E</div>
+              <div style={avatar}>{avatarLetter}</div>
 
               <div>
-                <strong>Engel Feliz</strong>
+                <strong>{fullName}</strong>
                 <br />
-                <span style={{ color: "#35d0c3" }}>
-                  Verificado
+                <span style={{ color: currentUser.isVerified ? "#35d0c3" : "#fde68a" }}>
+                  {userStatus}
                 </span>
               </div>
             </button>
@@ -156,18 +171,26 @@ function Topbar() {
                 </Link>
 
                 <Link style={menuItem} to="/orders">
-                  📦 Mis órdenes
+                  📦 Mis compras
                 </Link>
 
                 <Link style={menuItem} to="/disputes">
-                  ⚖ Mis disputas
+                  ⚖ Mis reclamos
                 </Link>
 
-                <Link style={menuItem} to="/settings">
-                  ⚙ Configuración
+                <Link style={menuItem} to="/complete-profile">
+                  🧾 Verificar identidad
                 </Link>
 
-                <button style={logoutButton}>
+                {(currentUser.role === "ADMIN" ||
+                  currentUser.role === "SENIOR_ADMIN" ||
+                  currentUser.role === "FOUNDER") && (
+                  <Link style={menuItem} to="/admin">
+                    🛠 Panel administrativo
+                  </Link>
+                )}
+
+                <button style={logoutButton} onClick={handleLogout}>
                   🚪 Cerrar sesión
                 </button>
               </div>
@@ -176,44 +199,28 @@ function Topbar() {
         </div>
       </div>
 
-      {/* CHAT FLOTANTE TIPO MESSENGER */}
-
       {activeChat && (
         <div style={chatWindow}>
           <div style={chatHeader}>
             <strong>{activeChat.name}</strong>
 
-            <button
-              style={closeButton}
-              onClick={() => setActiveChat(null)}
-            >
+            <button style={closeButton} onClick={() => setActiveChat(null)}>
               ✖
             </button>
           </div>
 
           <div style={chatMessages}>
-            <div style={messageOther}>
-              Hola 👋
-            </div>
+            <div style={messageOther}>Hola 👋</div>
 
-            <div style={messageMine}>
-              Hola, ¿el producto sigue disponible?
-            </div>
+            <div style={messageMine}>Hola, ¿el producto sigue disponible?</div>
 
-            <div style={messageOther}>
-              Sí, todavía está disponible.
-            </div>
+            <div style={messageOther}>Sí, todavía está disponible.</div>
           </div>
 
           <div style={chatInputArea}>
-            <input
-              placeholder="Escribe un mensaje..."
-              style={chatInput}
-            />
+            <input placeholder="Escribe un mensaje..." style={chatInput} />
 
-            <button style={sendButton}>
-              ➤
-            </button>
+            <button style={sendButton}>➤</button>
           </div>
         </div>
       )}
@@ -221,15 +228,12 @@ function Topbar() {
   );
 }
 
-/* ==========================
-   ESTILOS
-========================== */
-
 const topbar = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
-  marginBottom: "25px"
+  marginBottom: "25px",
+  gap: "18px"
 };
 
 const searchContainer = {
@@ -243,7 +247,8 @@ const searchInput = {
   borderRadius: "16px",
   background: "#081325",
   border: "1px solid rgba(53,208,195,.2)",
-  color: "white"
+  color: "white",
+  outline: "none"
 };
 
 const actions = {
@@ -280,7 +285,8 @@ const badge = {
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  fontSize: "12px"
+  fontSize: "12px",
+  fontWeight: "900"
 };
 
 const dropdown = {
@@ -292,18 +298,21 @@ const dropdown = {
   border: "1px solid rgba(53,208,195,.2)",
   borderRadius: "18px",
   padding: "20px",
-  zIndex: 100
+  zIndex: 100,
+  boxShadow: "0 25px 80px rgba(0,0,0,.45)"
 };
 
 const notificationItem = {
   padding: "12px",
-  borderBottom: "1px solid rgba(255,255,255,.08)"
+  borderBottom: "1px solid rgba(255,255,255,.08)",
+  color: "#cbd5e1"
 };
 
 const conversationItem = {
   padding: "14px",
   cursor: "pointer",
-  borderBottom: "1px solid rgba(255,255,255,.08)"
+  borderBottom: "1px solid rgba(255,255,255,.08)",
+  color: "#cbd5e1"
 };
 
 const profileContainer = {
@@ -319,7 +328,8 @@ const profileButton = {
   borderRadius: "18px",
   padding: "12px 18px",
   color: "white",
-  cursor: "pointer"
+  cursor: "pointer",
+  minWidth: "180px"
 };
 
 const avatar = {
@@ -330,7 +340,8 @@ const avatar = {
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  fontWeight: "bold"
+  fontWeight: "bold",
+  fontSize: "20px"
 };
 
 const profileMenu = {
@@ -344,12 +355,16 @@ const profileMenu = {
   padding: "15px",
   display: "flex",
   flexDirection: "column",
-  gap: "10px"
+  gap: "10px",
+  zIndex: 100,
+  boxShadow: "0 25px 80px rgba(0,0,0,.45)"
 };
 
 const menuItem = {
   color: "white",
-  textDecoration: "none"
+  textDecoration: "none",
+  padding: "10px 8px",
+  borderRadius: "10px"
 };
 
 const logoutButton = {
@@ -357,7 +372,9 @@ const logoutButton = {
   color: "#ef4444",
   border: "none",
   textAlign: "left",
-  cursor: "pointer"
+  cursor: "pointer",
+  padding: "10px 8px",
+  fontWeight: "800"
 };
 
 const chatWindow = {
@@ -371,7 +388,8 @@ const chatWindow = {
   border: "1px solid rgba(53,208,195,.2)",
   display: "flex",
   flexDirection: "column",
-  zIndex: 9999
+  zIndex: 9999,
+  boxShadow: "0 30px 100px rgba(0,0,0,.55)"
 };
 
 const chatHeader = {
@@ -420,7 +438,8 @@ const chatInput = {
   flex: 1,
   padding: "12px",
   borderRadius: "12px",
-  border: "none"
+  border: "none",
+  outline: "none"
 };
 
 const sendButton = {
