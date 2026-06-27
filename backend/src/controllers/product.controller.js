@@ -292,8 +292,45 @@ const improveProductEvidence = async (req, res) => {
   }
 };
 
+const getProductById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "ID de producto no válido"
+      });
+    }
+
+    const product = await Product.findById(id).populate(
+      "seller",
+      "firstName lastName email trustScore isVerified"
+    );
+
+    if (!product || product.status === "DISABLED") {
+      return res.status(404).json({
+        success: false,
+        message: "Producto no encontrado"
+      });
+    }
+
+    return res.json({
+      success: true,
+      product
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Error obteniendo producto",
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   createProduct,
   getProducts,
+  getProductById,
   improveProductEvidence
 };

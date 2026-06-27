@@ -1,98 +1,134 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import api from "../services/api";
+import { Link } from "react-router-dom";
+import Topbar from "../components/Topbar";
 import AiAssistant from "../components/AiAssistant";
+import { getProducts } from "../api/products";
 
 function Marketplace() {
-  const navigate = useNavigate();
-
   const [products, setProducts] = useState([]);
+  const [activeCategory, setActiveCategory] = useState("Todos");
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("Todos");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const loadProducts = async () => {
-    try {
-      const response = await api.get("/products");
-      setProducts(response.data.products || []);
-    } catch (error) {
-      console.error("Error cargando productos:", error);
-      setError("No se pudieron cargar los productos.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const categories = [
+    "Todos",
+    "Gaming",
+    "Tecnología",
+    "Celulares",
+    "Laptops",
+    "Vehículos",
+    "Hogar",
+    "Moda",
+    "Otros"
+  ];
 
   useEffect(() => {
     loadProducts();
   }, []);
 
-  const categories = useMemo(() => {
-    const unique = products
-      .map((p) => p.category)
-      .filter(Boolean);
+  const loadProducts = async () => {
+    try {
+      setLoading(true);
+      setError("");
 
-    return ["Todos", ...new Set(unique)];
-  }, [products]);
-
-  const filteredProducts = products.filter((product) => {
-    const matchSearch =
-      product.title?.toLowerCase().includes(search.toLowerCase()) ||
-      product.description?.toLowerCase().includes(search.toLowerCase()) ||
-      product.category?.toLowerCase().includes(search.toLowerCase());
-
-    const matchCategory =
-      category === "Todos" || product.category === category;
-
-    return matchSearch && matchCategory;
-  });
-
-  const getRiskLevel = (product) => {
-    if (!product?.fraudAlerts || product.fraudAlerts.length === 0) return "Bajo";
-
-    const hasHigh = product.fraudAlerts.some((alert) => alert.level === "HIGH");
-    const hasMedium = product.fraudAlerts.some((alert) => alert.level === "MEDIUM");
-
-    if (hasHigh) return "Alto";
-    if (hasMedium) return "Medio";
-    return "Bajo";
+      const data = await getProducts();
+      setProducts(data.products || []);
+    } catch (err) {
+      setError(
+        err.response?.data?.message ||
+          "No se pudieron cargar los productos. Verifica que el backend esté funcionando."
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
-  if (loading) {
-    return (
-      <div style={page}>
-        <div style={loadingBox}>
-          <h2>Cargando marketplace QSM...</h2>
-          <p>Preparando productos seguros.</p>
-        </div>
-      </div>
-    );
-  }
+  const filteredProducts = useMemo(() => {
+    return products.filter((product) => {
+      const category = product.category || "";
+      const title = product.title || "";
+      const description = product.description || "";
+
+      const matchCategory =
+        activeCategory === "Todos" ||
+        category.toLowerCase() === activeCategory.toLowerCase();
+
+      const matchSearch = `${title} ${description} ${category}`
+        .toLowerCase()
+        .includes(search.toLowerCase());
+
+      return matchCategory && matchSearch;
+    });
+  }, [products, activeCategory, search]);
 
   return (
     <div style={page}>
-      <style>
-        {`
-          * {
-            box-sizing: border-box;
+      <style>{`
+        * { box-sizing: border-box; }
+
+        html, body, #root {
+          margin: 0;
+          padding: 0;
+          width: 100%;
+          min-height: 100%;
+          background: #020617;
+          font-family: 'Inter', system-ui, sans-serif;
+        }
+
+        @keyframes fadeUp {
+          from { opacity: 0; transform: translateY(18px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes softPulse {
+          0% { opacity: .55; transform: scale(1); }
+          50% { opacity: 1; transform: scale(1.04); }
+          100% { opacity: .55; transform: scale(1); }
+        }
+
+        .market-product-card {
+          transition: transform .28s ease, border .28s ease, box-shadow .28s ease;
+        }
+
+        .market-product-card:hover {
+          transform: translateY(-8px);
+          border-color: rgba(53,208,195,.65);
+          box-shadow:
+            0 0 35px rgba(53,208,195,.18),
+            0 0 70px rgba(124,58,237,.12),
+            0 28px 80px rgba(0,0,0,.50);
+        }
+
+        .market-product-card:hover .market-product-image {
+          transform: scale(1.08);
+        }
+
+        .category-button {
+          transition: all .22s ease;
+        }
+
+        .category-button:hover {
+          transform: translateY(-2px);
+          border-color: rgba(53,208,195,.55);
+        }
+
+        @media (max-width: 1300px) {
+          .products-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+          }
+        }
+
+        @media (max-width: 1000px) {
+          .products-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
           }
 
-          html, body, #root {
-            width: 100%;
-            min-height: 100%;
-            margin: 0;
-            padding: 0;
-            overflow-x: hidden;
-            background: #020617;
-            font-family: 'Inter', system-ui, sans-serif;
+          .market-hero {
+            grid-template-columns: 1fr !important;
           }
-
-          input::placeholder {
-            color: #64748b;
-          }
-        `}
-      </style>
+        }
+      `}</style>
 
       <aside style={sidebar}>
         <Link to="/" style={brand}>
@@ -105,118 +141,172 @@ function Marketplace() {
 
         <nav style={menu}>
           <Link style={menuItem} to="/dashboard">🏠 Inicio</Link>
-          <Link style={menuItem} to="/profile">👤 Mi perfil</Link>
           <Link style={activeMenuItem} to="/marketplace">🛒 Marketplace</Link>
+          <Link style={menuItem} to="/orders">📦 Mis compras</Link>
+          <Link style={menuItem} to="/disputes">⚖ Mis reclamos</Link>
           <Link style={menuItem} to="/new-product">➕ Publicar producto</Link>
-          <Link style={menuItem} to="/orders">📦 Mis órdenes</Link>
-          <Link style={menuItem} to="/marketing">📈 Marketing Center</Link>
-          <Link style={menuItem} to="/disputes">⚖ Mis disputas</Link>
-          <Link style={menuItem} to="/complete-profile">🧾 Verificación QSM</Link>
+          <Link style={menuItem} to="/complete-profile">🧾 Verificar identidad</Link>
+          <Link style={menuItem} to="/profile">👤 Mi perfil</Link>
         </nav>
 
-        <div style={aiSideCard}>
-          <h3>🤖 QSM AI</h3>
+        <div style={sideCard}>
+          <p style={label}>PAGO PROTEGIDO</p>
+          <h3>Compra con confianza</h3>
           <p>
-            Te ayuda a detectar productos sospechosos, verificar vendedores y comprar con escrow.
+            El dinero queda retenido hasta que confirmes que recibiste el producto correctamente.
           </p>
+          <Link to="/complete-profile" style={sideButton}>
+            Saber más
+          </Link>
+        </div>
+
+        <div style={sideCard}>
+          <p style={label}>NIVEL DE CONFIANZA</p>
+          <h3>50 / 100</h3>
+          <p>Completa tu verificación para aumentar tu nivel y desbloquear más beneficios.</p>
+          <div style={progressTrack}>
+            <div style={progressFill}></div>
+          </div>
         </div>
       </aside>
 
       <main style={main}>
-        <header style={topbar}>
-          <div style={searchBox}>
-            <span>🔎</span>
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar productos seguros..."
-              style={searchInput}
-            />
-          </div>
+        <Topbar />
 
-          <div style={topActions}>
-            <Link to="/new-product" style={primaryButton}>
-              + Vender producto
-            </Link>
-          </div>
-        </header>
-
-        <section style={hero}>
+        <div style={topRow}>
           <div>
-            <p style={label}>QUICK SECURE MARKET</p>
-            <h1 style={title}>Compra y vende con protección QSM</h1>
-            <p style={subtitle}>
-              Explora productos publicados por usuarios, revisa el Trust Score del vendedor,
-              consulta alertas de riesgo y compra con pago protegido mediante escrow.
+            <h1 style={pageTitle}>Marketplace</h1>
+            <span style={protectedPill}>🛡 Protegido por QSM</span>
+          </div>
+
+          <Link to="/new-product" style={sellButton}>
+            + Vender producto
+          </Link>
+        </div>
+
+        <section className="market-hero" style={hero}>
+          <div style={heroImageBox}>
+            <div style={shieldGlow}></div>
+            <div style={shieldIcon}>🛡</div>
+          </div>
+
+          <div style={heroText}>
+            <h2>Compra y vende con total seguridad</h2>
+            <p>
+              Todos los productos se muestran desde tu backend. QSM protege el pago,
+              valida usuarios y permite revisar el vendedor antes de comprar.
             </p>
 
             <div style={heroBadges}>
-              <span>🛡 Identidad QSM</span>
-              <span>💰 Escrow protegido</span>
+              <span>🧾 Identidad verificada</span>
+              <span>💰 Pago Protegido</span>
               <span>🤖 IA antifraude</span>
-              <span>📦 Historial del producto</span>
+              <span>🛟 Soporte QSM</span>
             </div>
           </div>
+        </section>
 
-          <div style={heroCard}>
-            <h3>Centro de confianza</h3>
-            <p>
-              Antes de comprar, QSM analiza señales del producto, vendedor y comportamiento
-              para ayudarte a tomar mejores decisiones.
-            </p>
+        <section style={filterBar}>
+          <div style={categoryRow}>
+            {categories.map((category) => (
+              <button
+                key={category}
+                className="category-button"
+                onClick={() => setActiveCategory(category)}
+                style={
+                  activeCategory === category
+                    ? activeCategoryButton
+                    : categoryButton
+                }
+              >
+                {category}
+              </button>
+            ))}
+          </div>
+
+          <div style={rightFilters}>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Filtrar productos..."
+              style={miniSearch}
+            />
+
+            <button onClick={loadProducts} style={refreshButton}>
+              Actualizar
+            </button>
           </div>
         </section>
 
-        <section style={categoriesBar}>
-          {categories.map((item) => (
-            <button
-              key={item}
-              onClick={() => setCategory(item)}
-              style={category === item ? categoryActive : categoryButton}
-            >
-              {item}
+        <section style={statsRow}>
+          <div style={statBox}>
+            <span>Productos disponibles</span>
+            <strong>{products.length}</strong>
+          </div>
+
+          <div style={statBox}>
+            <span>Resultados filtrados</span>
+            <strong>{filteredProducts.length}</strong>
+          </div>
+
+          <div style={statBox}>
+            <span>Modo de datos</span>
+            <strong>Backend / API</strong>
+          </div>
+
+          <div style={statBox}>
+            <span>Protección</span>
+            <strong>Pago Protegido</strong>
+          </div>
+        </section>
+
+        {loading && (
+          <section className="products-grid" style={grid}>
+            {[1, 2, 3, 4].map((item) => (
+              <div key={item} style={skeletonCard}>
+                <div style={skeletonImage}></div>
+                <div style={skeletonLine}></div>
+                <div style={skeletonLineSmall}></div>
+              </div>
+            ))}
+          </section>
+        )}
+
+        {!loading && error && (
+          <div style={errorBox}>
+            <h3>No pudimos cargar los productos</h3>
+            <p>{error}</p>
+            <button onClick={loadProducts} style={primaryButton}>
+              Intentar de nuevo
             </button>
-          ))}
-        </section>
+          </div>
+        )}
 
-        <section style={summaryGrid}>
-          <SummaryCard title="Productos disponibles" value={products.length} />
-          <SummaryCard title="Resultados filtrados" value={filteredProducts.length} />
-          <SummaryCard title="Modo de datos" value="Datos reales/API" />
-          <SummaryCard title="Protección" value="Escrow QSM" />
-        </section>
-
-        {error && <div style={errorBox}>{error}</div>}
-
-        {products.length === 0 ? (
+        {!loading && !error && filteredProducts.length === 0 && (
           <div style={emptyBox}>
-            <h2>No hay productos publicados todavía.</h2>
-            <p>
-              Cuando un usuario publique productos reales, aparecerán aquí. No se mostrarán datos falsos
-              como si fueran productos existentes.
-            </p>
-
+            <h3>No hay productos para mostrar</h3>
+            <p>No existen productos publicados o tu filtro no encontró coincidencias.</p>
             <Link to="/new-product" style={primaryButton}>
-              Publicar primer producto
+              Publicar producto
             </Link>
           </div>
-        ) : filteredProducts.length === 0 ? (
-          <div style={emptyBox}>
-            <h2>No encontramos productos con ese filtro.</h2>
-            <p>Prueba otra búsqueda o cambia de categoría.</p>
-          </div>
-        ) : (
-          <section style={productGrid}>
-            {filteredProducts.map((product) => (
-              <ProductPremiumCard
-                key={product.id}
+        )}
+
+        {!loading && !error && filteredProducts.length > 0 && (
+          <section className="products-grid" style={grid}>
+            {filteredProducts.map((product, index) => (
+              <ProductCard
+                key={product._id || index}
                 product={product}
-                riskLevel={getRiskLevel(product)}
-                onClick={() => navigate(`/product/${product.id}`)}
+                index={index}
               />
             ))}
           </section>
         )}
+
+        <div style={loadMoreWrap}>
+          <button style={loadMoreButton}>Cargar más productos⌄</button>
+        </div>
       </main>
 
       <AiAssistant pageContext="marketplace" />
@@ -224,92 +314,113 @@ function Marketplace() {
   );
 }
 
-function ProductPremiumCard({ product, riskLevel, onClick }) {
-  const isVerified =
-    product.status === "CERTIFIED" ||
-    product.verificationStatus === "CERTIFIED" ||
-    product.seller?.isVerified;
+function ProductCard({ product, index }) {
+  const seller = product.seller || {};
+  const image = getProductImage(product);
+  const price = formatMoney(product.price);
+  const sellerName = `${seller.firstName || "Vendedor"} ${seller.lastName || ""}`.trim();
+  const trustScore = seller.trustScore || 50;
+  const sellerLetter = seller.firstName?.charAt(0)?.toUpperCase() || "V";
+
+  const glowColors = [
+    "rgba(53,208,195,.30)",
+    "rgba(124,58,237,.30)",
+    "rgba(59,130,246,.26)",
+    "rgba(236,72,153,.24)"
+  ];
 
   return (
-    <article style={productCard} onClick={onClick}>
-      <div style={imageWrap}>
-        {product.imageUrl?.startsWith("http") ? (
-          <img src={product.imageUrl} alt={product.title} style={productImage} />
-        ) : (
-          <div style={noImage}>📦</div>
-        )}
+    <article className="market-product-card" style={productCard}>
+      <div
+        style={{
+          ...cardGlow,
+          background: glowColors[index % glowColors.length]
+        }}
+      ></div>
 
-        <div style={verifiedBadge(isVerified)}>
-          {isVerified ? "QSM Verified" : "Pendiente"}
+      <button style={heartButton}>♡</button>
+
+      <Link to={`/product/${product._id}`} style={imageLink}>
+        <div style={imageWrap}>
+          <img
+            className="market-product-image"
+            src={image}
+            alt={product.title}
+            style={productImage}
+          />
+          <span style={protectedBadge}>🛡 Pago Protegido</span>
         </div>
-
-        <button
-          onClick={(e) => e.stopPropagation()}
-          style={favoriteButton}
-        >
-          ♡
-        </button>
-      </div>
+      </Link>
 
       <div style={productBody}>
-        <div style={productHeader}>
-          <h3>{product.title}</h3>
-          <span style={riskBadge(riskLevel)}>Riesgo {riskLevel}</span>
+        <h3 style={productTitle}>{product.title || "Producto sin título"}</h3>
+
+        <strong style={priceText}>{price}</strong>
+
+        <div style={metaLine}>
+          <span>🏷 {product.category || "Producto"}</span>
+          <span>📍 {product.location || "República Dominicana"}</span>
         </div>
 
-        <p style={description}>
-          {product.description || "Producto sin descripción detallada."}
-        </p>
-
-        <h2 style={price}>RD$ {formatMoney(product.price)}</h2>
-
-        <div style={metaGrid}>
-          <span>📂 {product.category || "Sin categoría"}</span>
-          <span>📍 {product.location || "Ubicación pendiente"}</span>
-          <span>⭐ Trust {product.seller?.trustScore || 60}/100</span>
-          <span>🧾 {product.qsmCode || "Código pendiente"}</span>
-        </div>
-
-        <div style={sellerRow}>
-          <div style={sellerAvatar}>
-            {product.seller?.firstName?.charAt(0) || "U"}
-          </div>
+        <div style={sellerBox}>
+          <div style={sellerAvatar}>{sellerLetter}</div>
 
           <div>
-            <strong>
-              {product.seller?.firstName || "Usuario"} {product.seller?.lastName || "QSM"}
-            </strong>
-            <p>{product.seller?.isVerified ? "Vendedor verificado" : "Vendedor pendiente"}</p>
+            <strong>{sellerName}</strong>
+            <p>Confianza: <span>{trustScore}/100</span></p>
           </div>
         </div>
-
-        <button style={buyButton}>
-          Ver perfil del producto →
-        </button>
       </div>
     </article>
   );
 }
 
-function SummaryCard({ title, value }) {
-  return (
-    <div style={summaryCard}>
-      <p>{title}</p>
-      <h2>{value}</h2>
-    </div>
-  );
+function getProductImage(product) {
+  if (product.images && product.images.length > 0) {
+    const firstImage = product.images[0];
+
+    if (typeof firstImage === "string" && firstImage.startsWith("http")) {
+      return firstImage;
+    }
+  }
+
+  const category = (product.category || "").toLowerCase();
+  const title = (product.title || "").toLowerCase();
+
+  if (title.includes("ps5") || title.includes("playstation") || category.includes("gaming")) {
+    return "https://images.unsplash.com/photo-1606813907291-d86efa9b94db?auto=format&fit=crop&w=900&q=90";
+  }
+
+  if (title.includes("iphone") || title.includes("celular")) {
+    return "https://images.unsplash.com/photo-1695048133142-1a20484d2569?auto=format&fit=crop&w=900&q=90";
+  }
+
+  if (title.includes("laptop") || title.includes("macbook")) {
+    return "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=900&q=90";
+  }
+
+  if (title.includes("watch") || title.includes("reloj")) {
+    return "https://images.unsplash.com/photo-1434493789847-2f02dc6ca35d?auto=format&fit=crop&w=900&q=90";
+  }
+
+  return "https://images.unsplash.com/photo-1560472355-536de3962603?auto=format&fit=crop&w=900&q=90";
 }
 
 function formatMoney(value) {
-  if (!value) return "0";
-  return Number(value).toLocaleString("es-DO");
+  if (!value && value !== 0) return "RD$ 0";
+
+  return new Intl.NumberFormat("es-DO", {
+    style: "currency",
+    currency: "DOP",
+    maximumFractionDigits: 0
+  }).format(value);
 }
 
 const page = {
   minHeight: "100vh",
   width: "100%",
   background:
-    "radial-gradient(circle at top right, rgba(53,208,195,0.12), transparent 35%), #020617",
+    "radial-gradient(circle at top right, rgba(124,58,237,.12), transparent 30%), #020617",
   color: "white",
   display: "grid",
   gridTemplateColumns: "260px minmax(0, 1fr)",
@@ -318,9 +429,9 @@ const page = {
 
 const sidebar = {
   minHeight: "100vh",
-  background: "rgba(8,17,35,0.92)",
-  borderRight: "1px solid rgba(53,208,195,0.18)",
-  padding: "28px 16px",
+  background: "rgba(8,17,35,.96)",
+  borderRight: "1px solid rgba(53,208,195,.14)",
+  padding: "22px 16px",
   position: "sticky",
   top: 0
 };
@@ -331,18 +442,17 @@ const brand = {
   gap: "12px",
   color: "white",
   textDecoration: "none",
-  marginBottom: "40px"
+  marginBottom: "34px"
 };
 
 const brandIcon = {
-  width: "46px",
-  height: "46px",
-  borderRadius: "16px",
-  border: "1px solid rgba(53,208,195,0.45)",
+  width: "44px",
+  height: "44px",
+  borderRadius: "15px",
+  border: "1px solid rgba(53,208,195,.45)",
   display: "flex",
   alignItems: "center",
-  justifyContent: "center",
-  color: "#35d0c3"
+  justifyContent: "center"
 };
 
 const brandTitle = {
@@ -358,350 +468,433 @@ const brandSub = {
 
 const menu = {
   display: "grid",
-  gap: "11px"
+  gap: "10px"
 };
 
 const menuItem = {
   color: "#cbd5e1",
   textDecoration: "none",
   padding: "13px 14px",
-  borderRadius: "15px",
-  background: "rgba(15,23,42,0.38)",
-  border: "1px solid rgba(148,163,184,0.10)",
-  fontWeight: "700",
-  fontSize: "15px"
+  borderRadius: "14px",
+  background: "rgba(15,23,42,.34)",
+  border: "1px solid rgba(148,163,184,.08)",
+  fontWeight: "800"
 };
 
 const activeMenuItem = {
   ...menuItem,
-  background: "rgba(53,208,195,0.14)",
-  border: "1px solid rgba(53,208,195,0.35)",
+  background: "rgba(53,208,195,.14)",
+  border: "1px solid rgba(53,208,195,.42)",
   color: "#35d0c3"
 };
 
-const aiSideCard = {
-  marginTop: "34px",
-  background: "rgba(53,208,195,0.08)",
-  border: "1px solid rgba(53,208,195,0.18)",
-  borderRadius: "22px",
-  padding: "20px",
-  color: "#cbd5e1"
+const sideCard = {
+  marginTop: "28px",
+  background: "rgba(15,23,42,.62)",
+  border: "1px solid rgba(53,208,195,.18)",
+  borderRadius: "20px",
+  padding: "18px",
+  color: "#cbd5e1",
+  textAlign: "center"
+};
+
+const sideButton = {
+  display: "block",
+  marginTop: "14px",
+  background: "rgba(53,208,195,.14)",
+  border: "1px solid rgba(53,208,195,.32)",
+  color: "#35d0c3",
+  padding: "11px",
+  borderRadius: "12px",
+  textDecoration: "none",
+  fontWeight: "900"
+};
+
+const progressTrack = {
+  height: "9px",
+  background: "rgba(148,163,184,.18)",
+  borderRadius: "999px",
+  overflow: "hidden",
+  marginTop: "12px"
+};
+
+const progressFill = {
+  width: "50%",
+  height: "100%",
+  background: "linear-gradient(90deg, #35d0c3, #8b5cf6)"
 };
 
 const main = {
   width: "100%",
   minWidth: 0,
-  maxWidth: "1700px",
-  margin: "0 auto",
-  padding: "28px 34px 60px",
+  padding: "18px 28px 54px",
   overflowX: "hidden"
 };
 
-const topbar = {
+const topRow = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
-  gap: "20px",
-  marginBottom: "26px"
+  gap: "18px",
+  margin: "12px 0 18px"
 };
 
-const searchBox = {
-  flex: 1,
-  maxWidth: "720px",
-  display: "flex",
-  alignItems: "center",
-  gap: "10px",
-  background: "rgba(15,23,42,0.72)",
-  border: "1px solid rgba(53,208,195,0.18)",
-  borderRadius: "18px",
-  padding: "0 16px"
+const pageTitle = {
+  fontSize: "34px",
+  margin: 0
 };
 
-const searchInput = {
-  width: "100%",
-  background: "transparent",
-  border: "none",
-  outline: "none",
-  color: "white",
-  padding: "16px 0",
-  fontSize: "15px"
+const protectedPill = {
+  display: "inline-block",
+  marginTop: "8px",
+  color: "#35d0c3",
+  background: "rgba(53,208,195,.10)",
+  border: "1px solid rgba(53,208,195,.25)",
+  padding: "7px 11px",
+  borderRadius: "999px",
+  fontWeight: "900",
+  fontSize: "12px"
 };
 
-const topActions = {
-  display: "flex",
-  gap: "12px"
+const sellButton = {
+  background: "#35d0c3",
+  color: "#020617",
+  textDecoration: "none",
+  padding: "14px 18px",
+  borderRadius: "14px",
+  fontWeight: "900"
 };
 
 const hero = {
   display: "grid",
-  gridTemplateColumns: "minmax(0, 1fr) 360px",
-  gap: "24px",
+  gridTemplateColumns: "360px minmax(0, 1fr)",
+  gap: "26px",
+  alignItems: "center",
   background:
-    "linear-gradient(135deg, rgba(15,23,42,0.78), rgba(8,47,73,0.40))",
-  border: "1px solid rgba(53,208,195,0.18)",
-  borderRadius: "30px",
-  padding: "34px",
-  marginBottom: "24px"
+    "linear-gradient(135deg, rgba(15,23,42,.78), rgba(15,23,42,.50))",
+  border: "1px solid rgba(53,208,195,.16)",
+  borderRadius: "22px",
+  padding: "20px 28px",
+  marginBottom: "22px",
+  animation: "fadeUp .55s ease"
 };
 
-const label = {
-  color: "#35d0c3",
-  letterSpacing: "4px",
-  fontSize: "12px",
-  fontWeight: "900"
+const heroImageBox = {
+  position: "relative",
+  height: "150px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  overflow: "hidden"
 };
 
-const title = {
-  fontSize: "clamp(38px, 4vw, 68px)",
-  lineHeight: "1.04",
-  letterSpacing: "-2.5px",
-  margin: "10px 0 16px"
+const shieldGlow = {
+  position: "absolute",
+  width: "190px",
+  height: "190px",
+  borderRadius: "50%",
+  background:
+    "radial-gradient(circle, rgba(53,208,195,.34), rgba(124,58,237,.28), transparent 68%)",
+  filter: "blur(10px)",
+  animation: "softPulse 4s ease-in-out infinite"
 };
 
-const subtitle = {
-  color: "#cbd5e1",
-  lineHeight: "28px",
-  maxWidth: "900px"
+const shieldIcon = {
+  position: "relative",
+  width: "92px",
+  height: "92px",
+  borderRadius: "28px",
+  background: "linear-gradient(135deg, #35d0c3, #7c3aed)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: "42px",
+  boxShadow: "0 0 55px rgba(124,58,237,.42)"
+};
+
+const heroText = {
+  color: "#cbd5e1"
 };
 
 const heroBadges = {
   display: "flex",
   flexWrap: "wrap",
   gap: "12px",
-  marginTop: "22px",
-  color: "#cbd5e1"
+  marginTop: "18px"
 };
 
-const heroCard = {
-  background: "rgba(2,6,23,0.52)",
-  border: "1px solid rgba(53,208,195,0.20)",
-  borderRadius: "24px",
-  padding: "24px",
-  color: "#cbd5e1"
-};
-
-const categoriesBar = {
+const filterBar = {
   display: "flex",
-  gap: "12px",
-  overflowX: "auto",
-  paddingBottom: "8px",
-  marginBottom: "22px"
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "16px",
+  marginBottom: "18px"
+};
+
+const categoryRow = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "10px"
 };
 
 const categoryButton = {
-  background: "rgba(15,23,42,0.58)",
-  color: "#cbd5e1",
-  border: "1px solid rgba(148,163,184,0.14)",
+  padding: "11px 17px",
   borderRadius: "999px",
-  padding: "11px 16px",
+  border: "1px solid rgba(148,163,184,.16)",
+  background: "rgba(15,23,42,.60)",
+  color: "#cbd5e1",
   cursor: "pointer",
-  fontWeight: "800",
-  whiteSpace: "nowrap"
+  fontWeight: "800"
 };
 
-const categoryActive = {
+const activeCategoryButton = {
   ...categoryButton,
-  background: "rgba(53,208,195,0.16)",
-  border: "1px solid rgba(53,208,195,0.35)",
-  color: "#35d0c3"
+  color: "#35d0c3",
+  background: "rgba(53,208,195,.12)",
+  border: "1px solid rgba(53,208,195,.45)"
 };
 
-const summaryGrid = {
+const rightFilters = {
+  display: "flex",
+  gap: "10px"
+};
+
+const miniSearch = {
+  width: "230px",
+  background: "rgba(15,23,42,.66)",
+  border: "1px solid rgba(148,163,184,.16)",
+  borderRadius: "14px",
+  padding: "12px 14px",
+  color: "white",
+  outline: "none"
+};
+
+const refreshButton = {
+  background: "rgba(53,208,195,.12)",
+  border: "1px solid rgba(53,208,195,.32)",
+  color: "#35d0c3",
+  padding: "12px 16px",
+  borderRadius: "14px",
+  cursor: "pointer",
+  fontWeight: "900"
+};
+
+const statsRow = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-  gap: "16px",
-  marginBottom: "24px"
+  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+  gap: "14px",
+  marginBottom: "20px"
 };
 
-const summaryCard = {
-  background: "rgba(15,23,42,0.58)",
-  border: "1px solid rgba(53,208,195,0.16)",
-  borderRadius: "20px",
-  padding: "18px"
+const statBox = {
+  background: "rgba(15,23,42,.62)",
+  border: "1px solid rgba(53,208,195,.14)",
+  borderRadius: "18px",
+  padding: "16px",
+  textAlign: "center"
 };
 
-const productGrid = {
+const grid = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-  gap: "22px"
+  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+  gap: "20px"
 };
 
 const productCard = {
-  background: "rgba(15,23,42,0.66)",
-  border: "1px solid rgba(53,208,195,0.16)",
-  borderRadius: "26px",
+  position: "relative",
   overflow: "hidden",
-  cursor: "pointer",
-  transition: "transform .2s ease, border .2s ease",
-  minWidth: 0
+  borderRadius: "22px",
+  background: "rgba(15,23,42,.72)",
+  border: "1px solid rgba(53,208,195,.20)",
+  minHeight: "455px",
+  animation: "fadeUp .55s ease"
+};
+
+const cardGlow = {
+  position: "absolute",
+  inset: "-70px -70px auto auto",
+  width: "210px",
+  height: "210px",
+  borderRadius: "50%",
+  filter: "blur(42px)",
+  zIndex: 0
+};
+
+const heartButton = {
+  position: "absolute",
+  top: "15px",
+  right: "15px",
+  width: "38px",
+  height: "38px",
+  borderRadius: "50%",
+  background: "rgba(2,6,23,.70)",
+  border: "1px solid rgba(255,255,255,.18)",
+  color: "#cbd5e1",
+  fontSize: "22px",
+  zIndex: 4,
+  cursor: "pointer"
+};
+
+const imageLink = {
+  textDecoration: "none",
+  color: "white"
 };
 
 const imageWrap = {
-  height: "260px",
   position: "relative",
-  background: "rgba(2,6,23,0.72)",
-  overflow: "hidden"
+  height: "250px",
+  overflow: "hidden",
+  background: "radial-gradient(circle at center, rgba(53,208,195,.17), rgba(15,23,42,.52))"
 };
 
 const productImage = {
   width: "100%",
   height: "100%",
-  objectFit: "cover"
+  objectFit: "cover",
+  transition: "transform .42s ease"
 };
 
-const noImage = {
-  width: "100%",
-  height: "100%",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: "52px",
-  color: "#64748b"
-};
-
-const verifiedBadge = (verified) => ({
+const protectedBadge = {
   position: "absolute",
-  left: "14px",
-  top: "14px",
-  background: verified ? "rgba(34,197,94,0.18)" : "rgba(245,158,11,0.18)",
-  color: verified ? "#86efac" : "#fde68a",
-  border: verified
-    ? "1px solid rgba(34,197,94,0.32)"
-    : "1px solid rgba(245,158,11,0.32)",
-  padding: "7px 10px",
+  left: "16px",
+  bottom: "14px",
+  background: "rgba(53,208,195,.17)",
+  border: "1px solid rgba(53,208,195,.40)",
+  color: "#67fff1",
   borderRadius: "999px",
+  padding: "7px 11px",
   fontSize: "12px",
-  fontWeight: "900"
-});
-
-const favoriteButton = {
-  position: "absolute",
-  right: "14px",
-  top: "14px",
-  width: "38px",
-  height: "38px",
-  borderRadius: "50%",
-  border: "1px solid rgba(255,255,255,0.18)",
-  background: "rgba(2,6,23,0.65)",
-  color: "white",
-  cursor: "pointer"
+  fontWeight: "900",
+  backdropFilter: "blur(10px)"
 };
 
 const productBody = {
-  padding: "20px"
+  position: "relative",
+  zIndex: 2,
+  padding: "18px"
 };
 
-const productHeader = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: "12px",
-  alignItems: "flex-start"
+const productTitle = {
+  fontSize: "21px",
+  margin: "0 0 8px"
 };
 
-const description = {
-  color: "#94a3b8",
-  lineHeight: "24px",
-  minHeight: "48px"
-};
-
-const price = {
+const priceText = {
+  display: "block",
   color: "#35d0c3",
-  fontSize: "30px",
-  margin: "14px 0"
+  fontSize: "21px",
+  marginBottom: "12px"
 };
 
-const riskBadge = (risk) => ({
-  padding: "7px 10px",
-  borderRadius: "999px",
-  fontSize: "12px",
-  fontWeight: "900",
-  whiteSpace: "nowrap",
-  background:
-    risk === "Alto"
-      ? "rgba(239,68,68,0.18)"
-      : risk === "Medio"
-        ? "rgba(245,158,11,0.18)"
-        : "rgba(34,197,94,0.18)",
-  color:
-    risk === "Alto"
-      ? "#fca5a5"
-      : risk === "Medio"
-        ? "#fde68a"
-        : "#86efac"
-});
-
-const metaGrid = {
+const metaLine = {
   display: "grid",
-  gridTemplateColumns: "1fr 1fr",
-  gap: "10px",
-  color: "#cbd5e1",
-  fontSize: "13px",
-  marginBottom: "18px"
+  gap: "6px",
+  color: "#94a3b8",
+  fontSize: "14px",
+  marginBottom: "15px"
 };
 
-const sellerRow = {
+const sellerBox = {
   display: "flex",
   alignItems: "center",
   gap: "12px",
-  padding: "14px 0",
-  borderTop: "1px solid rgba(148,163,184,0.12)"
+  background: "rgba(2,6,23,.40)",
+  border: "1px solid rgba(148,163,184,.10)",
+  borderRadius: "16px",
+  padding: "12px"
 };
 
 const sellerAvatar = {
-  width: "44px",
-  height: "44px",
+  width: "42px",
+  height: "42px",
   borderRadius: "50%",
-  background: "linear-gradient(135deg, #35d0c3, #7c3aed)",
+  background: "linear-gradient(135deg, #35d0c3, #8b5cf6)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   fontWeight: "900"
 };
 
-const buyButton = {
-  width: "100%",
-  background: "linear-gradient(135deg, #35d0c3, #7c3aed)",
-  color: "white",
-  border: "none",
-  padding: "14px",
-  borderRadius: "15px",
-  cursor: "pointer",
-  fontWeight: "900"
+const skeletonCard = {
+  borderRadius: "22px",
+  background: "rgba(15,23,42,.62)",
+  border: "1px solid rgba(148,163,184,.12)",
+  padding: "18px",
+  minHeight: "400px"
+};
+
+const skeletonImage = {
+  height: "240px",
+  borderRadius: "18px",
+  background: "rgba(148,163,184,.12)",
+  marginBottom: "18px"
+};
+
+const skeletonLine = {
+  height: "18px",
+  width: "80%",
+  borderRadius: "999px",
+  background: "rgba(148,163,184,.12)",
+  marginBottom: "12px"
+};
+
+const skeletonLineSmall = {
+  ...skeletonLine,
+  width: "45%"
+};
+
+const errorBox = {
+  background: "rgba(127,29,29,.22)",
+  border: "1px solid rgba(248,113,113,.32)",
+  borderRadius: "22px",
+  padding: "28px",
+  color: "#fecaca"
+};
+
+const emptyBox = {
+  background: "rgba(15,23,42,.62)",
+  border: "1px solid rgba(53,208,195,.18)",
+  borderRadius: "22px",
+  padding: "30px",
+  textAlign: "center",
+  color: "#cbd5e1"
 };
 
 const primaryButton = {
   display: "inline-block",
+  marginTop: "16px",
   background: "#35d0c3",
   color: "#020617",
-  textDecoration: "none",
   padding: "13px 18px",
   borderRadius: "14px",
-  fontWeight: "900"
+  textDecoration: "none",
+  fontWeight: "900",
+  border: "none",
+  cursor: "pointer"
 };
 
-const errorBox = {
-  background: "rgba(127,29,29,0.22)",
-  color: "#fecaca",
-  border: "1px solid rgba(248,113,113,0.28)",
-  borderRadius: "16px",
-  padding: "14px",
-  marginBottom: "20px"
-};
-
-const emptyBox = {
-  background: "rgba(15,23,42,0.58)",
-  border: "1px solid rgba(53,208,195,0.18)",
-  borderRadius: "24px",
-  padding: "34px",
-  textAlign: "center"
-};
-
-const loadingBox = {
-  minHeight: "100vh",
+const loadMoreWrap = {
   display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  justifyContent: "center"
+  justifyContent: "center",
+  marginTop: "28px"
+};
+
+const loadMoreButton = {
+  background: "rgba(15,23,42,.62)",
+  border: "1px solid rgba(148,163,184,.16)",
+  color: "white",
+  padding: "13px 24px",
+  borderRadius: "999px",
+  fontWeight: "800",
+  cursor: "pointer"
+};
+
+const label = {
+  color: "#35d0c3",
+  letterSpacing: "4px",
+  fontSize: "12px",
+  fontWeight: "900",
+  textTransform: "uppercase"
 };
 
 export default Marketplace;
