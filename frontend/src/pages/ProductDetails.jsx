@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
-import api from "../services/api";
+import api from "../api/axios";
+import Topbar from "../components/Topbar";
 import AiAssistant from "../components/AiAssistant";
 
 function ProductDetails() {
@@ -12,9 +13,21 @@ function ProductDetails() {
   const [activeImage, setActiveImage] = useState("");
   const [chatMessage, setChatMessage] = useState("");
   const [messages, setMessages] = useState([
-    { from: "seller", text: "¡Hola! 👋 ¿En qué puedo ayudarte?", time: "10:30 AM" },
-    { from: "buyer", text: "Hola, ¿el producto está disponible?", time: "10:31 AM" },
-    { from: "seller", text: "Sí, está disponible y funciona correctamente.", time: "10:32 AM" }
+    {
+      from: "seller",
+      text: "¡Hola! 👋 ¿En qué puedo ayudarte?",
+      time: "10:30 AM"
+    },
+    {
+      from: "buyer",
+      text: "Hola, ¿el producto está disponible?",
+      time: "10:31 AM"
+    },
+    {
+      from: "seller",
+      text: "Sí, todavía está disponible.",
+      time: "10:32 AM"
+    }
   ]);
 
   const [loading, setLoading] = useState(true);
@@ -22,8 +35,12 @@ function ProductDetails() {
 
   const loadProduct = async () => {
     try {
+      setLoading(true);
+      setError("");
+
       const response = await api.get(`/products/${id}`);
       const loadedProduct = response.data.product;
+
       setProduct(loadedProduct);
       setActiveImage(getProductImage(loadedProduct));
     } catch (error) {
@@ -38,19 +55,22 @@ function ProductDetails() {
     loadProduct();
   }, [id]);
 
+  const seller = product?.seller || {};
   const riskLevel = useMemo(() => getRiskLevel(product), [product]);
   const isVerified = isProductVerified(product);
-  const seller = product?.seller || {};
 
   const gallery = useMemo(() => {
-    const main = getProductImage(product);
+    if (!product) return [];
 
-    return [
-      main,
-      product?.imageUrl,
-      product?.secondaryImageUrl,
-      product?.thirdImageUrl
-    ].filter((img, index, arr) => img && img.startsWith("http") && arr.indexOf(img) === index);
+    const imagesFromArray = Array.isArray(product.images)
+      ? product.images.filter((img) => typeof img === "string" && img.startsWith("http"))
+      : [];
+
+    const fallback = getProductImage(product);
+
+    return [fallback, ...imagesFromArray]
+      .filter(Boolean)
+      .filter((img, index, arr) => arr.indexOf(img) === index);
   }, [product]);
 
   const sendMessage = () => {
@@ -72,7 +92,7 @@ function ProductDetails() {
     return (
       <div style={page}>
         <div style={centerBox}>
-          <h2>Cargando perfil del producto...</h2>
+          <h2>Cargando producto...</h2>
           <p>QSM está preparando la información segura del producto.</p>
         </div>
       </div>
@@ -94,27 +114,42 @@ function ProductDetails() {
 
   return (
     <div style={page}>
-      <style>
-        {`
-          * {
-            box-sizing: border-box;
-          }
+      <style>{`
+        * { box-sizing: border-box; }
 
-          html, body, #root {
-            width: 100%;
-            min-height: 100%;
-            margin: 0;
-            padding: 0;
-            overflow-x: hidden;
-            background: #020617;
-            font-family: 'Inter', system-ui, sans-serif;
-          }
+        html, body, #root {
+          width: 100%;
+          min-height: 100%;
+          margin: 0;
+          padding: 0;
+          overflow-x: hidden;
+          background: #020617;
+          font-family: 'Inter', system-ui, sans-serif;
+        }
 
-          input::placeholder {
-            color: #64748b;
-          }
-        `}
-      </style>
+        @keyframes fadeUp {
+          from { opacity: 0; transform: translateY(18px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes pulseGlow {
+          0% { opacity: .55; transform: scale(1); }
+          50% { opacity: 1; transform: scale(1.05); }
+          100% { opacity: .55; transform: scale(1); }
+        }
+
+        .product-main-image {
+          transition: transform .4s ease;
+        }
+
+        .product-main-image:hover {
+          transform: scale(1.04);
+        }
+
+        input::placeholder {
+          color: #64748b;
+        }
+      `}</style>
 
       <aside style={sidebar}>
         <Link to="/" style={brand}>
@@ -128,58 +163,52 @@ function ProductDetails() {
         <nav style={menu}>
           <Link style={menuItem} to="/dashboard">🏠 Inicio</Link>
           <Link style={activeMenuItem} to="/marketplace">🛒 Marketplace</Link>
-          <Link style={menuItem} to="/orders">📦 Mis órdenes</Link>
+          <Link style={menuItem} to="/orders">📦 Mis compras</Link>
+          <Link style={menuItem} to="/disputes">⚖ Mis reclamos</Link>
+          <Link style={menuItem} to="/new-product">➕ Publicar producto</Link>
+          <Link style={menuItem} to="/complete-profile">🧾 Verificar identidad</Link>
           <Link style={menuItem} to="/profile">👤 Mi perfil</Link>
-          <Link style={menuItem} to="/marketing">📈 Marketing Center</Link>
-          <Link style={menuItem} to="/disputes">⚖ Mis disputas</Link>
-          <Link style={menuItem} to="/complete-profile">🧾 Verificación QSM</Link>
         </nav>
 
         <div style={aiSideCard}>
           <h3>🤖 QSM AI</h3>
           <p>
-            Analizamos señales del producto, vendedor, precio, historial y riesgo para ayudarte a comprar seguro.
+            Analizamos señales del producto, vendedor, precio y riesgo para ayudarte a comprar seguro.
           </p>
         </div>
       </aside>
 
       <main style={main}>
-        <header style={topbar}>
-          <button onClick={() => navigate("/marketplace")} style={backButton}>
-            ← Marketplace
-          </button>
-
-          <div style={searchBox}>
-            <span>🔎</span>
-            <input placeholder="Buscar productos seguros..." style={searchInput} />
-          </div>
-
-          <div style={userMini}>
-            <div style={userAvatar}>
-              {seller.firstName?.charAt(0) || "U"}
-            </div>
-            <div>
-              <strong>{seller.firstName || "Usuario"} {seller.lastName || "QSM"}</strong>
-              <p>{seller.isVerified ? "Verificado" : "Pendiente"}</p>
-            </div>
-          </div>
-        </header>
+        <Topbar />
 
         <div style={breadcrumb}>
-          Marketplace › {product.category || "Categoría"} › {product.title}
+          <button onClick={() => navigate("/marketplace")} style={backButton}>
+            ← Volver al Marketplace
+          </button>
+
+          <span>
+            Marketplace › {product.category || "Categoría"} › {product.title}
+          </span>
         </div>
 
         <section style={productHero}>
           <div style={galleryCard}>
             <div style={imageStage}>
+              <div style={imageGlow}></div>
+
               {activeImage ? (
-                <img src={activeImage} alt={product.title} style={mainImage} />
+                <img
+                  className="product-main-image"
+                  src={activeImage}
+                  alt={product.title}
+                  style={mainImage}
+                />
               ) : (
                 <div style={noImage}>📦 Sin imagen</div>
               )}
 
               <span style={verifiedBadge(isVerified)}>
-                {isVerified ? "QSM Verified" : "Pendiente QSM"}
+                {isVerified ? "Vendedor verificado" : "Verificación pendiente"}
               </span>
 
               <button style={favoriteButton}>♡</button>
@@ -207,7 +236,7 @@ function ProductDetails() {
               <div>
                 <h1 style={productTitle}>{product.title}</h1>
                 <p style={productSubtitle}>
-                  {product.condition || "Condición no especificada"} · {product.category || "Sin categoría"}
+                  {formatCondition(product.condition)} · {product.category || "Sin categoría"}
                 </p>
                 <p style={published}>
                   Publicado el {product.createdAt ? formatDate(product.createdAt) : "fecha pendiente"}
@@ -215,25 +244,27 @@ function ProductDetails() {
               </div>
 
               <span style={productVerifiedTag(isVerified)}>
-                {isVerified ? "Producto Verificado" : "En revisión"}
+                {isVerified ? "Producto confiable" : "En revisión"}
               </span>
             </div>
 
-            <h2 style={price}>RD$ {formatMoney(product.price)}</h2>
+            <h2 style={price}>{formatMoney(product.price)}</h2>
 
-            <p style={aiPriceText}>Precio evaluado por QSM AI según señales del producto.</p>
+            <p style={aiPriceText}>
+              Precio evaluado por QSM según señales del producto, vendedor e historial.
+            </p>
 
             <div style={specGrid}>
-              <Spec title="Estado" value={product.condition || "No disponible"} />
-              <Spec title="Garantía" value={product.warranty || "No aplica"} />
-              <Spec title="Ubicación" value={product.location || "Santo Domingo, RD"} />
+              <Spec title="Estado" value={formatCondition(product.condition)} />
+              <Spec title="Calidad" value={formatQuality(product.quality)} />
+              <Spec title="Ubicación" value={product.location || "República Dominicana"} />
             </div>
 
             <button
-              onClick={() => navigate(`/checkout/${product.id}`)}
+              onClick={() => navigate(`/checkout/${product._id}`)}
               style={buyButton}
             >
-              🔒 Comprar con pago protegido Escrow QSM
+              🔒 Comprar con Pago Protegido
             </button>
 
             <button style={cartButton}>
@@ -250,33 +281,41 @@ function ProductDetails() {
 
             <div style={sellerProfile}>
               <div style={sellerPhoto}>
-                {seller.firstName?.charAt(0) || "U"}
+                {seller.firstName?.charAt(0)?.toUpperCase() || "V"}
               </div>
 
               <div>
-                <strong>{seller.firstName || "Usuario"} {seller.lastName || "QSM"}</strong>
+                <strong>
+                  {seller.firstName || "Vendedor"} {seller.lastName || ""}
+                </strong>
                 <p>@{generateUsername(seller.firstName, seller.lastName)}</p>
                 <span style={sellerBadge(seller.isVerified)}>
-                  {seller.isVerified ? "Verificado" : "Pendiente"}
+                  {seller.isVerified ? "Identidad verificada" : "Identidad pendiente"}
                 </span>
               </div>
             </div>
 
             <div style={trustBox}>
-              <h3>Trust Score</h3>
-              <h2>{seller.trustScore || 60}/100</h2>
-              <p>{getTrustLevel(seller.trustScore || 60)}</p>
+              <h3>Nivel de confianza</h3>
+              <h2>{seller.trustScore || 50}/100</h2>
+              <p>{getTrustLevel(seller.trustScore || 50)}</p>
+
               <div style={track}>
-                <div style={{ ...fill, width: `${seller.trustScore || 60}%` }}></div>
+                <div style={{ ...fill, width: `${seller.trustScore || 50}%` }}></div>
               </div>
             </div>
 
-            <InfoLine title="Miembro desde" value="Enero 2026" />
-            <InfoLine title="Productos vendidos" value={seller.productsSold || 0} />
-            <InfoLine title="Ventas completadas" value={seller.completedSales || 0} />
-            <InfoLine title="Reseñas positivas" value={seller.positiveReviews ? `${seller.positiveReviews}%` : "Sin datos"} />
+            <InfoLine title="Miembro desde" value={seller.createdAt ? formatDate(seller.createdAt) : "Pendiente"} />
+            <InfoLine title="Correo" value={seller.email || "No disponible"} />
+            <InfoLine title="Estado" value={seller.isVerified ? "Verificado" : "Pendiente"} />
+            <InfoLine title="Nivel" value={getTrustLevel(seller.trustScore || 50)} />
 
-            <button style={sellerButton}>Ver perfil del vendedor</button>
+            <button
+              style={sellerButton}
+              onClick={() => navigate(`/seller/${seller._id || seller.id || ""}`)}
+            >
+              Ver perfil del vendedor
+            </button>
           </aside>
         </section>
 
@@ -284,17 +323,21 @@ function ProductDetails() {
           <button onClick={() => setActiveTab("description")} style={activeTab === "description" ? tabActive : tab}>
             Descripción
           </button>
+
           <button onClick={() => setActiveTab("details")} style={activeTab === "details" ? tabActive : tab}>
             Detalles
           </button>
+
           <button onClick={() => setActiveTab("ai")} style={activeTab === "ai" ? tabActive : tab}>
-            Análisis QSM AI
+            Análisis QSM
           </button>
+
           <button onClick={() => setActiveTab("history")} style={activeTab === "history" ? tabActive : tab}>
             Historial
           </button>
+
           <button onClick={() => setActiveTab("shipping")} style={activeTab === "shipping" ? tabActive : tab}>
-            Envíos y devoluciones
+            Entrega
           </button>
         </section>
 
@@ -313,27 +356,29 @@ function ProductDetails() {
               {activeTab === "details" && (
                 <>
                   <h2>Detalles del producto</h2>
-                  <InfoLine title="Código QSM" value={product.qsmCode || "Pendiente"} />
+                  <InfoLine title="ID del producto" value={product._id || "Pendiente"} />
                   <InfoLine title="Categoría" value={product.category || "No disponible"} />
-                  <InfoLine title="Condición" value={product.condition || "No disponible"} />
-                  <InfoLine title="Estado QSM" value={formatStatus(product.status)} />
-                  <InfoLine title="Verificación" value={formatStatus(product.verificationStatus)} />
+                  <InfoLine title="Estado" value={formatCondition(product.condition)} />
+                  <InfoLine title="Calidad" value={formatQuality(product.quality)} />
+                  <InfoLine title="Estatus" value={formatStatus(product.status)} />
+                  <InfoLine title="Puntaje de evidencia" value={`${product.confidenceScore || 70}/100`} />
                 </>
               )}
 
               {activeTab === "ai" && (
                 <>
-                  <h2>Análisis QSM AI</h2>
+                  <h2>Análisis QSM</h2>
+
                   <p style={paragraph}>
-                    QSM AI evalúa el producto usando señales de precio, vendedor, historial,
-                    descripción, imágenes, reportes y comportamiento de riesgo.
+                    QSM evalúa el producto usando señales de precio, vendedor, descripción,
+                    evidencia, historial y nivel de confianza.
                   </p>
 
                   <div style={checkList}>
-                    <Check text="Vendedor identificado en la plataforma" />
-                    <Check text="Precio evaluado dentro del rango esperado" />
-                    <Check text="Historial del producto disponible" />
-                    <Check text={hasAlerts(product) ? "Existen alertas que deben revisarse" : "Sin alertas críticas activas"} />
+                    <Check text="Vendedor registrado en la plataforma" />
+                    <Check text={`Nivel de riesgo actual: ${riskLevel}`} />
+                    <Check text={`Puntaje de evidencia: ${product.confidenceScore || 70}/100`} />
+                    <Check text={product.riskLevel ? `Código interno de riesgo: ${formatRisk(product.riskLevel)}` : "Sin riesgo crítico activo"} />
                   </div>
                 </>
               )}
@@ -341,19 +386,20 @@ function ProductDetails() {
               {activeTab === "history" && (
                 <>
                   <h2>Historial del producto</h2>
+
                   <Timeline title="Producto publicado" text="El producto fue creado en QSM." />
-                  <Timeline title="Revisión QSM" text="La plataforma evaluó la información del producto." />
-                  <Timeline title="Análisis IA" text={`Riesgo actual: ${riskLevel}.`} />
-                  <Timeline title="Código único" text={product.qsmCode || "Código pendiente de asignación."} />
+                  <Timeline title="Revisión inicial" text="QSM revisó la información básica del producto." />
+                  <Timeline title="Análisis de riesgo" text={`Resultado actual: ${riskLevel}.`} />
+                  <Timeline title="Pago Protegido" text="Disponible para compras seguras dentro de la plataforma." />
                 </>
               )}
 
               {activeTab === "shipping" && (
                 <>
-                  <h2>Envíos y devoluciones</h2>
+                  <h2>Entrega y protección</h2>
                   <p style={paragraph}>
-                    La entrega debe ser acordada entre comprador y vendedor. QSM recomienda lugares seguros,
-                    evidencia de entrega y uso de escrow para proteger el pago.
+                    La entrega debe ser acordada entre comprador y vendedor. QSM recomienda
+                    lugares seguros, evidencia de entrega y uso de Pago Protegido para cuidar el dinero.
                   </p>
                 </>
               )}
@@ -362,45 +408,41 @@ function ProductDetails() {
             <div style={insightGrid}>
               <div style={panel}>
                 <div style={panelHeader}>
-                  <h2>Análisis QSM AI</h2>
+                  <h2>Seguridad QSM</h2>
                   <span style={riskBadge(riskLevel)}>Riesgo {riskLevel}</span>
                 </div>
 
                 <p style={paragraph}>
-                  Nuestra IA determinó este nivel de riesgo según la información disponible del producto.
+                  El sistema clasifica este producto según la información disponible.
                 </p>
 
                 <div style={checkList}>
-                  <Check text="Vendedor con información registrada" />
-                  <Check text="Precio revisado por QSM AI" />
-                  <Check text="Descripción del vendedor disponible" />
-                  <Check text={hasAlerts(product) ? "Alertas pendientes de revisión" : "Sin alertas activas"} />
+                  <Check text="Producto registrado en MongoDB" />
+                  <Check text="Vendedor enlazado correctamente" />
+                  <Check text="Pago Protegido disponible" />
+                  <Check text="Mensajería protegida por IA preparada" />
                 </div>
               </div>
 
               <div style={panel}>
-                <h2>Certificación QSM</h2>
+                <h2>Protección del comprador</h2>
 
                 <div style={certBox}>
                   <div style={certIcon}>🛡</div>
                   <div>
-                    <strong>{isVerified ? "Producto verificado por QSM" : "Producto pendiente de revisión"}</strong>
+                    <strong>Pago Protegido QSM</strong>
                     <p>
-                      QSM valida señales del vendedor, producto, historial e información disponible.
+                      El dinero se retiene hasta que el comprador confirme la entrega correcta.
                     </p>
                   </div>
                 </div>
 
                 <div style={checkList}>
-                  <Check text="Identidad del vendedor revisada" />
-                  <Check text="Producto analizado por IA" />
-                  <Check text="Historial consultado" />
-                  <Check text={`Riesgo ${riskLevel.toLowerCase()} registrado`} />
+                  <Check text="Dinero retenido durante la compra" />
+                  <Check text="Chat protegido por IA antifraude" />
+                  <Check text="Reclamos disponibles si ocurre un problema" />
+                  <Check text="Historial del producto visible" />
                 </div>
-
-                <p style={codeLine}>
-                  Código único: <strong>{product.qsmCode || "Pendiente"}</strong>
-                </p>
               </div>
             </div>
           </div>
@@ -408,7 +450,7 @@ function ProductDetails() {
           <aside style={chatCard}>
             <div style={chatHeader}>
               <strong>Chat con el vendedor</strong>
-              <span>● En línea</span>
+              <span>● Demo visual</span>
             </div>
 
             <div style={chatBody}>
@@ -436,10 +478,10 @@ function ProductDetails() {
         </section>
 
         <section style={benefitRow}>
-          <Benefit icon="💎" title="Pago protegido" text="Tu dinero se mantiene seguro con escrow QSM." />
-          <Benefit icon="🧾" title="Identidad verificada" text="Vendedores revisados para mayor confianza." />
-          <Benefit icon="🤖" title="IA antifraude" text="Analizamos cada producto para evitar fraudes." />
-          <Benefit icon="⚖️" title="Disputas protegidas" text="Si tienes problemas, QSM revisa tu caso." />
+          <Benefit icon="💰" title="Pago Protegido" text="Tu dinero se mantiene seguro hasta confirmar la entrega." />
+          <Benefit icon="🧾" title="Identidad verificada" text="Los vendedores pueden validar su identidad para generar confianza." />
+          <Benefit icon="🤖" title="IA antifraude" text="QSM analiza mensajes y señales sospechosas." />
+          <Benefit icon="⚖️" title="Reclamos protegidos" text="Si hay problemas, puedes abrir un reclamo con evidencia." />
         </section>
       </main>
 
@@ -500,50 +542,104 @@ function Benefit({ icon, title, text }) {
 }
 
 function getProductImage(product) {
-  if (product?.imageUrl?.startsWith("http")) return product.imageUrl;
-  return "";
+  if (product?.images && product.images.length > 0) {
+    const firstImage = product.images[0];
+
+    if (typeof firstImage === "string" && firstImage.startsWith("http")) {
+      return firstImage;
+    }
+  }
+
+  const category = (product?.category || "").toLowerCase();
+  const title = (product?.title || "").toLowerCase();
+
+  if (title.includes("ps5") || title.includes("playstation") || category.includes("gaming")) {
+    return "https://images.unsplash.com/photo-1606813907291-d86efa9b94db?auto=format&fit=crop&w=1200&q=90";
+  }
+
+  if (title.includes("iphone") || title.includes("celular")) {
+    return "https://images.unsplash.com/photo-1695048133142-1a20484d2569?auto=format&fit=crop&w=1200&q=90";
+  }
+
+  if (title.includes("laptop") || title.includes("macbook")) {
+    return "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=1200&q=90";
+  }
+
+  if (title.includes("watch") || title.includes("reloj")) {
+    return "https://images.unsplash.com/photo-1434493789847-2f02dc6ca35d?auto=format&fit=crop&w=1200&q=90";
+  }
+
+  return "https://images.unsplash.com/photo-1560472355-536de3962603?auto=format&fit=crop&w=1200&q=90";
 }
 
 function isProductVerified(product) {
-  return (
-    product?.status === "CERTIFIED" ||
-    product?.verificationStatus === "CERTIFIED" ||
-    product?.seller?.isVerified
-  );
-}
-
-function hasAlerts(product) {
-  return product?.fraudAlerts?.length > 0;
+  return product?.seller?.isVerified || product?.isQsmVerified || false;
 }
 
 function getRiskLevel(product) {
-  if (!product?.fraudAlerts || product.fraudAlerts.length === 0) return "Bajo";
+  if (!product?.riskLevel) return "Bajo";
 
-  const hasHigh = product.fraudAlerts.some((alert) => alert.level === "HIGH");
-  const hasMedium = product.fraudAlerts.some((alert) => alert.level === "MEDIUM");
+  const map = {
+    LOW: "Bajo",
+    MEDIUM: "Medio",
+    HIGH: "Alto",
+    CRITICAL: "Crítico"
+  };
 
-  if (hasHigh) return "Alto";
-  if (hasMedium) return "Medio";
-  return "Bajo";
+  return map[product.riskLevel] || "Bajo";
+}
+
+function formatRisk(value) {
+  const map = {
+    LOW: "Bajo",
+    MEDIUM: "Medio",
+    HIGH: "Alto",
+    CRITICAL: "Crítico"
+  };
+
+  return map[value] || value || "Bajo";
+}
+
+function formatCondition(condition) {
+  const map = {
+    NEW: "Nuevo",
+    LIKE_NEW: "Como nuevo",
+    USED_GOOD: "Buen estado",
+    USED_DETAILS: "Usado con detalles",
+    FOR_PARTS: "Para piezas"
+  };
+
+  return map[condition] || "No disponible";
+}
+
+function formatQuality(quality) {
+  const map = {
+    EXCELLENT: "Excelente",
+    GOOD: "Buena",
+    FAIR: "Aceptable",
+    DAMAGED: "Dañado",
+    UNKNOWN: "No especificada"
+  };
+
+  return map[quality] || "No especificada";
 }
 
 function formatStatus(status) {
-  const statusMap = {
+  const map = {
+    ACTIVE: "Activo",
     PENDING: "Pendiente",
-    CERTIFIED: "Certificado",
-    APPROVED: "Aprobado",
-    REJECTED: "Rechazado",
     SOLD: "Vendido",
-    SHIPPED: "Enviado",
-    DELIVERED: "Entregado"
+    DISABLED: "Deshabilitado",
+    COMPLETED: "Completado"
   };
 
-  return statusMap[status] || status || "No disponible";
+  return map[status] || status || "No disponible";
 }
 
 function generateUsername(firstName, lastName) {
-  const first = firstName ? firstName.toLowerCase().replaceAll(" ", "") : "usuario";
+  const first = firstName ? firstName.toLowerCase().replaceAll(" ", "") : "vendedor";
   const last = lastName ? lastName.toLowerCase().replaceAll(" ", "") : "qsm";
+
   return `${first}${last}`;
 }
 
@@ -554,8 +650,13 @@ function getTrustLevel(score) {
 }
 
 function formatMoney(value) {
-  if (!value) return "0";
-  return Number(value).toLocaleString("es-DO");
+  if (!value && value !== 0) return "RD$ 0";
+
+  return new Intl.NumberFormat("es-DO", {
+    style: "currency",
+    currency: "DOP",
+    maximumFractionDigits: 0
+  }).format(value);
 }
 
 function formatDate(date) {
@@ -583,9 +684,9 @@ const page = {
 
 const sidebar = {
   minHeight: "100vh",
-  background: "rgba(8,17,35,0.94)",
+  background: "rgba(8,17,35,0.96)",
   borderRight: "1px solid rgba(53,208,195,0.18)",
-  padding: "28px 16px",
+  padding: "22px 16px",
   position: "sticky",
   top: 0
 };
@@ -596,13 +697,13 @@ const brand = {
   gap: "12px",
   color: "white",
   textDecoration: "none",
-  marginBottom: "40px"
+  marginBottom: "34px"
 };
 
 const brandIcon = {
-  width: "46px",
-  height: "46px",
-  borderRadius: "16px",
+  width: "44px",
+  height: "44px",
+  borderRadius: "15px",
   border: "1px solid rgba(53,208,195,0.45)",
   display: "flex",
   alignItems: "center",
@@ -623,122 +724,74 @@ const brandSub = {
 
 const menu = {
   display: "grid",
-  gap: "11px"
+  gap: "10px"
 };
 
 const menuItem = {
   color: "#cbd5e1",
   textDecoration: "none",
   padding: "13px 14px",
-  borderRadius: "15px",
-  background: "rgba(15,23,42,0.38)",
-  border: "1px solid rgba(148,163,184,0.10)",
-  fontWeight: "700",
-  fontSize: "15px"
+  borderRadius: "14px",
+  background: "rgba(15,23,42,0.34)",
+  border: "1px solid rgba(148,163,184,0.08)",
+  fontWeight: "800"
 };
 
 const activeMenuItem = {
   ...menuItem,
   background: "rgba(53,208,195,0.14)",
-  border: "1px solid rgba(53,208,195,0.35)",
+  border: "1px solid rgba(53,208,195,0.42)",
   color: "#35d0c3"
 };
 
 const aiSideCard = {
-  marginTop: "34px",
+  marginTop: "28px",
   background: "rgba(53,208,195,0.08)",
   border: "1px solid rgba(53,208,195,0.18)",
-  borderRadius: "22px",
-  padding: "20px",
+  borderRadius: "20px",
+  padding: "18px",
   color: "#cbd5e1"
 };
 
 const main = {
   width: "100%",
   minWidth: 0,
-  maxWidth: "1740px",
-  margin: "0 auto",
-  padding: "28px 34px 60px",
+  padding: "18px 28px 54px",
   overflowX: "hidden"
 };
 
-const topbar = {
-  display: "grid",
-  gridTemplateColumns: "160px minmax(0, 1fr) 260px",
+const breadcrumb = {
+  color: "#94a3b8",
+  margin: "14px 0 18px",
+  display: "flex",
   alignItems: "center",
-  gap: "18px",
-  marginBottom: "24px"
+  gap: "14px",
+  flexWrap: "wrap"
 };
 
 const backButton = {
   background: "rgba(15,23,42,0.58)",
   color: "#cbd5e1",
   border: "1px solid rgba(53,208,195,0.18)",
-  padding: "13px 15px",
+  padding: "12px 15px",
   borderRadius: "14px",
   cursor: "pointer",
   fontWeight: "800"
 };
 
-const searchBox = {
-  display: "flex",
-  alignItems: "center",
-  gap: "10px",
-  background: "rgba(15,23,42,0.72)",
-  border: "1px solid rgba(53,208,195,0.18)",
-  borderRadius: "18px",
-  padding: "0 16px"
-};
-
-const searchInput = {
-  width: "100%",
-  background: "transparent",
-  border: "none",
-  outline: "none",
-  color: "white",
-  padding: "16px 0",
-  fontSize: "15px"
-};
-
-const userMini = {
-  display: "flex",
-  alignItems: "center",
-  gap: "12px",
-  background: "rgba(15,23,42,0.52)",
-  border: "1px solid rgba(53,208,195,0.16)",
-  borderRadius: "18px",
-  padding: "12px"
-};
-
-const userAvatar = {
-  width: "46px",
-  height: "46px",
-  borderRadius: "50%",
-  background: "linear-gradient(135deg, #35d0c3, #7c3aed)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontWeight: "900"
-};
-
-const breadcrumb = {
-  color: "#94a3b8",
-  marginBottom: "22px"
-};
-
 const productHero = {
   display: "grid",
   gridTemplateColumns: "minmax(360px, 1fr) minmax(420px, 1fr) 330px",
-  gap: "24px",
+  gap: "22px",
   alignItems: "stretch",
-  marginBottom: "24px"
+  marginBottom: "22px"
 };
 
 const galleryCard = {
   background: "rgba(15,23,42,0.62)",
   border: "1px solid rgba(53,208,195,0.16)",
-  borderRadius: "26px",
-  padding: "18px",
+  borderRadius: "24px",
+  padding: "16px",
   minWidth: 0
 };
 
@@ -750,7 +803,17 @@ const imageStage = {
   background: "rgba(2,6,23,0.70)"
 };
 
+const imageGlow = {
+  position: "absolute",
+  inset: "20%",
+  background: "radial-gradient(circle, rgba(53,208,195,0.22), transparent 65%)",
+  filter: "blur(20px)",
+  animation: "pulseGlow 4s ease-in-out infinite"
+};
+
 const mainImage = {
+  position: "relative",
+  zIndex: 2,
   width: "100%",
   height: "100%",
   objectFit: "cover"
@@ -770,6 +833,7 @@ const verifiedBadge = (verified) => ({
   position: "absolute",
   top: "14px",
   left: "14px",
+  zIndex: 3,
   background: verified ? "rgba(34,197,94,0.18)" : "rgba(245,158,11,0.18)",
   color: verified ? "#86efac" : "#fde68a",
   border: verified
@@ -785,6 +849,7 @@ const favoriteButton = {
   position: "absolute",
   top: "14px",
   right: "14px",
+  zIndex: 3,
   width: "42px",
   height: "42px",
   borderRadius: "50%",
@@ -831,21 +896,21 @@ const emptyThumb = {
 const productCard = {
   background: "rgba(15,23,42,0.62)",
   border: "1px solid rgba(53,208,195,0.16)",
-  borderRadius: "26px",
-  padding: "26px",
+  borderRadius: "24px",
+  padding: "24px",
   minWidth: 0
 };
 
 const productTitleRow = {
   display: "flex",
   justifyContent: "space-between",
-  gap: "16px",
+  gap: "14px",
   alignItems: "flex-start"
 };
 
 const productTitle = {
-  fontSize: "36px",
-  lineHeight: "42px",
+  fontSize: "34px",
+  lineHeight: "40px",
   margin: "0 0 8px"
 };
 
@@ -874,12 +939,12 @@ const productVerifiedTag = (verified) => ({
 const price = {
   color: "#35d0c3",
   fontSize: "40px",
-  margin: "28px 0 8px"
+  margin: "26px 0 8px"
 };
 
 const aiPriceText = {
   color: "#94a3b8",
-  marginBottom: "24px"
+  marginBottom: "22px"
 };
 
 const specGrid = {
@@ -926,8 +991,8 @@ const reportButton = {
 const sellerCard = {
   background: "rgba(15,23,42,0.62)",
   border: "1px solid rgba(53,208,195,0.16)",
-  borderRadius: "26px",
-  padding: "24px",
+  borderRadius: "24px",
+  padding: "22px",
   minWidth: 0
 };
 
@@ -940,12 +1005,12 @@ const sellerProfile = {
   display: "flex",
   gap: "14px",
   alignItems: "center",
-  marginBottom: "22px"
+  marginBottom: "20px"
 };
 
 const sellerPhoto = {
-  width: "76px",
-  height: "76px",
+  width: "72px",
+  height: "72px",
   borderRadius: "50%",
   background: "linear-gradient(135deg, #35d0c3, #7c3aed)",
   display: "flex",
@@ -1026,8 +1091,8 @@ const tabActive = {
 const belowGrid = {
   display: "grid",
   gridTemplateColumns: "minmax(0, 1fr) 360px",
-  gap: "24px",
-  marginBottom: "28px"
+  gap: "22px",
+  marginBottom: "26px"
 };
 
 const leftContent = {
@@ -1088,17 +1153,17 @@ const riskBadge = (risk) => ({
   fontWeight: "900",
   fontSize: "12px",
   background:
-    risk === "Alto"
+    risk === "Alto" || risk === "Crítico"
       ? "rgba(239,68,68,0.18)"
       : risk === "Medio"
-        ? "rgba(245,158,11,0.18)"
-        : "rgba(34,197,94,0.18)",
+      ? "rgba(245,158,11,0.18)"
+      : "rgba(34,197,94,0.18)",
   color:
-    risk === "Alto"
+    risk === "Alto" || risk === "Crítico"
       ? "#fca5a5"
       : risk === "Medio"
-        ? "#fde68a"
-        : "#86efac"
+      ? "#fde68a"
+      : "#86efac"
 });
 
 const certBox = {
@@ -1109,20 +1174,15 @@ const certBox = {
 };
 
 const certIcon = {
-  width: "76px",
-  height: "76px",
-  borderRadius: "24px",
+  width: "72px",
+  height: "72px",
+  borderRadius: "22px",
   background: "rgba(53,208,195,0.12)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   fontSize: "34px",
   flexShrink: 0
-};
-
-const codeLine = {
-  color: "#cbd5e1",
-  marginTop: "18px"
 };
 
 const timeline = {
