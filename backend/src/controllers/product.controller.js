@@ -38,6 +38,113 @@ const isValidObjectId = (id) => {
   return mongoose.Types.ObjectId.isValid(id);
 };
 
+const normalizeImages = (images) => {
+  if (!Array.isArray(images)) return [];
+
+  return images
+    .filter((item) => typeof item === "string" && item.trim())
+    .slice(0, 8)
+    .map((item) => sanitizeText(item));
+};
+
+const normalizeVideo = (video) => {
+  if (!video || typeof video !== "object") {
+    return {
+      url: "",
+      thumbnail: "",
+      duration: 0
+    };
+  }
+
+  return {
+    url: video.url ? sanitizeText(video.url) : "",
+    thumbnail: video.thumbnail ? sanitizeText(video.thumbnail) : "",
+    duration: Number(video.duration || 0)
+  };
+};
+
+const calculateProductAnalysis = ({
+  images = [],
+  video = {},
+  description = "",
+  price = 0,
+  quality = "UNKNOWN",
+  specialPriceExplanation = "",
+  sellerTrustScore = 50
+}) => {
+  let evidenceRequired = [];
+
+  let imageScore = 0;
+  if (images.length >= 6) imageScore = 95;
+  else if (images.length >= 3) imageScore = 80;
+  else if (images.length >= 1) imageScore = 55;
+  else {
+    imageScore = 0;
+    evidenceRequired.push("Agregar fotos reales del producto");
+  }
+
+  let videoScore = 0;
+  if (video?.url) videoScore = 90;
+  else {
+    videoScore = 0;
+    evidenceRequired.push("Agregar un video corto del producto funcionando");
+  }
+
+  let priceScore = 70;
+  if (Number(price) > 0) priceScore = 80;
+  else {
+    priceScore = 0;
+    evidenceRequired.push("Agregar un precio válido");
+  }
+
+  let descriptionScore = 0;
+  if (description.length >= 250) descriptionScore = 95;
+  else if (description.length >= 120) descriptionScore = 80;
+  else if (description.length >= 40) descriptionScore = 60;
+  else {
+    descriptionScore = 25;
+    evidenceRequired.push("Mejorar la descripción del producto");
+  }
+
+  let sellerScore = Math.min(Number(sellerTrustScore || 50), 100);
+
+  if (quality === "UNKNOWN") {
+    evidenceRequired.push("Indicar la calidad real del producto");
+  }
+
+  if (!specialPriceExplanation || specialPriceExplanation.length < 30) {
+    evidenceRequired.push("Explicar mejor el motivo de venta o precio");
+  }
+
+  const fraudRiskScore = Math.round(
+    imageScore * 0.22 +
+      videoScore * 0.18 +
+      priceScore * 0.15 +
+      descriptionScore * 0.22 +
+      sellerScore * 0.23
+  );
+
+  let riskLevel = "LOW";
+
+  if (fraudRiskScore < 45) riskLevel = "HIGH";
+  else if (fraudRiskScore < 70) riskLevel = "MEDIUM";
+  else riskLevel = "LOW";
+
+  return {
+    confidenceScore: fraudRiskScore,
+    riskLevel,
+    evidenceRequired,
+    aiAnalysis: {
+      imageScore,
+      videoScore,
+      priceScore,
+      descriptionScore,
+      sellerScore,
+      fraudRiskScore
+    }
+  };
+};
+
 const createProduct = async (req, res) => {
   try {
     const {
@@ -47,9 +154,13 @@ const createProduct = async (req, res) => {
       category,
       condition,
       quality,
+      location,
+      warranty,
+      deliveryMethod,
       specialPriceReason,
       specialPriceExplanation,
-      images
+      images,
+      video
     } = req.body;
 
     if (!title || !description || !price || !category) {
@@ -92,9 +203,18 @@ const createProduct = async (req, res) => {
       });
     }
 
-    const safeImages = Array.isArray(images)
-      ? images.slice(0, 8).map((item) => sanitizeText(item))
-      : [];
+    const safeImages = normalizeImages(images);
+    const safeVideo = normalizeVideo(video);
+
+    const analysis = calculateProductAnalysis({
+      images: safeImages,
+      video: safeVideo,
+      description: sanitizeText(description),
+      price: numericPrice,
+      quality: quality || "UNKNOWN",
+      specialPriceExplanation: specialPriceExplanation || "",
+      sellerTrustScore: req.user?.trustScore || 50
+    });
 
     const product = await Product.create({
       title: sanitizeText(title),
@@ -103,16 +223,22 @@ const createProduct = async (req, res) => {
       category: sanitizeText(category),
       condition: condition || "USED_GOOD",
       quality: quality || "UNKNOWN",
+      location: location ? sanitizeText(location) : "",
+      warranty: warranty ? sanitizeText(warranty) : "",
+      deliveryMethod: deliveryMethod ? sanitizeText(deliveryMethod) : "",
       specialPriceReason: specialPriceReason || "NONE",
       specialPriceExplanation: specialPriceExplanation
         ? sanitizeText(specialPriceExplanation)
         : "",
       images: safeImages,
+      video: safeVideo,
       seller: req.user._id,
       status: "ACTIVE",
-      riskLevel: "LOW",
-      confidenceScore: 70,
-      evidenceRequired: []
+      isQsmVerified: analysis.confidenceScore >= 85,
+      riskLevel: analysis.riskLevel,
+      confidenceScore: analysis.confidenceScore,
+      aiAnalysis: analysis.aiAnalysis,
+      evidenceRequired: analysis.evidenceRequired
     });
 
     return res.status(201).json({
@@ -151,147 +277,6 @@ const getProducts = async (req, res) => {
   }
 };
 
-const improveProductEvidence = async (req, res) => {
-  try {
-    const { productId } = req.params;
-
-    if (!isValidObjectId(productId)) {
-      return res.status(400).json({
-        success: false,
-        message: "productId no es válido"
-      });
-    }
-
-    const {
-      images,
-      quality,
-      specialPriceExplanation,
-      hasVideo,
-      hasSerialNumber,
-      hasInvoice
-    } = req.body;
-
-    const product = await Product.findById(productId);
-
-    if (!product) {
-      return res.status(404).json({
-        success: false,
-        message: "Producto no encontrado"
-      });
-    }
-
-    if (product.seller.toString() !== req.user._id.toString()) {
-      return res.status(403).json({
-        success: false,
-        message: "No tienes permiso para modificar este producto"
-      });
-    }
-
-    if (images) {
-      if (!Array.isArray(images)) {
-        return res.status(400).json({
-          success: false,
-          message: "images debe ser un arreglo"
-        });
-      }
-
-      product.images = images.slice(0, 8).map((item) => sanitizeText(item));
-    }
-
-    if (quality) {
-      if (!allowedQualities.includes(quality)) {
-        return res.status(400).json({
-          success: false,
-          message: "Calidad del producto no válida"
-        });
-      }
-
-      product.quality = quality;
-    }
-
-    if (specialPriceExplanation) {
-      product.specialPriceExplanation = sanitizeText(specialPriceExplanation);
-    }
-
-    let confidenceScore = 50;
-    let evidenceRequired = [];
-
-    if (product.images && product.images.length >= 3) {
-      confidenceScore += 15;
-    } else {
-      evidenceRequired.push("Agregar al menos 3 fotos reales del producto");
-    }
-
-    if (Boolean(hasVideo)) {
-      confidenceScore += 15;
-    } else {
-      evidenceRequired.push("Agregar un video corto funcionando");
-    }
-
-    if (Boolean(hasSerialNumber)) {
-      confidenceScore += 10;
-    } else {
-      evidenceRequired.push("Agregar número de serie visible");
-    }
-
-    if (Boolean(hasInvoice)) {
-      confidenceScore += 10;
-    } else {
-      evidenceRequired.push("Agregar factura o comprobante si aplica");
-    }
-
-    if (product.quality && product.quality !== "UNKNOWN") {
-      confidenceScore += 10;
-    } else {
-      evidenceRequired.push("Indicar la calidad real del equipo");
-    }
-
-    if (
-      product.specialPriceExplanation &&
-      product.specialPriceExplanation.length >= 40
-    ) {
-      confidenceScore += 10;
-    } else {
-      evidenceRequired.push("Explicar mejor el motivo del precio bajo");
-    }
-
-    if (confidenceScore > 100) confidenceScore = 100;
-    if (confidenceScore < 0) confidenceScore = 0;
-
-    if (confidenceScore >= 85) product.riskLevel = "LOW";
-    else if (confidenceScore >= 65) product.riskLevel = "MEDIUM";
-    else product.riskLevel = "HIGH";
-
-    product.confidenceScore = confidenceScore;
-    product.evidenceRequired = evidenceRequired;
-
-    await product.save();
-
-    return res.json({
-      success: true,
-      message: "Evidencias actualizadas correctamente",
-      resultado: {
-        nivelDeRiesgo:
-          product.riskLevel === "LOW"
-            ? "Bajo"
-            : product.riskLevel === "MEDIUM"
-            ? "Medio"
-            : "Alto",
-        codigoInternoRiesgo: product.riskLevel,
-        puntajeDeConfianza: product.confidenceScore,
-        evidenciasPendientes: product.evidenceRequired
-      },
-      product
-    });
-  } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Error actualizando evidencias",
-      error: error.message
-    });
-  }
-};
-
 const getProductById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -323,6 +308,123 @@ const getProductById = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Error obteniendo producto",
+      error: error.message
+    });
+  }
+};
+
+const improveProductEvidence = async (req, res) => {
+  try {
+    const { productId } = req.params;
+
+    if (!isValidObjectId(productId)) {
+      return res.status(400).json({
+        success: false,
+        message: "productId no es válido"
+      });
+    }
+
+    const {
+      images,
+      video,
+      quality,
+      location,
+      warranty,
+      deliveryMethod,
+      specialPriceExplanation
+    } = req.body;
+
+    const product = await Product.findById(productId).populate(
+      "seller",
+      "trustScore"
+    );
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Producto no encontrado"
+      });
+    }
+
+    if (product.seller._id.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: "No tienes permiso para modificar este producto"
+      });
+    }
+
+    if (images) {
+      if (!Array.isArray(images)) {
+        return res.status(400).json({
+          success: false,
+          message: "images debe ser un arreglo"
+        });
+      }
+
+      product.images = normalizeImages(images);
+    }
+
+    if (video) {
+      product.video = normalizeVideo(video);
+    }
+
+    if (quality) {
+      if (!allowedQualities.includes(quality)) {
+        return res.status(400).json({
+          success: false,
+          message: "Calidad del producto no válida"
+        });
+      }
+
+      product.quality = quality;
+    }
+
+    if (location) product.location = sanitizeText(location);
+    if (warranty) product.warranty = sanitizeText(warranty);
+    if (deliveryMethod) product.deliveryMethod = sanitizeText(deliveryMethod);
+
+    if (specialPriceExplanation) {
+      product.specialPriceExplanation = sanitizeText(specialPriceExplanation);
+    }
+
+    const analysis = calculateProductAnalysis({
+      images: product.images,
+      video: product.video,
+      description: product.description,
+      price: product.price,
+      quality: product.quality,
+      specialPriceExplanation: product.specialPriceExplanation,
+      sellerTrustScore: product.seller?.trustScore || 50
+    });
+
+    product.riskLevel = analysis.riskLevel;
+    product.confidenceScore = analysis.confidenceScore;
+    product.aiAnalysis = analysis.aiAnalysis;
+    product.evidenceRequired = analysis.evidenceRequired;
+    product.isQsmVerified = analysis.confidenceScore >= 85;
+
+    await product.save();
+
+    return res.json({
+      success: true,
+      message: "Evidencias actualizadas correctamente",
+      resultado: {
+        nivelDeRiesgo:
+          product.riskLevel === "LOW"
+            ? "Bajo"
+            : product.riskLevel === "MEDIUM"
+            ? "Medio"
+            : "Alto",
+        codigoInternoRiesgo: product.riskLevel,
+        puntajeDeConfianza: product.confidenceScore,
+        evidenciasPendientes: product.evidenceRequired
+      },
+      product
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Error actualizando evidencias",
       error: error.message
     });
   }

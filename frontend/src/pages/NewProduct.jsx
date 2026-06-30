@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import api from "../services/api";
+import api from "../api/axios";
+import Topbar from "../components/Topbar";
 import AiAssistant from "../components/AiAssistant";
 
 function NewProduct() {
@@ -11,6 +12,7 @@ function NewProduct() {
     lastName: "QSM",
     email: "usuario@qsm.com",
     trustScore: 60,
+    isVerified: false,
     kycStatus: "PENDING"
   };
 
@@ -20,37 +22,39 @@ function NewProduct() {
     price: "",
     category: "",
     condition: "",
-    status: "PENDING",
-    imageUrl: "",
+    quality: "UNKNOWN",
+    specialPriceReason: "NONE",
+    specialPriceExplanation: "",
     location: "",
     warranty: "",
-    deliveryType: ""
+    deliveryMethod: "",
+    imageUrl: ""
   });
 
-  const [imageSlots, setImageSlots] = useState([]);
+  const [imagePreviews, setImagePreviews] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
 
   const completion = useMemo(() => {
     const checks = [
       !!form.title,
-      !!form.description,
+      form.description.length >= 40,
       !!form.price,
       !!form.category,
       !!form.condition,
       !!form.location,
-      imageSlots.length > 0 || !!form.imageUrl
+      !!form.imageUrl || imagePreviews.length > 0
     ];
 
     const done = checks.filter(Boolean).length;
     return Math.round((done / checks.length) * 100);
-  }, [form, imageSlots]);
+  }, [form, imagePreviews]);
 
   const aiChecks = [
     {
       title: "Imagen del producto",
-      value: imageSlots.length > 0 || form.imageUrl ? "Lista" : "Pendiente",
-      done: imageSlots.length > 0 || form.imageUrl
+      value: form.imageUrl || imagePreviews.length > 0 ? "Lista" : "Pendiente",
+      done: form.imageUrl || imagePreviews.length > 0
     },
     {
       title: "Precio justo",
@@ -59,8 +63,8 @@ function NewProduct() {
     },
     {
       title: "Información del vendedor",
-      value: savedUser.kycStatus === "VERIFIED" ? "Verificada" : "Pendiente",
-      done: savedUser.kycStatus === "VERIFIED"
+      value: savedUser.isVerified ? "Verificada" : "Pendiente",
+      done: savedUser.isVerified
     },
     {
       title: "Descripción",
@@ -75,7 +79,7 @@ function NewProduct() {
   ];
 
   const previewImage =
-    imageSlots[0] ||
+    imagePreviews[0] ||
     form.imageUrl ||
     "https://images.unsplash.com/photo-1598327105666-5b89351aff97?auto=format&fit=crop&w=900&q=90";
 
@@ -89,7 +93,7 @@ function NewProduct() {
   const handleFiles = (e) => {
     const files = Array.from(e.target.files || []);
     const previews = files.slice(0, 8).map((file) => URL.createObjectURL(file));
-    setImageSlots(previews);
+    setImagePreviews(previews);
   };
 
   const handleSubmit = async (e) => {
@@ -101,22 +105,48 @@ function NewProduct() {
       return;
     }
 
+    if (Number(form.price) <= 0) {
+      setMessage("El precio debe ser mayor que cero.");
+      return;
+    }
+
     try {
       setSubmitting(true);
 
-      await api.post("/products", {
-        ...form,
-        imageUrl: imageSlots[0] || form.imageUrl,
-        status: "PENDING",
-        verificationStatus: "PENDING",
-        sellerId: savedUser.id
+      const images = form.imageUrl ? [form.imageUrl] : [];
+
+      const response = await api.post("/products", {
+        title: form.title,
+        description: form.description,
+        price: Number(form.price),
+        category: form.category,
+        condition: form.condition,
+        quality: form.quality,
+        specialPriceReason: form.specialPriceReason,
+        specialPriceExplanation: [
+          form.specialPriceExplanation,
+          form.location ? `Ubicación: ${form.location}` : "",
+          form.warranty ? `Garantía: ${form.warranty}` : "",
+          form.deliveryMethod ? `Entrega: ${form.deliveryMethod}` : ""
+        ]
+          .filter(Boolean)
+          .join(" | "),
+        images
       });
 
-      setMessage("Producto enviado a verificación QSM correctamente.");
-      setTimeout(() => navigate("/marketplace"), 900);
+      const newProduct = response.data.product;
+
+      setMessage("Producto publicado correctamente en QSM.");
+
+      setTimeout(() => {
+        navigate(newProduct?._id ? `/product/${newProduct._id}` : "/marketplace");
+      }, 700);
     } catch (error) {
       console.error("Error publicando producto:", error);
-      setMessage("No se pudo publicar el producto. Revisa el backend o intenta nuevamente.");
+      setMessage(
+        error.response?.data?.message ||
+          "No se pudo publicar el producto. Verifica que el backend esté funcionando."
+      );
     } finally {
       setSubmitting(false);
     }
@@ -124,32 +154,28 @@ function NewProduct() {
 
   return (
     <div style={page}>
-      <style>
-        {`
-          * {
-            box-sizing: border-box;
-          }
+      <style>{`
+        * { box-sizing: border-box; }
 
-          html, body, #root {
-            width: 100%;
-            min-height: 100%;
-            margin: 0;
-            padding: 0;
-            overflow-x: hidden;
-            background: #020617;
-            font-family: 'Inter', system-ui, sans-serif;
-          }
+        html, body, #root {
+          width: 100%;
+          min-height: 100%;
+          margin: 0;
+          padding: 0;
+          overflow-x: hidden;
+          background: #020617;
+          font-family: 'Inter', system-ui, sans-serif;
+        }
 
-          input::placeholder,
-          textarea::placeholder {
-            color: #64748b;
-          }
+        input::placeholder,
+        textarea::placeholder {
+          color: #64748b;
+        }
 
-          select {
-            color-scheme: dark;
-          }
-        `}
-      </style>
+        select {
+          color-scheme: dark;
+        }
+      `}</style>
 
       <aside style={sidebar}>
         <Link to="/" style={brand}>
@@ -167,7 +193,7 @@ function NewProduct() {
           <Link style={menuItem} to="/profile">👤 Mi perfil</Link>
           <Link style={activeMenuItem} to="/new-product">➕ Vender producto</Link>
           <Link style={menuItem} to="/marketing">📈 Marketing Center</Link>
-          <Link style={menuItem} to="/disputes">⚖ Mis disputas</Link>
+          <Link style={menuItem} to="/disputes">⚖ Mis reclamos</Link>
           <Link style={menuItem} to="/complete-profile">🧾 Verificación QSM</Link>
         </nav>
 
@@ -179,40 +205,20 @@ function NewProduct() {
       </aside>
 
       <main style={main}>
-        <header style={topbar}>
-          <div style={searchBox}>
-            <span>🔎</span>
-            <input placeholder="Buscar productos seguros..." style={searchInput} />
-          </div>
-
-          <div style={topIcons}>
-            <TopIcon icon="🔔" number="3" label="Notificaciones" />
-            <TopIcon icon="✉️" number="2" label="Mensajes" />
-            <TopIcon icon="🛒" number="1" label="Carrito" />
-          </div>
-
-          <div style={userMini}>
-            <div style={userAvatar}>
-              {savedUser.firstName?.charAt(0) || "U"}
-            </div>
-            <div>
-              <strong>{savedUser.firstName || "Usuario"} {savedUser.lastName || "QSM"}</strong>
-              <p>{savedUser.kycStatus === "VERIFIED" ? "Verificado" : "Pendiente"}</p>
-            </div>
-          </div>
-        </header>
+        <Topbar />
 
         <div style={breadcrumb}>
-          Inicio › Vender producto › <strong>Publicar nuevo producto</strong>
+          Marketplace › Vender producto › <strong>Publicar nuevo producto</strong>
         </div>
 
         <section style={layout}>
           <form onSubmit={handleSubmit} style={formCard}>
             <div style={formHeader}>
               <div>
-                <h1 style={title}>Publicar Producto</h1>
+                <p style={label}>PUBLICACIÓN SEGURA</p>
+                <h1 style={title}>Vender producto</h1>
                 <p style={subtitle}>
-                  QSM analizará la imagen, precio y vendedor antes de publicarlo.
+                  Publica tu producto con análisis QSM, Pago Protegido y revisión antifraude.
                 </p>
               </div>
 
@@ -225,12 +231,19 @@ function NewProduct() {
               </div>
             </div>
 
+            <div style={stepsRow}>
+              <Step active number="1" text="Información básica" />
+              <Step active={completion >= 40} number="2" text="Detalles" />
+              <Step active={completion >= 70} number="3" text="Imágenes" />
+              <Step active={completion >= 90} number="4" text="Publicar" />
+            </div>
+
             <label style={fieldLabel}>Título del producto</label>
             <input
               name="title"
               value={form.title}
               onChange={handleChange}
-              placeholder="Ej: iPhone 13 Pro 128GB"
+              placeholder="Ej: iPhone 13 Pro 128GB en excelente estado"
               style={input}
             />
 
@@ -240,11 +253,11 @@ function NewProduct() {
                 name="description"
                 value={form.description}
                 onChange={handleChange}
-                placeholder="Describe tu producto en detalle, su estado, funcionamiento, accesorios incluidos, etc."
+                placeholder="Describe el estado real, funcionamiento, detalles, accesorios incluidos, razón de venta, etc."
                 style={textarea}
-                maxLength={1000}
+                maxLength={2000}
               />
-              <span style={counter}>{form.description.length}/1000</span>
+              <span style={counter}>{form.description.length}/2000</span>
             </div>
 
             <div style={twoColumns}>
@@ -264,12 +277,13 @@ function NewProduct() {
                 <label style={fieldLabel}>Categoría</label>
                 <select name="category" value={form.category} onChange={handleChange} style={input}>
                   <option value="">Selecciona una categoría</option>
-                  <option value="Tecnología">Tecnología</option>
-                  <option value="Celulares">Celulares</option>
                   <option value="Gaming">Gaming</option>
-                  <option value="Computadoras">Computadoras</option>
+                  <option value="Celulares">Celulares</option>
+                  <option value="Laptops">Laptops</option>
                   <option value="Vehículos">Vehículos</option>
                   <option value="Hogar">Hogar</option>
+                  <option value="Moda">Moda</option>
+                  <option value="Otros">Otros</option>
                 </select>
               </div>
             </div>
@@ -279,18 +293,22 @@ function NewProduct() {
                 <label style={fieldLabel}>Condición</label>
                 <select name="condition" value={form.condition} onChange={handleChange} style={input}>
                   <option value="">Selecciona la condición</option>
-                  <option value="Nuevo">Nuevo</option>
-                  <option value="Como nuevo">Como nuevo</option>
-                  <option value="Usado en excelente estado">Usado en excelente estado</option>
-                  <option value="Usado con detalles">Usado con detalles</option>
+                  <option value="NEW">Nuevo</option>
+                  <option value="LIKE_NEW">Como nuevo</option>
+                  <option value="USED_GOOD">Buen estado</option>
+                  <option value="USED_DETAILS">Usado con detalles</option>
+                  <option value="FOR_PARTS">Para piezas</option>
                 </select>
               </div>
 
               <div>
-                <label style={fieldLabel}>Estado</label>
-                <select name="status" value={form.status} onChange={handleChange} style={input}>
-                  <option value="PENDING">Pendiente de revisión</option>
-                  <option value="CERTIFIED">Certificado QSM</option>
+                <label style={fieldLabel}>Calidad</label>
+                <select name="quality" value={form.quality} onChange={handleChange} style={input}>
+                  <option value="UNKNOWN">No especificada</option>
+                  <option value="EXCELLENT">Excelente</option>
+                  <option value="GOOD">Buena</option>
+                  <option value="FAIR">Aceptable</option>
+                  <option value="DAMAGED">Dañado</option>
                 </select>
               </div>
             </div>
@@ -302,7 +320,7 @@ function NewProduct() {
                   name="location"
                   value={form.location}
                   onChange={handleChange}
-                  placeholder="Ej: Santo Domingo, RD"
+                  placeholder="Ej: Santo Domingo, República Dominicana"
                   style={input}
                 />
               </div>
@@ -313,11 +331,52 @@ function NewProduct() {
                   name="warranty"
                   value={form.warranty}
                   onChange={handleChange}
-                  placeholder="Ej: No aplica / 30 días"
+                  placeholder="Ej: No aplica / 30 días / garantía de tienda"
                   style={input}
                 />
               </div>
             </div>
+
+            <div style={twoColumns}>
+              <div>
+                <label style={fieldLabel}>Método de entrega</label>
+                <select name="deliveryMethod" value={form.deliveryMethod} onChange={handleChange} style={input}>
+                  <option value="">Selecciona el método</option>
+                  <option value="Punto seguro QSM">Punto seguro QSM</option>
+                  <option value="Entrega acordada">Entrega acordada</option>
+                  <option value="Envío nacional">Envío nacional</option>
+                  <option value="Retiro presencial">Retiro presencial</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={fieldLabel}>Motivo de precio especial</label>
+                <select
+                  name="specialPriceReason"
+                  value={form.specialPriceReason}
+                  onChange={handleChange}
+                  style={input}
+                >
+                  <option value="NONE">No aplica</option>
+                  <option value="URGENT_MONEY">Necesito vender rápido</option>
+                  <option value="MOVING">Mudanza</option>
+                  <option value="BOUGHT_ANOTHER">Compré otro producto</option>
+                  <option value="NO_LONGER_USED">Ya no lo uso</option>
+                  <option value="MEDICAL_EXPENSE">Gasto médico</option>
+                  <option value="BUSINESS_LIQUIDATION">Liquidación</option>
+                  <option value="OTHER">Otro</option>
+                </select>
+              </div>
+            </div>
+
+            <label style={fieldLabel}>Explicación adicional</label>
+            <input
+              name="specialPriceExplanation"
+              value={form.specialPriceExplanation}
+              onChange={handleChange}
+              placeholder="Ej: Lo vendo porque compré uno nuevo. Incluye caja y cargador."
+              style={input}
+            />
 
             <label style={fieldLabel}>Imágenes del producto</label>
 
@@ -331,15 +390,15 @@ function NewProduct() {
               />
               <div style={uploadIcon}>☁️</div>
               <strong>Sube fotos claras y reales del producto</strong>
-              <p>Arrastra imágenes aquí o haz clic para seleccionar</p>
-              <span>Máximo 8 imágenes · JPG/PNG · Máx. 10MB c/u</span>
+              <p>Haz clic para seleccionar imágenes de vista previa</p>
+              <span>Vista previa local. Para guardar en backend usa URL de imagen abajo.</span>
             </label>
 
             <div style={slotGrid}>
               {Array.from({ length: 8 }).map((_, index) => (
                 <div key={index} style={slot}>
-                  {imageSlots[index] ? (
-                    <img src={imageSlots[index]} alt={`Producto ${index + 1}`} style={slotImage} />
+                  {imagePreviews[index] ? (
+                    <img src={imagePreviews[index]} alt={`Producto ${index + 1}`} style={slotImage} />
                   ) : (
                     "+"
                   )}
@@ -347,23 +406,29 @@ function NewProduct() {
               ))}
             </div>
 
-            <label style={fieldLabel}>URL o código único de imagen (opcional)</label>
+            <label style={fieldLabel}>URL de imagen principal</label>
             <input
               name="imageUrl"
               value={form.imageUrl}
               onChange={handleChange}
-              placeholder="https://ejemplo.com/imagen.jpg o código único"
+              placeholder="https://ejemplo.com/imagen.jpg"
               style={input}
             />
 
             {message && <div style={messageBox}>{message}</div>}
 
-            <button disabled={submitting} type="submit" style={submitButton}>
-              {submitting ? "Publicando..." : "Publicar y enviar a verificación QSM →"}
-            </button>
+            <div style={buttonRow}>
+              <Link to="/marketplace" style={cancelButton}>
+                Cancelar
+              </Link>
+
+              <button disabled={submitting} type="submit" style={submitButton}>
+                {submitting ? "Publicando..." : "Publicar producto seguro →"}
+              </button>
+            </div>
 
             <p style={secureText}>
-              🔒 Tu producto estará protegido y verificado por QSM IA antes de publicarse.
+              🔒 Tu producto será protegido y verificado por QSM antes de mostrarse a compradores.
             </p>
           </form>
 
@@ -395,7 +460,7 @@ function NewProduct() {
 
               <div style={previewImageWrap}>
                 <img src={previewImage} alt="Vista previa" style={previewImageStyle} />
-                <span style={previewBadge}>QSM Verificado</span>
+                <span style={previewBadge}>QSM Seguro</span>
               </div>
 
               <div style={previewContent}>
@@ -404,8 +469,8 @@ function NewProduct() {
                 <p>{form.description || "Descripción breve del producto..."}</p>
 
                 <div style={previewMeta}>
-                  <span>🛡 Vendedor {savedUser.kycStatus === "VERIFIED" ? "verificado" : "pendiente"}</span>
-                  <span>⭐ Trust Score {savedUser.trustScore || 60}/100</span>
+                  <span>🛡 Vendedor {savedUser.isVerified ? "verificado" : "pendiente"}</span>
+                  <span>⭐ Nivel de confianza {savedUser.trustScore || 60}/100</span>
                 </div>
 
                 <div style={riskPreview}>
@@ -417,15 +482,11 @@ function NewProduct() {
         </section>
 
         <section style={benefitRow}>
-          <Benefit icon="🛡" title="Protección garantizada" text="Tu dinero siempre seguro con escrow." />
-          <Benefit icon="🤖" title="Verificación inteligente" text="IA analiza cada publicación para detectar riesgos." />
-          <Benefit icon="✅" title="Vendedor verificado" text="Genera confianza con tu identidad verificada QSM." />
-          <Benefit icon="📈" title="Más ventas" text="Productos verificados reciben más confianza y ventas." />
+          <Benefit icon="🛡" title="Pago Protegido" text="El dinero queda retenido hasta confirmar la entrega." />
+          <Benefit icon="🤖" title="Verificación inteligente" text="QSM analiza cada publicación para detectar riesgos." />
+          <Benefit icon="✅" title="Vendedor confiable" text="Genera confianza con información clara y real." />
+          <Benefit icon="📈" title="Más ventas" text="Publicaciones completas generan más confianza." />
         </section>
-
-        <footer style={footer}>
-          © 2026 Quick Secure Market. Todos los derechos reservados.
-        </footer>
       </main>
 
       <AiAssistant pageContext="new-product" />
@@ -433,12 +494,11 @@ function NewProduct() {
   );
 }
 
-function TopIcon({ icon, number, label }) {
+function Step({ number, text, active }) {
   return (
-    <div style={topIconBox}>
-      <span style={notification}>{number}</span>
-      <div>{icon}</div>
-      <small>{label}</small>
+    <div style={step}>
+      <span style={active ? stepNumberActive : stepNumber}>{number}</span>
+      <p>{text}</p>
     </div>
   );
 }
@@ -570,83 +630,6 @@ const main = {
   overflowX: "hidden"
 };
 
-const topbar = {
-  display: "grid",
-  gridTemplateColumns: "minmax(0, 1fr) auto 260px",
-  gap: "18px",
-  alignItems: "center",
-  marginBottom: "28px"
-};
-
-const searchBox = {
-  display: "flex",
-  alignItems: "center",
-  gap: "10px",
-  background: "rgba(15,23,42,0.72)",
-  border: "1px solid rgba(53,208,195,0.18)",
-  borderRadius: "18px",
-  padding: "0 16px"
-};
-
-const searchInput = {
-  width: "100%",
-  background: "transparent",
-  border: "none",
-  outline: "none",
-  color: "white",
-  padding: "16px 0",
-  fontSize: "15px"
-};
-
-const topIcons = {
-  display: "flex",
-  gap: "18px"
-};
-
-const topIconBox = {
-  position: "relative",
-  textAlign: "center",
-  color: "#cbd5e1",
-  fontSize: "13px"
-};
-
-const notification = {
-  position: "absolute",
-  top: "-8px",
-  right: "8px",
-  background: "#ef4444",
-  color: "white",
-  width: "18px",
-  height: "18px",
-  borderRadius: "50%",
-  fontSize: "11px",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontWeight: "900"
-};
-
-const userMini = {
-  display: "flex",
-  alignItems: "center",
-  gap: "12px",
-  background: "rgba(15,23,42,0.52)",
-  border: "1px solid rgba(53,208,195,0.16)",
-  borderRadius: "18px",
-  padding: "12px"
-};
-
-const userAvatar = {
-  width: "46px",
-  height: "46px",
-  borderRadius: "50%",
-  background: "linear-gradient(135deg, #35d0c3, #7c3aed)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontWeight: "900"
-};
-
 const breadcrumb = {
   color: "#94a3b8",
   marginBottom: "24px"
@@ -673,6 +656,13 @@ const formHeader = {
   gap: "22px",
   alignItems: "start",
   marginBottom: "26px"
+};
+
+const label = {
+  color: "#35d0c3",
+  letterSpacing: "4px",
+  fontSize: "12px",
+  fontWeight: "900"
 };
 
 const title = {
@@ -707,6 +697,40 @@ const protectionIcon = {
   alignItems: "center",
   justifyContent: "center",
   fontSize: "24px"
+};
+
+const stepsRow = {
+  display: "grid",
+  gridTemplateColumns: "repeat(4, 1fr)",
+  gap: "12px",
+  marginBottom: "24px"
+};
+
+const step = {
+  display: "flex",
+  alignItems: "center",
+  gap: "10px",
+  color: "#cbd5e1",
+  fontWeight: "800"
+};
+
+const stepNumber = {
+  width: "30px",
+  height: "30px",
+  borderRadius: "50%",
+  background: "rgba(148,163,184,0.18)",
+  color: "#94a3b8",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  flexShrink: 0
+};
+
+const stepNumberActive = {
+  ...stepNumber,
+  background: "#35d0c3",
+  color: "#020617",
+  fontWeight: "900"
 };
 
 const fieldLabel = {
@@ -756,7 +780,7 @@ const uploadBox = {
   border: "1px dashed rgba(148,163,184,0.36)",
   background: "rgba(2,6,23,0.38)",
   borderRadius: "18px",
-  minHeight: "160px",
+  minHeight: "150px",
   display: "flex",
   flexDirection: "column",
   justifyContent: "center",
@@ -768,7 +792,7 @@ const uploadBox = {
 };
 
 const uploadIcon = {
-  fontSize: "42px",
+  fontSize: "38px",
   marginBottom: "10px"
 };
 
@@ -807,10 +831,26 @@ const messageBox = {
   fontWeight: "800"
 };
 
+const buttonRow = {
+  display: "grid",
+  gridTemplateColumns: "180px 1fr",
+  gap: "14px",
+  marginTop: "22px"
+};
+
+const cancelButton = {
+  background: "rgba(15,23,42,0.72)",
+  color: "white",
+  border: "1px solid rgba(148,163,184,0.20)",
+  padding: "17px",
+  borderRadius: "15px",
+  fontWeight: "900",
+  textDecoration: "none",
+  textAlign: "center"
+};
+
 const submitButton = {
-  width: "100%",
-  marginTop: "22px",
-  background: "linear-gradient(135deg, #35d0c3, #22d3ee)",
+  background: "linear-gradient(135deg, #35d0c3, #2563eb)",
   color: "#020617",
   border: "none",
   padding: "17px",
@@ -925,8 +965,8 @@ const previewContent = {
 
 const previewMeta = {
   display: "grid",
-  gridTemplateColumns: "1fr 1fr",
-  gap: "10px",
+  gridTemplateColumns: "1fr",
+  gap: "8px",
   color: "#cbd5e1",
   fontSize: "13px",
   paddingTop: "12px",
@@ -965,12 +1005,6 @@ const benefitIcon = {
   alignItems: "center",
   justifyContent: "center",
   flexShrink: 0
-};
-
-const footer = {
-  textAlign: "center",
-  color: "#64748b",
-  padding: "26px 0 0"
 };
 
 export default NewProduct;

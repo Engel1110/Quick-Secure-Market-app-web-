@@ -25,8 +25,13 @@ const paymentRoutes = require("./routes/payment.routes");
 const adminRoutes = require("./routes/admin.routes");
 //const aiRoutes = require("./routes/ai.routes");
 //const validateObjectId = require("../middleware/validateObjectId.middleware");
+const uploadRoutes = require("./routes/upload.routes");
 
 const app = express();
+
+const path = require("path");
+
+app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
 connectDB();
 
@@ -121,6 +126,8 @@ app.use("/api/shipping", shippingRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/admin", adminRoutes);
 //app.use("/api/ai", aiRoutes);
+app.use("/api/upload", uploadRoutes);
+
 
 app.use((req, res) => {
   res.status(404).json({

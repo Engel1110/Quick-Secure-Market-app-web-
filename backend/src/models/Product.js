@@ -19,6 +19,10 @@ const productSchema = new mongoose.Schema(
       default: "UNKNOWN"
     },
 
+    location: { type: String, default: "" },
+    warranty: { type: String, default: "" },
+    deliveryMethod: { type: String, default: "" },
+
     specialPriceReason: {
       type: String,
       enum: [
@@ -34,12 +38,15 @@ const productSchema = new mongoose.Schema(
       default: "NONE"
     },
 
-    specialPriceExplanation: {
-      type: String,
-      default: ""
-    },
+    specialPriceExplanation: { type: String, default: "" },
 
     images: [{ type: String }],
+
+    video: {
+      url: { type: String, default: "" },
+      thumbnail: { type: String, default: "" },
+      duration: { type: Number, default: 0 }
+    },
 
     seller: {
       type: mongoose.Schema.Types.ObjectId,
@@ -61,9 +68,15 @@ const productSchema = new mongoose.Schema(
       default: "LOW"
     },
 
-    confidenceScore: {
-      type: Number,
-      default: 70
+    confidenceScore: { type: Number, default: 70 },
+
+    aiAnalysis: {
+      imageScore: { type: Number, default: 0 },
+      videoScore: { type: Number, default: 0 },
+      priceScore: { type: Number, default: 0 },
+      descriptionScore: { type: Number, default: 0 },
+      sellerScore: { type: Number, default: 0 },
+      fraudRiskScore: { type: Number, default: 0 }
     },
 
     evidenceRequired: {
