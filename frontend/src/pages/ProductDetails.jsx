@@ -63,12 +63,12 @@ function ProductDetails() {
     if (!product) return [];
 
     const imagesFromArray = Array.isArray(product.images)
-      ? product.images.filter((img) => typeof img === "string" && img.startsWith("http"))
+      ? product.images.map((img) => getImageUrl(img)).filter(Boolean)
       : [];
 
     const fallback = getProductImage(product);
 
-    return [fallback, ...imagesFromArray]
+    return [...imagesFromArray, fallback]
       .filter(Boolean)
       .filter((img, index, arr) => arr.indexOf(img) === index);
   }, [product]);
@@ -541,11 +541,38 @@ function Benefit({ icon, title, text }) {
   );
 }
 
+const API_URL = "http://localhost:5000";
+
+function getImageUrl(image) {
+  if (!image) return "";
+
+  const cleanImage = String(image)
+    .trim()
+    .replaceAll("&#x2F;", "/")
+    .replaceAll("&amp;", "&");
+
+  if (!cleanImage) return "";
+
+  if (cleanImage.startsWith("http://") || cleanImage.startsWith("https://")) {
+    return cleanImage;
+  }
+
+  if (cleanImage.startsWith("/uploads")) {
+    return `${API_URL}${cleanImage}`;
+  }
+
+  if (cleanImage.startsWith("uploads")) {
+    return `${API_URL}/${cleanImage}`;
+  }
+
+  return `${API_URL}/uploads/products/images/${cleanImage}`;
+}
+
 function getProductImage(product) {
   if (product?.images && product.images.length > 0) {
-    const firstImage = product.images[0];
+    const firstImage = getImageUrl(product.images[0]);
 
-    if (typeof firstImage === "string" && firstImage.startsWith("http")) {
+    if (firstImage) {
       return firstImage;
     }
   }

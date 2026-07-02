@@ -3,22 +3,8 @@ const validator = require("validator");
 
 const Product = require("../models/Product");
 
-const allowedConditions = [
-  "NEW",
-  "LIKE_NEW",
-  "USED_GOOD",
-  "USED_DETAILS",
-  "FOR_PARTS"
-];
-
-const allowedQualities = [
-  "EXCELLENT",
-  "GOOD",
-  "FAIR",
-  "DAMAGED",
-  "UNKNOWN"
-];
-
+const allowedConditions = ["NEW", "LIKE_NEW", "USED_GOOD", "USED_DETAILS", "FOR_PARTS"];
+const allowedQualities = ["EXCELLENT", "GOOD", "FAIR", "DAMAGED", "UNKNOWN"];
 const allowedSpecialPriceReasons = [
   "NONE",
   "URGENT_MONEY",
@@ -30,13 +16,17 @@ const allowedSpecialPriceReasons = [
   "OTHER"
 ];
 
-const sanitizeText = (value) => {
-  return validator.escape(String(value || "").trim());
+const sanitizeText = (value) => validator.escape(String(value || "").trim());
+
+const cleanFilePath = (value) => {
+  if (!value) return "";
+  return String(value)
+    .trim()
+    .replaceAll("&#x2F;", "/")
+    .replaceAll("&amp;", "&");
 };
 
-const isValidObjectId = (id) => {
-  return mongoose.Types.ObjectId.isValid(id);
-};
+const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
 
 const normalizeImages = (images) => {
   if (!Array.isArray(images)) return [];
@@ -44,21 +34,17 @@ const normalizeImages = (images) => {
   return images
     .filter((item) => typeof item === "string" && item.trim())
     .slice(0, 8)
-    .map((item) => sanitizeText(item));
+    .map((item) => cleanFilePath(item));
 };
 
 const normalizeVideo = (video) => {
   if (!video || typeof video !== "object") {
-    return {
-      url: "",
-      thumbnail: "",
-      duration: 0
-    };
+    return { url: "", thumbnail: "", duration: 0 };
   }
 
   return {
-    url: video.url ? sanitizeText(video.url) : "",
-    thumbnail: video.thumbnail ? sanitizeText(video.thumbnail) : "",
+    url: cleanFilePath(video.url),
+    thumbnail: cleanFilePath(video.thumbnail),
     duration: Number(video.duration || 0)
   };
 };
@@ -72,41 +58,27 @@ const calculateProductAnalysis = ({
   specialPriceExplanation = "",
   sellerTrustScore = 50
 }) => {
-  let evidenceRequired = [];
+  const evidenceRequired = [];
 
   let imageScore = 0;
   if (images.length >= 6) imageScore = 95;
   else if (images.length >= 3) imageScore = 80;
-  else if (images.length >= 1) imageScore = 55;
-  else {
-    imageScore = 0;
-    evidenceRequired.push("Agregar fotos reales del producto");
-  }
+  else if (images.length >= 1) imageScore = 60;
+  else evidenceRequired.push("Agregar fotos reales del producto");
 
-  let videoScore = 0;
-  if (video?.url) videoScore = 90;
-  else {
-    videoScore = 0;
-    evidenceRequired.push("Agregar un video corto del producto funcionando");
-  }
+  let videoScore = video?.url ? 90 : 0;
+  if (!video?.url) evidenceRequired.push("Agregar un video corto del producto funcionando");
 
-  let priceScore = 70;
-  if (Number(price) > 0) priceScore = 80;
-  else {
-    priceScore = 0;
-    evidenceRequired.push("Agregar un precio válido");
-  }
+  let priceScore = Number(price) > 0 ? 80 : 0;
+  if (!priceScore) evidenceRequired.push("Agregar un precio válido");
 
-  let descriptionScore = 0;
+  let descriptionScore = 25;
   if (description.length >= 250) descriptionScore = 95;
   else if (description.length >= 120) descriptionScore = 80;
   else if (description.length >= 40) descriptionScore = 60;
-  else {
-    descriptionScore = 25;
-    evidenceRequired.push("Mejorar la descripción del producto");
-  }
+  else evidenceRequired.push("Mejorar la descripción del producto");
 
-  let sellerScore = Math.min(Number(sellerTrustScore || 50), 100);
+  const sellerScore = Math.min(Number(sellerTrustScore || 50), 100);
 
   if (quality === "UNKNOWN") {
     evidenceRequired.push("Indicar la calidad real del producto");
@@ -125,10 +97,8 @@ const calculateProductAnalysis = ({
   );
 
   let riskLevel = "LOW";
-
   if (fraudRiskScore < 45) riskLevel = "HIGH";
   else if (fraudRiskScore < 70) riskLevel = "MEDIUM";
-  else riskLevel = "LOW";
 
   return {
     confidenceScore: fraudRiskScore,
@@ -193,10 +163,7 @@ const createProduct = async (req, res) => {
       });
     }
 
-    if (
-      specialPriceReason &&
-      !allowedSpecialPriceReasons.includes(specialPriceReason)
-    ) {
+    if (specialPriceReason && !allowedSpecialPriceReasons.includes(specialPriceReason)) {
       return res.status(400).json({
         success: false,
         message: "Motivo de precio especial no válido"
@@ -209,7 +176,7 @@ const createProduct = async (req, res) => {
     const analysis = calculateProductAnalysis({
       images: safeImages,
       video: safeVideo,
-      description: sanitizeText(description),
+      description: String(description || ""),
       price: numericPrice,
       quality: quality || "UNKNOWN",
       specialPriceExplanation: specialPriceExplanation || "",
@@ -227,9 +194,7 @@ const createProduct = async (req, res) => {
       warranty: warranty ? sanitizeText(warranty) : "",
       deliveryMethod: deliveryMethod ? sanitizeText(deliveryMethod) : "",
       specialPriceReason: specialPriceReason || "NONE",
-      specialPriceExplanation: specialPriceExplanation
-        ? sanitizeText(specialPriceExplanation)
-        : "",
+      specialPriceExplanation: specialPriceExplanation ? sanitizeText(specialPriceExplanation) : "",
       images: safeImages,
       video: safeVideo,
       seller: req.user._id,
@@ -257,9 +222,7 @@ const createProduct = async (req, res) => {
 
 const getProducts = async (req, res) => {
   try {
-    const products = await Product.find({
-      status: { $ne: "DISABLED" }
-    })
+    const products = await Product.find({ status: { $ne: "DISABLED" } })
       .populate("seller", "firstName lastName email trustScore isVerified")
       .sort({ createdAt: -1 });
 
@@ -334,10 +297,7 @@ const improveProductEvidence = async (req, res) => {
       specialPriceExplanation
     } = req.body;
 
-    const product = await Product.findById(productId).populate(
-      "seller",
-      "trustScore"
-    );
+    const product = await Product.findById(productId).populate("seller", "trustScore");
 
     if (!product) {
       return res.status(404).json({
@@ -364,9 +324,7 @@ const improveProductEvidence = async (req, res) => {
       product.images = normalizeImages(images);
     }
 
-    if (video) {
-      product.video = normalizeVideo(video);
-    }
+    if (video) product.video = normalizeVideo(video);
 
     if (quality) {
       if (!allowedQualities.includes(quality)) {
@@ -382,10 +340,7 @@ const improveProductEvidence = async (req, res) => {
     if (location) product.location = sanitizeText(location);
     if (warranty) product.warranty = sanitizeText(warranty);
     if (deliveryMethod) product.deliveryMethod = sanitizeText(deliveryMethod);
-
-    if (specialPriceExplanation) {
-      product.specialPriceExplanation = sanitizeText(specialPriceExplanation);
-    }
+    if (specialPriceExplanation) product.specialPriceExplanation = sanitizeText(specialPriceExplanation);
 
     const analysis = calculateProductAnalysis({
       images: product.images,
@@ -408,17 +363,6 @@ const improveProductEvidence = async (req, res) => {
     return res.json({
       success: true,
       message: "Evidencias actualizadas correctamente",
-      resultado: {
-        nivelDeRiesgo:
-          product.riskLevel === "LOW"
-            ? "Bajo"
-            : product.riskLevel === "MEDIUM"
-            ? "Medio"
-            : "Alto",
-        codigoInternoRiesgo: product.riskLevel,
-        puntajeDeConfianza: product.confidenceScore,
-        evidenciasPendientes: product.evidenceRequired
-      },
       product
     });
   } catch (error) {

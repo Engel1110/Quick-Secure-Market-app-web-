@@ -12,8 +12,7 @@ function NewProduct() {
     lastName: "QSM",
     email: "usuario@qsm.com",
     trustScore: 60,
-    isVerified: false,
-    kycStatus: "PENDING"
+    isVerified: false
   };
 
   const [form, setForm] = useState({
@@ -27,12 +26,15 @@ function NewProduct() {
     specialPriceExplanation: "",
     location: "",
     warranty: "",
-    deliveryMethod: "",
-    imageUrl: ""
+    deliveryMethod: ""
   });
 
+  const [imageFiles, setImageFiles] = useState([]);
   const [imagePreviews, setImagePreviews] = useState([]);
+  const [videoFile, setVideoFile] = useState(null);
+  const [videoPreview, setVideoPreview] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [uploadingText, setUploadingText] = useState("");
   const [message, setMessage] = useState("");
 
   const completion = useMemo(() => {
@@ -43,65 +45,66 @@ function NewProduct() {
       !!form.category,
       !!form.condition,
       !!form.location,
-      !!form.imageUrl || imagePreviews.length > 0
+      imageFiles.length >= 1,
+      !!videoFile
     ];
 
-    const done = checks.filter(Boolean).length;
-    return Math.round((done / checks.length) * 100);
-  }, [form, imagePreviews]);
+    return Math.round((checks.filter(Boolean).length / checks.length) * 100);
+  }, [form, imageFiles, videoFile]);
 
-  const aiChecks = [
-    {
-      title: "Imagen del producto",
-      value: form.imageUrl || imagePreviews.length > 0 ? "Lista" : "Pendiente",
-      done: form.imageUrl || imagePreviews.length > 0
-    },
-    {
-      title: "Precio justo",
-      value: form.price ? "En evaluación" : "Pendiente",
-      done: !!form.price
-    },
-    {
-      title: "Información del vendedor",
-      value: savedUser.isVerified ? "Verificada" : "Pendiente",
-      done: savedUser.isVerified
-    },
-    {
-      title: "Descripción",
-      value: form.description.length >= 40 ? "Completa" : "Pendiente",
-      done: form.description.length >= 40
-    },
-    {
-      title: "Riesgo de fraude",
-      value: completion >= 80 ? "Bajo" : "Pendiente",
-      done: completion >= 80
-    }
-  ];
+  const riskLevel =
+    completion >= 85
+      ? "Riesgo bajo"
+      : completion >= 60
+      ? "Riesgo medio"
+      : "Pendiente";
 
   const previewImage =
     imagePreviews[0] ||
-    form.imageUrl ||
-    "https://images.unsplash.com/photo-1598327105666-5b89351aff97?auto=format&fit=crop&w=900&q=90";
+    "https://images.unsplash.com/photo-1606813907291-d86efa9b94db?auto=format&fit=crop&w=900&q=90";
 
   const handleChange = (e) => {
-    setForm({
-      ...form,
-      [e.target.name]: e.target.value
-    });
+    setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  const handleFiles = (e) => {
-    const files = Array.from(e.target.files || []);
-    const previews = files.slice(0, 8).map((file) => URL.createObjectURL(file));
-    setImagePreviews(previews);
+  const handleImages = (e) => {
+    const files = Array.from(e.target.files || []).slice(0, 8);
+
+    setImageFiles(files);
+    setImagePreviews(files.map((file) => URL.createObjectURL(file)));
+  };
+
+  const handleVideo = (e) => {
+    const file = e.target.files?.[0];
+
+    if (!file) return;
+
+    setVideoFile(file);
+    setVideoPreview(URL.createObjectURL(file));
+  };
+
+  const removeImage = (index) => {
+    setImageFiles(imageFiles.filter((_, i) => i !== index));
+    setImagePreviews(imagePreviews.filter((_, i) => i !== index));
+  };
+
+  const removeVideo = () => {
+    setVideoFile(null);
+    setVideoPreview("");
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setMessage("");
 
-    if (!form.title || !form.description || !form.price || !form.category || !form.condition) {
-      setMessage("Completa título, descripción, precio, categoría y condición antes de publicar.");
+    if (
+      !form.title ||
+      !form.description ||
+      !form.price ||
+      !form.category ||
+      !form.condition
+    ) {
+      setMessage("Completa título, descripción, precio, categoría y condición.");
       return;
     }
 
@@ -112,8 +115,31 @@ function NewProduct() {
 
     try {
       setSubmitting(true);
+      setUploadingText("Subiendo imágenes y video...");
 
-      const images = form.imageUrl ? [form.imageUrl] : [];
+      let uploadedImages = [];
+      let uploadedVideo = null;
+
+      if (imageFiles.length > 0 || videoFile) {
+        const formData = new FormData();
+
+        imageFiles.forEach((file) => {
+          formData.append("images", file);
+        });
+
+        if (videoFile) {
+          formData.append("video", videoFile);
+        }
+
+        const uploadResponse = await api.post("/upload", formData, {
+          headers: { "Content-Type": "multipart/form-data" }
+        });
+
+        uploadedImages = uploadResponse.data.images || [];
+        uploadedVideo = uploadResponse.data.video || null;
+      }
+
+      setUploadingText("Publicando producto en QSM...");
 
       const response = await api.post("/products", {
         title: form.title,
@@ -122,58 +148,67 @@ function NewProduct() {
         category: form.category,
         condition: form.condition,
         quality: form.quality,
+        location: form.location,
+        warranty: form.warranty,
+        deliveryMethod: form.deliveryMethod,
         specialPriceReason: form.specialPriceReason,
-        specialPriceExplanation: [
-          form.specialPriceExplanation,
-          form.location ? `Ubicación: ${form.location}` : "",
-          form.warranty ? `Garantía: ${form.warranty}` : "",
-          form.deliveryMethod ? `Entrega: ${form.deliveryMethod}` : ""
-        ]
-          .filter(Boolean)
-          .join(" | "),
-        images
+        specialPriceExplanation: form.specialPriceExplanation,
+        images: uploadedImages,
+        video: uploadedVideo
       });
 
       const newProduct = response.data.product;
 
-      setMessage("Producto publicado correctamente en QSM.");
+      setMessage("Producto publicado correctamente.");
 
       setTimeout(() => {
         navigate(newProduct?._id ? `/product/${newProduct._id}` : "/marketplace");
       }, 700);
     } catch (error) {
-      console.error("Error publicando producto:", error);
+      console.error(error);
       setMessage(
         error.response?.data?.message ||
-          "No se pudo publicar el producto. Verifica que el backend esté funcionando."
+          "No se pudo publicar el producto. Verifica el backend."
       );
     } finally {
       setSubmitting(false);
+      setUploadingText("");
     }
   };
 
   return (
-    <div style={page}>
+    <div style={page} className="qsm-new-product-page">
       <style>{`
         * { box-sizing: border-box; }
 
         html, body, #root {
-          width: 100%;
-          min-height: 100%;
           margin: 0;
           padding: 0;
-          overflow-x: hidden;
+          width: 100%;
+          min-height: 100%;
           background: #020617;
-          font-family: 'Inter', system-ui, sans-serif;
+          font-family: Inter, system-ui, sans-serif;
+          overflow-x: hidden;
         }
 
-        input::placeholder,
-        textarea::placeholder {
+        input::placeholder, textarea::placeholder {
           color: #64748b;
         }
 
         select {
           color-scheme: dark;
+        }
+
+        @keyframes floatGlow {
+          0% { transform: translateY(0px); opacity: .65; }
+          50% { transform: translateY(-12px); opacity: 1; }
+          100% { transform: translateY(0px); opacity: .65; }
+        }
+
+        @keyframes pulseRing {
+          0% { box-shadow: 0 0 0 0 rgba(53,208,195,.35); }
+          70% { box-shadow: 0 0 0 18px rgba(53,208,195,0); }
+          100% { box-shadow: 0 0 0 0 rgba(53,208,195,0); }
         }
       `}</style>
 
@@ -197,86 +232,90 @@ function NewProduct() {
           <Link style={menuItem} to="/complete-profile">🧾 Verificación QSM</Link>
         </nav>
 
-        <div style={aiSideCard}>
-          <h3>🤖 QSM AI</h3>
-          <p>Te ayudamos a publicar productos seguros y atractivos para compradores.</p>
-          <button style={sideButton}>Pregúntame algo</button>
+        <div style={sideCard}>
+          <p style={sideLabel}>PUBLICACIÓN SEGURA</p>
+          <h3>QSM AI</h3>
+          <p>
+            Analizamos fotos, video, descripción, precio y vendedor antes de publicar.
+          </p>
         </div>
       </aside>
 
       <main style={main}>
         <Topbar />
 
-        <div style={breadcrumb}>
-          Marketplace › Vender producto › <strong>Publicar nuevo producto</strong>
-        </div>
+        <section style={hero}>
+          <div>
+            <p style={label}>MARKETPLACE / VENDER PRODUCTO</p>
+            <h1 style={title}>
+              Publica con <span style={gradientText}>Protección QSM</span>
+            </h1>
+            <p style={subtitle}>
+              Crea una publicación profesional con fotos, video, análisis de riesgo y Pago Protegido.
+            </p>
+          </div>
+
+          <div style={heroBadge}>
+            <div style={heroIcon}>🧠</div>
+            <div>
+              <strong>Análisis inteligente activo</strong>
+              <p>Tu producto será evaluado antes de mostrarse.</p>
+            </div>
+          </div>
+        </section>
 
         <section style={layout}>
           <form onSubmit={handleSubmit} style={formCard}>
-            <div style={formHeader}>
-              <div>
-                <p style={label}>PUBLICACIÓN SEGURA</p>
-                <h1 style={title}>Vender producto</h1>
-                <p style={subtitle}>
-                  Publica tu producto con análisis QSM, Pago Protegido y revisión antifraude.
-                </p>
-              </div>
-
-              <div style={protectionBox}>
-                <div style={protectionIcon}>🛡</div>
-                <div>
-                  <strong>Protección QSM</strong>
-                  <p>Tu publicación será analizada por IA.</p>
-                </div>
-              </div>
+            <div style={stepBar}>
+              <Step active number="1" text="Datos" />
+              <Step active={completion >= 35} number="2" text="Fotos" />
+              <Step active={completion >= 60} number="3" text="Video" />
+              <Step active={completion >= 85} number="4" text="Publicar" />
             </div>
 
-            <div style={stepsRow}>
-              <Step active number="1" text="Información básica" />
-              <Step active={completion >= 40} number="2" text="Detalles" />
-              <Step active={completion >= 70} number="3" text="Imágenes" />
-              <Step active={completion >= 90} number="4" text="Publicar" />
-            </div>
+            <div style={sectionTitle}>Información principal</div>
 
             <label style={fieldLabel}>Título del producto</label>
             <input
               name="title"
               value={form.title}
               onChange={handleChange}
-              placeholder="Ej: iPhone 13 Pro 128GB en excelente estado"
+              placeholder="Ej: iPhone 15 Pro Max 256GB"
               style={input}
             />
 
             <label style={fieldLabel}>Descripción</label>
-            <div style={textareaWrap}>
-              <textarea
-                name="description"
-                value={form.description}
-                onChange={handleChange}
-                placeholder="Describe el estado real, funcionamiento, detalles, accesorios incluidos, razón de venta, etc."
-                style={textarea}
-                maxLength={2000}
-              />
-              <span style={counter}>{form.description.length}/2000</span>
-            </div>
+            <textarea
+              name="description"
+              value={form.description}
+              onChange={handleChange}
+              placeholder="Describe estado real, detalles, accesorios, garantía y motivo de venta."
+              style={textarea}
+              maxLength={2000}
+            />
 
             <div style={twoColumns}>
               <div>
-                <label style={fieldLabel}>Precio (RD$)</label>
+                <label style={fieldLabel}>Precio RD$</label>
                 <input
                   name="price"
                   type="number"
                   value={form.price}
                   onChange={handleChange}
-                  placeholder="Ej: 45000"
+                  placeholder="Ej: 65000"
                   style={input}
                 />
               </div>
 
               <div>
                 <label style={fieldLabel}>Categoría</label>
-                <select name="category" value={form.category} onChange={handleChange} style={input}>
-                  <option value="">Selecciona una categoría</option>
+                <select
+                  name="category"
+                  value={form.category}
+                  onChange={handleChange}
+                  style={input}
+                >
+                  <option value="">Seleccionar</option>
                   <option value="Gaming">Gaming</option>
                   <option value="Celulares">Celulares</option>
                   <option value="Laptops">Laptops</option>
@@ -291,8 +330,13 @@ function NewProduct() {
             <div style={twoColumns}>
               <div>
                 <label style={fieldLabel}>Condición</label>
-                <select name="condition" value={form.condition} onChange={handleChange} style={input}>
-                  <option value="">Selecciona la condición</option>
+                <select
+                  name="condition"
+                  value={form.condition}
+                  onChange={handleChange}
+                  style={input}
+                >
+                  <option value="">Seleccionar</option>
                   <option value="NEW">Nuevo</option>
                   <option value="LIKE_NEW">Como nuevo</option>
                   <option value="USED_GOOD">Buen estado</option>
@@ -303,7 +347,12 @@ function NewProduct() {
 
               <div>
                 <label style={fieldLabel}>Calidad</label>
-                <select name="quality" value={form.quality} onChange={handleChange} style={input}>
+                <select
+                  name="quality"
+                  value={form.quality}
+                  onChange={handleChange}
+                  style={input}
+                >
                   <option value="UNKNOWN">No especificada</option>
                   <option value="EXCELLENT">Excelente</option>
                   <option value="GOOD">Buena</option>
@@ -320,7 +369,7 @@ function NewProduct() {
                   name="location"
                   value={form.location}
                   onChange={handleChange}
-                  placeholder="Ej: Santo Domingo, República Dominicana"
+                  placeholder="Ej: Santo Domingo"
                   style={input}
                 />
               </div>
@@ -331,161 +380,216 @@ function NewProduct() {
                   name="warranty"
                   value={form.warranty}
                   onChange={handleChange}
-                  placeholder="Ej: No aplica / 30 días / garantía de tienda"
+                  placeholder="Ej: 30 días / No aplica"
                   style={input}
                 />
               </div>
             </div>
 
-            <div style={twoColumns}>
-              <div>
-                <label style={fieldLabel}>Método de entrega</label>
-                <select name="deliveryMethod" value={form.deliveryMethod} onChange={handleChange} style={input}>
-                  <option value="">Selecciona el método</option>
-                  <option value="Punto seguro QSM">Punto seguro QSM</option>
-                  <option value="Entrega acordada">Entrega acordada</option>
-                  <option value="Envío nacional">Envío nacional</option>
-                  <option value="Retiro presencial">Retiro presencial</option>
-                </select>
-              </div>
-
-              <div>
-                <label style={fieldLabel}>Motivo de precio especial</label>
-                <select
-                  name="specialPriceReason"
-                  value={form.specialPriceReason}
-                  onChange={handleChange}
-                  style={input}
-                >
-                  <option value="NONE">No aplica</option>
-                  <option value="URGENT_MONEY">Necesito vender rápido</option>
-                  <option value="MOVING">Mudanza</option>
-                  <option value="BOUGHT_ANOTHER">Compré otro producto</option>
-                  <option value="NO_LONGER_USED">Ya no lo uso</option>
-                  <option value="MEDICAL_EXPENSE">Gasto médico</option>
-                  <option value="BUSINESS_LIQUIDATION">Liquidación</option>
-                  <option value="OTHER">Otro</option>
-                </select>
-              </div>
-            </div>
-
-            <label style={fieldLabel}>Explicación adicional</label>
-            <input
-              name="specialPriceExplanation"
-              value={form.specialPriceExplanation}
+            <label style={fieldLabel}>Método de entrega</label>
+            <select
+              name="deliveryMethod"
+              value={form.deliveryMethod}
               onChange={handleChange}
-              placeholder="Ej: Lo vendo porque compré uno nuevo. Incluye caja y cargador."
               style={input}
-            />
+            >
+              <option value="">Seleccionar</option>
+              <option value="Punto seguro QSM">Punto seguro QSM</option>
+              <option value="Entrega acordada">Entrega acordada</option>
+              <option value="Envío nacional">Envío nacional</option>
+              <option value="Retiro presencial">Retiro presencial</option>
+            </select>
 
-            <label style={fieldLabel}>Imágenes del producto</label>
+            <div style={sectionTitle}>Fotos y video</div>
 
             <label style={uploadBox}>
               <input
                 type="file"
                 accept="image/*"
                 multiple
-                onChange={handleFiles}
+                onChange={handleImages}
                 style={{ display: "none" }}
               />
-              <div style={uploadIcon}>☁️</div>
-              <strong>Sube fotos claras y reales del producto</strong>
-              <p>Haz clic para seleccionar imágenes de vista previa</p>
-              <span>Vista previa local. Para guardar en backend usa URL de imagen abajo.</span>
+              <div style={uploadIcon}>📷</div>
+              <strong>Subir hasta 8 imágenes reales</strong>
+              <p>Fotos claras aumentan la confianza del comprador.</p>
             </label>
 
-            <div style={slotGrid}>
+            <div style={mediaGrid}>
               {Array.from({ length: 8 }).map((_, index) => (
-                <div key={index} style={slot}>
+                <div key={index} style={mediaSlot}>
                   {imagePreviews[index] ? (
-                    <img src={imagePreviews[index]} alt={`Producto ${index + 1}`} style={slotImage} />
+                    <>
+                      <img src={imagePreviews[index]} alt="preview" style={mediaImg} />
+                      <button
+                        type="button"
+                        onClick={() => removeImage(index)}
+                        style={removeBtn}
+                      >
+                        ×
+                      </button>
+                    </>
                   ) : (
-                    "+"
+                    <span>+</span>
                   )}
                 </div>
               ))}
             </div>
 
-            <label style={fieldLabel}>URL de imagen principal</label>
-            <input
-              name="imageUrl"
-              value={form.imageUrl}
+            <label style={uploadBoxVideo}>
+              <input
+                type="file"
+                accept="video/*"
+                onChange={handleVideo}
+                style={{ display: "none" }}
+              />
+              <div style={uploadIcon}>🎥</div>
+              <strong>Subir video del producto</strong>
+              <p>Máximo 1 video. Ideal mostrando que el producto funciona.</p>
+            </label>
+
+            {videoPreview && (
+              <div style={videoBox}>
+                <video src={videoPreview} controls style={videoPlayer} />
+                <button type="button" onClick={removeVideo} style={removeVideoButton}>
+                  Eliminar video
+                </button>
+              </div>
+            )}
+
+            <label style={fieldLabel}>Motivo de precio especial</label>
+            <select
+              name="specialPriceReason"
+              value={form.specialPriceReason}
               onChange={handleChange}
-              placeholder="https://ejemplo.com/imagen.jpg"
+              style={input}
+            >
+              <option value="NONE">No aplica</option>
+              <option value="URGENT_MONEY">Necesito vender rápido</option>
+              <option value="MOVING">Mudanza</option>
+              <option value="BOUGHT_ANOTHER">Compré otro producto</option>
+              <option value="NO_LONGER_USED">Ya no lo uso</option>
+              <option value="MEDICAL_EXPENSE">Gasto médico</option>
+              <option value="BUSINESS_LIQUIDATION">Liquidación</option>
+              <option value="OTHER">Otro</option>
+            </select>
+
+            <label style={fieldLabel}>Explicación adicional</label>
+            <input
+              name="specialPriceExplanation"
+              value={form.specialPriceExplanation}
+              onChange={handleChange}
+              placeholder="Ej: Lo vendo porque compré otro. Incluye caja y cargador."
               style={input}
             />
 
             {message && <div style={messageBox}>{message}</div>}
+            {uploadingText && <div style={uploadingBox}>{uploadingText}</div>}
 
             <div style={buttonRow}>
               <Link to="/marketplace" style={cancelButton}>
                 Cancelar
               </Link>
 
-              <button disabled={submitting} type="submit" style={submitButton}>
+              <button type="button" style={draftButton}>
+                Guardar borrador
+              </button>
+
+              <button type="submit" disabled={submitting} style={submitButton}>
                 {submitting ? "Publicando..." : "Publicar producto seguro →"}
               </button>
             </div>
-
-            <p style={secureText}>
-              🔒 Tu producto será protegido y verificado por QSM antes de mostrarse a compradores.
-            </p>
           </form>
 
           <aside style={rightColumn}>
-            <section style={analysisCard}>
-              <h2>Análisis en tiempo real</h2>
-              <p style={muted}>QSM IA evaluará tu producto</p>
-
-              <div style={analysisList}>
-                {aiChecks.map((item) => (
-                  <AnalysisItem key={item.title} item={item} />
-                ))}
-              </div>
-
-              <div style={progressArea}>
-                <div style={circle}>
-                  <span>{completion}%</span>
-                </div>
-
+            <section style={aiCard}>
+              <div style={aiHeader}>
+                <div style={aiBrain}>🧠</div>
                 <div>
-                  <strong>Análisis completo</strong>
-                  <p>Tu producto será evaluado por nuestra IA antifraude.</p>
+                  <h2>QSM AI</h2>
+                  <p>Análisis inteligente en tiempo real</p>
                 </div>
               </div>
+
+              <div style={scoreCircle}>
+                <span>{completion}%</span>
+              </div>
+
+              <div style={scoreBar}>
+                <div style={{ ...scoreFill, width: `${completion}%` }}></div>
+              </div>
+
+              <AnalysisLine
+                icon="📷"
+                title="Fotos del producto"
+                value={`${imageFiles.length}/8 imágenes`}
+                done={imageFiles.length > 0}
+              />
+              <AnalysisLine
+                icon="🎥"
+                title="Video funcional"
+                value={videoFile ? "Video agregado" : "Pendiente"}
+                done={!!videoFile}
+              />
+              <AnalysisLine
+                icon="💰"
+                title="Precio publicado"
+                value={
+                  form.price
+                    ? `RD$ ${Number(form.price).toLocaleString("es-DO")}`
+                    : "Pendiente"
+                }
+                done={!!form.price}
+              />
+              <AnalysisLine
+                icon="📝"
+                title="Descripción"
+                value={form.description.length >= 40 ? "Aceptable" : "Muy corta"}
+                done={form.description.length >= 40}
+              />
+              <AnalysisLine
+                icon="👤"
+                title="Vendedor"
+                value={`Nivel ${savedUser.trustScore || 60}/100`}
+                done
+              />
+              <AnalysisLine
+                icon="🛡"
+                title="Riesgo QSM"
+                value={riskLevel}
+                done={completion >= 60}
+              />
             </section>
 
             <section style={previewCard}>
-              <h2>Vista previa del producto</h2>
+              <h2>Vista previa</h2>
 
               <div style={previewImageWrap}>
-                <img src={previewImage} alt="Vista previa" style={previewImageStyle} />
-                <span style={previewBadge}>QSM Seguro</span>
+                <img src={previewImage} alt="preview" style={previewImageStyle} />
+                <span style={previewBadge}>Pago Protegido</span>
               </div>
 
-              <div style={previewContent}>
-                <h3>{form.title || "Título del producto aparecerá aquí"}</h3>
-                <h2>RD$ {form.price ? Number(form.price).toLocaleString("es-DO") : "0"}</h2>
-                <p>{form.description || "Descripción breve del producto..."}</p>
+              <h3>{form.title || "Tu producto aparecerá aquí"}</h3>
+              <h2 style={previewPrice}>
+                RD$ {form.price ? Number(form.price).toLocaleString("es-DO") : "0"}
+              </h2>
+              <p style={previewText}>
+                {form.description || "Agrega una descripción clara para generar confianza."}
+              </p>
 
-                <div style={previewMeta}>
-                  <span>🛡 Vendedor {savedUser.isVerified ? "verificado" : "pendiente"}</span>
-                  <span>⭐ Nivel de confianza {savedUser.trustScore || 60}/100</span>
+              <div style={sellerPreview}>
+                <div style={avatar}>
+                  {savedUser.firstName?.charAt(0)?.toUpperCase() || "U"}
                 </div>
-
-                <div style={riskPreview}>
-                  🟡 Riesgo QSM: {completion >= 80 ? "Bajo" : "Pendiente"}
+                <div>
+                  <strong>
+                    {savedUser.firstName} {savedUser.lastName}
+                  </strong>
+                  <p>Nivel de confianza {savedUser.trustScore || 60}/100</p>
                 </div>
               </div>
             </section>
           </aside>
-        </section>
-
-        <section style={benefitRow}>
-          <Benefit icon="🛡" title="Pago Protegido" text="El dinero queda retenido hasta confirmar la entrega." />
-          <Benefit icon="🤖" title="Verificación inteligente" text="QSM analiza cada publicación para detectar riesgos." />
-          <Benefit icon="✅" title="Vendedor confiable" text="Genera confianza con información clara y real." />
-          <Benefit icon="📈" title="Más ventas" text="Publicaciones completas generan más confianza." />
         </section>
       </main>
 
@@ -503,68 +607,57 @@ function Step({ number, text, active }) {
   );
 }
 
-function AnalysisItem({ item }) {
+function AnalysisLine({ icon, title, value, done }) {
   return (
-    <div style={analysisItem}>
-      <div style={analysisIcon(item.done)}>{item.done ? "✓" : "•"}</div>
-      <div>
-        <strong>{item.title}</strong>
-        <p>{item.value}</p>
-      </div>
-    </div>
-  );
-}
-
-function Benefit({ icon, title, text }) {
-  return (
-    <div style={benefit}>
-      <div style={benefitIcon}>{icon}</div>
+    <div style={analysisLine}>
+      <div style={done ? analysisIconDone : analysisIcon}>{icon}</div>
       <div>
         <strong>{title}</strong>
-        <p>{text}</p>
+        <p>{value}</p>
       </div>
+      <span style={done ? checkDone : checkPending}>{done ? "✓" : "•"}</span>
     </div>
   );
 }
 
 const page = {
   minHeight: "100vh",
-  width: "100%",
-  background:
-    "radial-gradient(circle at top right, rgba(53,208,195,0.10), transparent 35%), #020617",
-  color: "white",
+  width: "100vw",
   display: "grid",
-  gridTemplateColumns: "260px minmax(0, 1fr)",
+  gridTemplateColumns: "280px minmax(0, 1fr)",
+  background:
+    "radial-gradient(circle at 80% 10%, rgba(124,58,237,.20), transparent 30%), radial-gradient(circle at 25% 15%, rgba(53,208,195,.13), transparent 28%), #020617",
+  color: "white",
   overflowX: "hidden"
 };
 
 const sidebar = {
+  background: "rgba(8,17,35,.94)",
+  borderRight: "1px solid rgba(53,208,195,.18)",
+  padding: "24px 16px",
   minHeight: "100vh",
-  background: "rgba(8,17,35,0.94)",
-  borderRight: "1px solid rgba(53,208,195,0.18)",
-  padding: "28px 16px",
   position: "sticky",
-  top: 0
+  top: 0,
+  width: "280px"
 };
 
 const brand = {
   display: "flex",
   alignItems: "center",
   gap: "12px",
-  color: "white",
   textDecoration: "none",
-  marginBottom: "40px"
+  color: "white",
+  marginBottom: "38px"
 };
 
 const brandIcon = {
   width: "46px",
   height: "46px",
   borderRadius: "16px",
-  border: "1px solid rgba(53,208,195,0.45)",
+  border: "1px solid rgba(53,208,195,.45)",
   display: "flex",
   alignItems: "center",
-  justifyContent: "center",
-  color: "#35d0c3"
+  justifyContent: "center"
 };
 
 const brandTitle = {
@@ -588,74 +681,50 @@ const menuItem = {
   textDecoration: "none",
   padding: "13px 14px",
   borderRadius: "15px",
-  background: "rgba(15,23,42,0.38)",
-  border: "1px solid rgba(148,163,184,0.10)",
-  fontWeight: "700",
-  fontSize: "15px"
+  background: "rgba(15,23,42,.38)",
+  border: "1px solid rgba(148,163,184,.10)",
+  fontWeight: "800"
 };
 
 const activeMenuItem = {
   ...menuItem,
-  background: "rgba(53,208,195,0.14)",
-  border: "1px solid rgba(53,208,195,0.35)",
-  color: "#35d0c3"
+  color: "#35d0c3",
+  background: "rgba(53,208,195,.14)",
+  border: "1px solid rgba(53,208,195,.35)"
 };
 
-const aiSideCard = {
+const sideCard = {
   marginTop: "34px",
-  background: "rgba(53,208,195,0.08)",
-  border: "1px solid rgba(53,208,195,0.18)",
-  borderRadius: "22px",
-  padding: "20px",
+  padding: "22px",
+  borderRadius: "24px",
+  background:
+    "linear-gradient(145deg, rgba(53,208,195,.13), rgba(124,58,237,.12))",
+  border: "1px solid rgba(53,208,195,.22)",
   color: "#cbd5e1"
 };
 
-const sideButton = {
-  width: "100%",
-  background: "rgba(15,23,42,0.72)",
+const sideLabel = {
   color: "#35d0c3",
-  border: "1px solid rgba(53,208,195,0.24)",
-  padding: "12px",
-  borderRadius: "14px",
-  cursor: "pointer",
+  letterSpacing: "4px",
+  fontSize: "11px",
   fontWeight: "900"
 };
 
 const main = {
   width: "100%",
-  minWidth: 0,
-  maxWidth: "1740px",
-  margin: "0 auto",
-  padding: "28px 34px 60px",
-  overflowX: "hidden"
-};
-
-const breadcrumb = {
-  color: "#94a3b8",
-  marginBottom: "24px"
-};
-
-const layout = {
-  display: "grid",
-  gridTemplateColumns: "minmax(0, 1fr) 390px",
-  gap: "24px",
-  alignItems: "start"
-};
-
-const formCard = {
-  background: "rgba(15,23,42,0.62)",
-  border: "1px solid rgba(53,208,195,0.16)",
-  borderRadius: "28px",
-  padding: "34px",
+  maxWidth: "none",
+  margin: 0,
+  padding: "18px 26px 96px",
   minWidth: 0
 };
 
-const formHeader = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: "22px",
-  alignItems: "start",
-  marginBottom: "26px"
+const hero = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr) 340px",
+  gap: "24px",
+  alignItems: "center",
+  margin: "18px 0 24px",
+  width: "100%"
 };
 
 const label = {
@@ -667,43 +736,67 @@ const label = {
 
 const title = {
   fontSize: "42px",
-  lineHeight: "46px",
-  margin: "0 0 8px",
-  letterSpacing: "-1.5px"
+  lineHeight: "48px",
+  margin: "8px 0"
+};
+
+const gradientText = {
+  background: "linear-gradient(90deg, #35d0c3, #60a5fa, #a855f7)",
+  WebkitBackgroundClip: "text",
+  color: "transparent"
 };
 
 const subtitle = {
   color: "#cbd5e1",
-  margin: 0
+  fontSize: "18px",
+  maxWidth: "780px"
 };
 
-const protectionBox = {
+const heroBadge = {
   display: "flex",
-  gap: "14px",
   alignItems: "center",
-  background: "rgba(2,6,23,0.42)",
-  border: "1px solid rgba(53,208,195,0.18)",
-  borderRadius: "18px",
-  padding: "16px",
-  minWidth: "230px"
+  gap: "14px",
+  minWidth: "330px",
+  padding: "18px",
+  borderRadius: "22px",
+  background: "rgba(15,23,42,.68)",
+  border: "1px solid rgba(53,208,195,.20)"
 };
 
-const protectionIcon = {
-  width: "46px",
-  height: "46px",
-  borderRadius: "14px",
-  background: "rgba(53,208,195,0.12)",
+const heroIcon = {
+  width: "58px",
+  height: "58px",
+  borderRadius: "18px",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  fontSize: "24px"
+  background: "linear-gradient(135deg, #35d0c3, #7c3aed)",
+  fontSize: "28px",
+  animation: "pulseRing 2.4s infinite"
 };
 
-const stepsRow = {
+const layout = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr) 560px",
+  gap: "20px",
+  alignItems: "start",
+  width: "100%"
+};
+
+const formCard = {
+  padding: "26px",
+  borderRadius: "26px",
+  background: "rgba(15,23,42,.72)",
+  border: "1px solid rgba(53,208,195,.18)",
+  boxShadow: "0 30px 100px rgba(0,0,0,.38)",
+  minWidth: 0
+};
+
+const stepBar = {
   display: "grid",
   gridTemplateColumns: "repeat(4, 1fr)",
   gap: "12px",
-  marginBottom: "24px"
+  marginBottom: "22px"
 };
 
 const step = {
@@ -711,233 +804,327 @@ const step = {
   alignItems: "center",
   gap: "10px",
   color: "#cbd5e1",
-  fontWeight: "800"
+  fontWeight: "900"
 };
 
 const stepNumber = {
-  width: "30px",
-  height: "30px",
+  width: "32px",
+  height: "32px",
   borderRadius: "50%",
-  background: "rgba(148,163,184,0.18)",
+  background: "rgba(148,163,184,.16)",
   color: "#94a3b8",
   display: "flex",
   alignItems: "center",
-  justifyContent: "center",
-  flexShrink: 0
+  justifyContent: "center"
 };
 
 const stepNumberActive = {
   ...stepNumber,
   background: "#35d0c3",
-  color: "#020617",
-  fontWeight: "900"
+  color: "#020617"
+};
+
+const sectionTitle = {
+  marginTop: "18px",
+  paddingTop: "18px",
+  borderTop: "1px solid rgba(148,163,184,.12)",
+  color: "#35d0c3",
+  fontWeight: "900",
+  letterSpacing: "2px"
 };
 
 const fieldLabel = {
   display: "block",
   margin: "18px 0 8px",
-  fontWeight: "900",
-  color: "#e5e7eb"
+  fontWeight: "900"
 };
 
 const input = {
   width: "100%",
-  background: "rgba(2,6,23,0.60)",
-  border: "1px solid rgba(148,163,184,0.22)",
-  color: "white",
-  outline: "none",
   padding: "15px",
-  borderRadius: "14px",
-  fontFamily: "'Inter', system-ui, sans-serif"
-};
-
-const textareaWrap = {
-  position: "relative"
+  borderRadius: "15px",
+  border: "1px solid rgba(148,163,184,.22)",
+  background: "rgba(2,6,23,.64)",
+  color: "white",
+  outline: "none"
 };
 
 const textarea = {
   ...input,
-  minHeight: "140px",
+  minHeight: "150px",
   resize: "vertical",
   lineHeight: "24px"
-};
-
-const counter = {
-  position: "absolute",
-  right: "14px",
-  bottom: "12px",
-  color: "#94a3b8",
-  fontSize: "12px"
 };
 
 const twoColumns = {
   display: "grid",
   gridTemplateColumns: "1fr 1fr",
-  gap: "20px"
+  gap: "18px"
 };
 
 const uploadBox = {
-  border: "1px dashed rgba(148,163,184,0.36)",
-  background: "rgba(2,6,23,0.38)",
-  borderRadius: "18px",
+  marginTop: "10px",
   minHeight: "150px",
+  borderRadius: "22px",
+  border: "1px dashed rgba(53,208,195,.38)",
+  background:
+    "linear-gradient(145deg, rgba(53,208,195,.08), rgba(124,58,237,.08))",
   display: "flex",
   flexDirection: "column",
-  justifyContent: "center",
   alignItems: "center",
+  justifyContent: "center",
   textAlign: "center",
-  padding: "22px",
   cursor: "pointer",
   color: "#cbd5e1"
 };
 
+const uploadBoxVideo = {
+  ...uploadBox,
+  border: "1px dashed rgba(168,85,247,.45)"
+};
+
 const uploadIcon = {
-  fontSize: "38px",
+  fontSize: "42px",
   marginBottom: "10px"
 };
 
-const slotGrid = {
+const mediaGrid = {
   display: "grid",
   gridTemplateColumns: "repeat(8, 1fr)",
   gap: "10px",
-  marginTop: "12px"
+  marginTop: "14px"
 };
 
-const slot = {
-  height: "70px",
-  border: "1px dashed rgba(148,163,184,0.28)",
-  borderRadius: "12px",
-  background: "rgba(2,6,23,0.42)",
+const mediaSlot = {
+  height: "82px",
+  borderRadius: "16px",
+  background: "rgba(2,6,23,.55)",
+  border: "1px solid rgba(148,163,184,.16)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
+  overflow: "hidden",
+  position: "relative",
   color: "#94a3b8",
-  overflow: "hidden"
+  fontWeight: "900"
 };
 
-const slotImage = {
+const mediaImg = {
   width: "100%",
   height: "100%",
   objectFit: "cover"
 };
 
+const removeBtn = {
+  position: "absolute",
+  top: "4px",
+  right: "4px",
+  border: "none",
+  width: "22px",
+  height: "22px",
+  borderRadius: "50%",
+  background: "rgba(239,68,68,.90)",
+  color: "white",
+  cursor: "pointer"
+};
+
+const videoBox = {
+  marginTop: "14px",
+  borderRadius: "20px",
+  overflow: "hidden",
+  border: "1px solid rgba(53,208,195,.18)"
+};
+
+const videoPlayer = {
+  width: "100%",
+  maxHeight: "320px",
+  display: "block",
+  background: "#020617"
+};
+
+const removeVideoButton = {
+  width: "100%",
+  padding: "12px",
+  background: "rgba(239,68,68,.18)",
+  color: "#fecaca",
+  border: "none",
+  cursor: "pointer",
+  fontWeight: "900"
+};
+
 const messageBox = {
   marginTop: "18px",
-  background: "rgba(245,158,11,0.12)",
-  border: "1px solid rgba(245,158,11,0.28)",
-  color: "#fde68a",
   padding: "14px",
   borderRadius: "14px",
-  fontWeight: "800"
+  background: "rgba(245,158,11,.13)",
+  color: "#fde68a",
+  border: "1px solid rgba(245,158,11,.28)",
+  fontWeight: "900"
+};
+
+const uploadingBox = {
+  ...messageBox,
+  background: "rgba(53,208,195,.12)",
+  color: "#67fff1",
+  border: "1px solid rgba(53,208,195,.28)"
 };
 
 const buttonRow = {
+  position: "fixed",
+  left: "300px",
+  right: "26px",
+  bottom: "18px",
   display: "grid",
-  gridTemplateColumns: "180px 1fr",
+  gridTemplateColumns: "280px 1fr 1.1fr",
   gap: "14px",
-  marginTop: "22px"
+  zIndex: 50,
+  padding: 0
 };
 
 const cancelButton = {
-  background: "rgba(15,23,42,0.72)",
-  color: "white",
-  border: "1px solid rgba(148,163,184,0.20)",
-  padding: "17px",
-  borderRadius: "15px",
-  fontWeight: "900",
+  textAlign: "center",
   textDecoration: "none",
-  textAlign: "center"
+  color: "white",
+  padding: "16px",
+  borderRadius: "15px",
+  background: "rgba(15,23,42,.72)",
+  border: "1px solid rgba(148,163,184,.18)",
+  fontWeight: "900"
+};
+
+const draftButton = {
+  textAlign: "center",
+  color: "#35d0c3",
+  padding: "16px",
+  borderRadius: "15px",
+  background: "rgba(15,23,42,.72)",
+  border: "1px solid rgba(53,208,195,.35)",
+  fontWeight: "900",
+  cursor: "pointer"
 };
 
 const submitButton = {
-  background: "linear-gradient(135deg, #35d0c3, #2563eb)",
-  color: "#020617",
   border: "none",
-  padding: "17px",
+  padding: "16px",
   borderRadius: "15px",
+  background: "linear-gradient(135deg, #35d0c3, #2563eb, #7c3aed)",
+  color: "white",
   fontWeight: "900",
   cursor: "pointer",
-  fontSize: "15px"
-};
-
-const secureText = {
-  color: "#cbd5e1",
-  textAlign: "center",
-  marginTop: "16px"
+  fontSize: "16px"
 };
 
 const rightColumn = {
   display: "grid",
-  gap: "24px"
-};
-
-const analysisCard = {
-  background: "rgba(15,23,42,0.62)",
-  border: "1px solid rgba(53,208,195,0.16)",
-  borderRadius: "28px",
-  padding: "26px"
-};
-
-const muted = {
-  color: "#94a3b8"
-};
-
-const analysisList = {
-  display: "grid",
+  gridTemplateColumns: "1fr",
   gap: "18px",
-  marginTop: "20px"
+  position: "sticky",
+  top: "18px",
+  minWidth: 0
 };
 
-const analysisItem = {
+const aiCard = {
+  borderRadius: "26px",
+  padding: "22px",
+  background:
+    "linear-gradient(145deg, rgba(15,23,42,.86), rgba(30,41,59,.58))",
+  border: "1px solid rgba(53,208,195,.20)",
+  boxShadow: "0 28px 90px rgba(0,0,0,.35)"
+};
+
+const aiHeader = {
   display: "flex",
-  gap: "14px",
-  alignItems: "center"
+  alignItems: "center",
+  gap: "14px"
 };
 
-const analysisIcon = (done) => ({
-  width: "36px",
-  height: "36px",
-  borderRadius: "12px",
-  background: done ? "rgba(34,197,94,0.14)" : "rgba(245,158,11,0.12)",
-  color: done ? "#86efac" : "#fde68a",
+const aiBrain = {
+  width: "58px",
+  height: "58px",
+  borderRadius: "20px",
+  background: "linear-gradient(135deg, #35d0c3, #7c3aed)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  fontWeight: "900"
-});
-
-const progressArea = {
-  display: "flex",
-  gap: "16px",
-  alignItems: "center",
-  marginTop: "28px"
+  fontSize: "28px"
 };
 
-const circle = {
-  width: "70px",
-  height: "70px",
+const scoreCircle = {
+  width: "120px",
+  height: "120px",
+  margin: "22px auto",
   borderRadius: "50%",
-  border: "7px solid rgba(53,208,195,0.25)",
+  border: "10px solid rgba(53,208,195,.25)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   color: "#35d0c3",
+  fontSize: "30px",
+  fontWeight: "900",
+  animation: "floatGlow 4s ease-in-out infinite"
+};
+
+const scoreBar = {
+  height: "10px",
+  background: "rgba(148,163,184,.16)",
+  borderRadius: "999px",
+  overflow: "hidden",
+  marginBottom: "22px"
+};
+
+const scoreFill = {
+  height: "100%",
+  background: "linear-gradient(90deg, #35d0c3, #60a5fa, #a855f7)",
+  borderRadius: "999px"
+};
+
+const analysisLine = {
+  display: "grid",
+  gridTemplateColumns: "44px 1fr 28px",
+  gap: "12px",
+  alignItems: "center",
+  padding: "14px 0",
+  borderBottom: "1px solid rgba(148,163,184,.10)"
+};
+
+const analysisIcon = {
+  width: "44px",
+  height: "44px",
+  borderRadius: "14px",
+  background: "rgba(245,158,11,.12)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center"
+};
+
+const analysisIconDone = {
+  ...analysisIcon,
+  background: "rgba(34,197,94,.14)"
+};
+
+const checkDone = {
+  color: "#86efac",
+  fontWeight: "900"
+};
+
+const checkPending = {
+  color: "#fde68a",
   fontWeight: "900"
 };
 
 const previewCard = {
-  background: "rgba(15,23,42,0.62)",
-  border: "1px solid rgba(53,208,195,0.16)",
-  borderRadius: "28px",
-  padding: "20px"
+  borderRadius: "26px",
+  padding: "20px",
+  background: "rgba(15,23,42,.72)",
+  border: "1px solid rgba(53,208,195,.18)"
 };
 
 const previewImageWrap = {
-  height: "260px",
-  borderRadius: "18px",
-  overflow: "hidden",
   position: "relative",
-  background: "rgba(2,6,23,0.55)"
+  height: "260px",
+  borderRadius: "22px",
+  overflow: "hidden",
+  background: "#020617"
 };
 
 const previewImageStyle = {
@@ -948,63 +1135,45 @@ const previewImageStyle = {
 
 const previewBadge = {
   position: "absolute",
-  top: "12px",
-  right: "12px",
-  background: "rgba(53,208,195,0.16)",
-  color: "#35d0c3",
-  border: "1px solid rgba(53,208,195,0.28)",
+  left: "14px",
+  bottom: "14px",
+  padding: "8px 12px",
   borderRadius: "999px",
-  padding: "7px 10px",
+  background: "rgba(53,208,195,.18)",
+  color: "#67fff1",
+  border: "1px solid rgba(53,208,195,.35)",
   fontWeight: "900",
   fontSize: "12px"
 };
 
-const previewContent = {
-  paddingTop: "16px"
+const previewPrice = {
+  color: "#35d0c3"
 };
 
-const previewMeta = {
-  display: "grid",
-  gridTemplateColumns: "1fr",
-  gap: "8px",
-  color: "#cbd5e1",
-  fontSize: "13px",
-  paddingTop: "12px",
-  borderTop: "1px solid rgba(148,163,184,0.12)"
+const previewText = {
+  color: "#94a3b8",
+  lineHeight: "24px"
 };
 
-const riskPreview = {
-  marginTop: "14px",
-  color: "#fde68a",
-  fontWeight: "800"
-};
-
-const benefitRow = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
-  gap: "16px",
-  marginTop: "34px"
-};
-
-const benefit = {
+const sellerPreview = {
   display: "flex",
-  gap: "14px",
-  background: "rgba(15,23,42,0.45)",
-  border: "1px solid rgba(53,208,195,0.12)",
+  gap: "12px",
+  alignItems: "center",
+  padding: "14px",
   borderRadius: "18px",
-  padding: "18px",
-  color: "#cbd5e1"
+  background: "rgba(2,6,23,.45)",
+  border: "1px solid rgba(148,163,184,.12)"
 };
 
-const benefitIcon = {
-  width: "46px",
-  height: "46px",
-  borderRadius: "14px",
-  background: "rgba(53,208,195,0.12)",
+const avatar = {
+  width: "48px",
+  height: "48px",
+  borderRadius: "50%",
+  background: "linear-gradient(135deg, #35d0c3, #7c3aed)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  flexShrink: 0
+  fontWeight: "900"
 };
 
 export default NewProduct;

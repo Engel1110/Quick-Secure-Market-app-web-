@@ -2,332 +2,444 @@ import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import AiAssistant from "../components/AiAssistant";
 
-const heroImages = [
-  "https://images.unsplash.com/photo-1519608487953-e999c86e7455?auto=format&fit=crop&w=1920&q=90",
-  "https://images.unsplash.com/photo-1518005020951-eccb494ad742?auto=format&fit=crop&w=1920&q=90",
-  "https://images.unsplash.com/photo-1494526585095-c41746248156?auto=format&fit=crop&w=1920&q=90"
+const heroSlides = [
+  {
+    title: "Compra y vende con confianza.",
+    highlight: "confianza.",
+    text: "QSM protege tus compras con identidad verificada, Pago Protegido y análisis antifraude para reducir estafas en transacciones digitales.",
+    image:
+      "https://images.unsplash.com/photo-1519608487953-e999c86e7455?auto=format&fit=crop&w=2400&q=90",
+    meta: "Santo Domingo Futurista"
+  },
+  {
+    title: "Tecnología segura para todos.",
+    highlight: "segura",
+    text: "Compra celulares, laptops y equipos tecnológicos con vendedores verificados, historial del producto y protección QSM.",
+    image:
+      "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=2400&q=90",
+    meta: "Tecnología protegida"
+  },
+  {
+    title: "Gaming con pago protegido.",
+    highlight: "protegido.",
+    text: "Compra consolas, accesorios y equipos gaming con validación, evidencia y retención segura del pago.",
+    image:
+      "https://images.unsplash.com/photo-1606813907291-d86efa9b94db?auto=format&fit=crop&w=2400&q=90",
+    meta: "Gaming seguro"
+  },
+  {
+    title: "Vehículos con más confianza.",
+    highlight: "confianza.",
+    text: "Publica y compra vehículos con información clara, identidad del vendedor y herramientas de protección.",
+    image:
+      "https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&w=2400&q=90",
+    meta: "Vehículos verificados"
+  },
+  {
+    title: "Compras digitales más seguras.",
+    highlight: "seguras.",
+    text: "QSM ayuda a compradores y vendedores a realizar transacciones digitales con menor riesgo.",
+    image:
+      "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=2400&q=90",
+    meta: "Compras inteligentes"
+  }
+];
+
+const securityCards = [
+  {
+    icon: "🧾",
+    title: "Verificación de identidad",
+    text: "Validamos compradores y vendedores para aumentar la confianza dentro de la plataforma."
+  },
+  {
+    icon: "🖼️",
+    title: "Validación inteligente de imágenes",
+    text: "QSM revisa señales visuales para detectar productos sospechosos o publicaciones incompletas."
+  },
+  {
+    icon: "📉",
+    title: "Análisis de precio",
+    text: "Detectamos precios demasiado bajos o incoherentes que puedan indicar riesgo."
+  },
+  {
+    icon: "⭐",
+    title: "Puntuación de confianza",
+    text: "Cada usuario obtiene una puntuación basada en su perfil, historial y comportamiento."
+  },
+  {
+    icon: "📦",
+    title: "Identificador QSM",
+    text: "Cada producto tiene un código único para trazabilidad durante la compra."
+  },
+  {
+    icon: "⚖️",
+    title: "Centro de reclamaciones",
+    text: "Si ocurre un problema, QSM permite documentar el caso y revisar evidencias."
+  }
+];
+
+const categories = [
+  {
+    title: "Tecnología",
+    image:
+      "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=900&q=80"
+  },
+  {
+    title: "Gaming",
+    image:
+      "https://images.unsplash.com/photo-1606813907291-d86efa9b94db?auto=format&fit=crop&w=900&q=80"
+  },
+  {
+    title: "Vehículos",
+    image:
+      "https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&w=900&q=80"
+  },
+  {
+    title: "Hogar y compras",
+    image:
+      "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=900&q=80"
+  }
 ];
 
 function LandingPage() {
-  const [currentImage, setCurrentImage] = useState(0);
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [theme, setTheme] = useState(() => localStorage.getItem("qsm_theme") || "dark");
+
+  const isDark = theme === "dark";
+  const slide = heroSlides[currentSlide];
+
+  useEffect(() => {
+    localStorage.setItem("qsm_theme", theme);
+    document.documentElement.setAttribute("data-qsm-theme", theme);
+  }, [theme]);
 
   useEffect(() => {
     const timer = setInterval(() => {
-      setCurrentImage((prev) => (prev + 1) % heroImages.length);
-    }, 7000);
+      setCurrentSlide((prev) => (prev + 1) % heroSlides.length);
+    }, 7500);
 
     return () => clearInterval(timer);
   }, []);
 
+  const goToSection = (id) => {
+    document.querySelector(id)?.scrollIntoView({ behavior: "smooth" });
+  };
+
   return (
-    <div style={page}>
-      <style>
-        {`
-          * {
-            box-sizing: border-box;
-          }
+    <div style={page(isDark)}>
+      <style>{`
+        * { box-sizing: border-box; }
 
-          html, body, #root {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            min-height: 100%;
-            background: #020617;
-            overflow-x: hidden;
-            scroll-behavior: smooth;
-            font-family: 'Inter', system-ui, sans-serif;
-          }
+        html, body, #root {
+          margin: 0;
+          padding: 0;
+          width: 100%;
+          min-height: 100%;
+          overflow-x: hidden;
+          scroll-behavior: smooth;
+          font-family: Inter, "Plus Jakarta Sans", system-ui, sans-serif;
+        }
 
-          @keyframes slowZoom {
-            0% { transform: scale(1); }
-            100% { transform: scale(1.09); }
-          }
+        body {
+          background: ${isDark ? "#020617" : "#f8fafc"};
+        }
 
-          @keyframes fadeUp {
-            from { opacity: 0; transform: translateY(30px); }
-            to { opacity: 1; transform: translateY(0); }
-          }
+        a, button {
+          font-family: inherit;
+          transition: all .25s ease;
+        }
 
-          @keyframes floatSoft {
-            0% { transform: translateY(0); }
-            50% { transform: translateY(-12px); }
-            100% { transform: translateY(0); }
-          }
+        a:hover, button:hover {
+          transform: translateY(-2px);
+        }
 
-          @keyframes glowPulse {
-            0% { box-shadow: 0 0 28px rgba(53,208,195,0.18); }
-            50% { box-shadow: 0 0 70px rgba(53,208,195,0.42); }
-            100% { box-shadow: 0 0 28px rgba(53,208,195,0.18); }
-          }
+        @keyframes slowZoom {
+          0% { transform: scale(1); }
+          100% { transform: scale(1.08); }
+        }
 
-          a, button {
-            transition: all .25s ease;
-          }
+        @keyframes fadeUp {
+          from { opacity: 0; transform: translateY(26px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
 
-          a:hover, button:hover {
-            transform: translateY(-2px);
-          }
-        `}
-      </style>
+        @keyframes glowLine {
+          0%,100% { width: 26px; opacity: .6; }
+          50% { width: 52px; opacity: 1; }
+        }
 
-      <nav style={nav}>
-        <div style={logoWrap}>
-          <div style={logoIcon}>🛡</div>
+        .hero-bg {
+          animation: slowZoom 16s ease-in-out alternate infinite;
+        }
+
+        .nav-active::after {
+          content: "";
+          position: absolute;
+          left: 50%;
+          bottom: -14px;
+          transform: translateX(-50%);
+          height: 3px;
+          width: 42px;
+          border-radius: 999px;
+          background: linear-gradient(90deg, #38bdf8, #8b5cf6, #ec4899);
+          box-shadow: 0 0 24px rgba(139,92,246,.75);
+          animation: glowLine 2.5s ease-in-out infinite;
+        }
+
+        @media (max-width: 1100px) {
+          .desktop-nav { display: none !important; }
+          .hero-dashboard { display: none !important; }
+          .hero-content { max-width: 100% !important; }
+          .escrow-section { grid-template-columns: 1fr !important; }
+          .demo-section { grid-template-columns: 1fr !important; }
+        }
+
+        @media (max-width: 760px) {
+          .topbar { padding: 14px 18px !important; height: auto !important; }
+          .hero { padding: 130px 22px 70px !important; }
+          .hero-title { font-size: 48px !important; }
+          .hero-buttons { flex-direction: column !important; }
+          .features-grid, .category-grid, .footer-grid { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
+
+      <header className="topbar" style={topbar(isDark)}>
+        <Link to="/" style={brand}>
+          <div style={logoIcon(isDark)}>🛡</div>
           <div>
-            <div style={logo}>QSM</div>
-            <small style={logoSub}>Quick Secure Market</small>
+            <strong style={logoText(isDark)}>QSM</strong>
+            <span style={logoSub(isDark)}>Quick Secure Market</span>
           </div>
-        </div>
+        </Link>
 
-        <div style={navLinks}>
-          <a href="#inicio" style={navLink}>Inicio</a>
-          <a href="#nosotros" style={navLink}>Nosotros</a>
-          <a href="#seguridad" style={navLink}>Seguridad</a>
-          <a href="#escrow" style={navLink}>Escrow</a>
-          <a href="#demo" style={navLink}>Demo</a>
-          <a href="#contacto" style={navLink}>Contacto</a>
-        </div>
+        <nav className="desktop-nav" style={navLinks}>
+          <button className="nav-active" onClick={() => goToSection("#inicio")} style={navButton(isDark)}>
+            Inicio
+          </button>
+          <button onClick={() => goToSection("#nosotros")} style={navButton(isDark)}>
+            Nosotros
+          </button>
+          <button onClick={() => goToSection("#seguridad")} style={navButton(isDark)}>
+            Seguridad
+          </button>
+          <button onClick={() => goToSection("#pago-protegido")} style={navButton(isDark)}>
+            Pago Protegido
+          </button>
+          <button onClick={() => goToSection("#demo")} style={navButton(isDark)}>
+            Demo
+          </button>
+          <button onClick={() => goToSection("#contacto")} style={navButton(isDark)}>
+            Contacto
+          </button>
+        </nav>
 
         <div style={navActions}>
-          <Link to="/login" style={outlineButton}>Iniciar sesión</Link>
-          <Link to="/register" style={primaryButton}>Registrarse</Link>
+          <button
+            type="button"
+            onClick={() => setTheme(isDark ? "light" : "dark")}
+            style={themeToggle(isDark)}
+            title="Cambiar tema"
+          >
+            {isDark ? "☀️" : "🌙"}
+          </button>
+
+          <Link to="/login" style={loginButton(isDark)}>
+            Iniciar sesión
+          </Link>
+
+          <Link to="/register" style={registerButton}>
+            Crear cuenta
+          </Link>
         </div>
-      </nav>
+      </header>
 
-      <section id="inicio" style={hero}>
-        <div
-          key={currentImage}
-          style={{
-            ...heroBackground,
-            backgroundImage: `
-              linear-gradient(90deg, rgba(2,6,23,0.98), rgba(2,6,23,0.70), rgba(2,6,23,0.22)),
-              url(${heroImages[currentImage]})
-            `
-          }}
-        />
+      <main>
+        <section id="inicio" className="hero" style={hero}>
+          <div
+            key={currentSlide}
+            className="hero-bg"
+            style={{
+              ...heroBg,
+              backgroundImage: `
+                linear-gradient(90deg, ${
+                  isDark
+                    ? "rgba(2,6,23,.96), rgba(2,6,23,.74), rgba(2,6,23,.26)"
+                    : "rgba(248,250,252,.96), rgba(248,250,252,.74), rgba(248,250,252,.20)"
+                }),
+                url(${slide.image})
+              `
+            }}
+          />
 
-        <div style={heroOverlay} />
+          <div style={heroGlow(isDark)} />
 
-        <div style={heroContent}>
-          <div style={badge}>
-            <span style={badgeDot}></span>
-            Plataforma segura con enfoque antifraude
-          </div>
+          <div className="hero-content" style={heroContent}>
+            <p style={eyebrow}>MARKETPLACE SEGURO EN REPÚBLICA DOMINICANA</p>
 
-          <h1 style={heroTitle}>
-            Comercio digital seguro para una nueva{" "}
-            <span style={accent}>República Dominicana.</span>
-          </h1>
+            <h1 className="hero-title" style={heroTitle(isDark)}>
+              {renderTitle(slide.title, slide.highlight)}
+            </h1>
 
-          <p style={heroText}>
-            Quick Secure Market protege compradores y vendedores con verificación de identidad,
-            escrow, historial de productos, Trust Score e inteligencia antifraude.
-          </p>
+            <p style={heroText(isDark)}>{slide.text}</p>
 
-          <div style={heroButtons}>
-            <Link to="/register" style={primaryLarge}>
-              Crear cuenta segura →
-            </Link>
+            <div className="hero-buttons" style={heroButtons}>
+              <Link to="/register" style={primaryLarge}>
+                Crear cuenta segura →
+              </Link>
 
-            <a href="#demo" style={outlineLarge}>
-              Ver demostración
-            </a>
-          </div>
-
-          <div style={heroStats}>
-            <div>
-              <strong>12K+</strong>
-              <span>usuarios proyectados</span>
+              <button onClick={() => goToSection("#demo")} style={outlineLarge(isDark)}>
+                Ver demostración ▷
+              </button>
             </div>
-            <div>
-              <strong>8K+</strong>
-              <span>productos protegidos</span>
+
+            <div style={trustRow(isDark)}>
+              <span>🛡 Identidad validada</span>
+              <span>💰 Pago retenido</span>
+              <span>🤖 IA antifraude</span>
+              <span>📦 Código QSM</span>
             </div>
-            <div>
-              <strong>98%</strong>
-              <span>confianza estimada</span>
+          </div>
+
+          <div className="hero-dashboard" style={heroDashboard(isDark)}>
+            <div style={dashboardTop}>
+              <strong>QSM Risk Engine</strong>
+              <span style={liveBadge}>Activo</span>
+            </div>
+
+            <div style={riskCircle}>
+              <strong>96</strong>
+              <small>/100</small>
+            </div>
+
+            <p style={riskText(isDark)}>Nivel de confianza estimado</p>
+
+            <div style={progressTrack}>
+              <div style={progressFill}></div>
+            </div>
+
+            <div style={miniRows(isDark)}>
+              <span>✅ Identidad verificada</span>
+              <span>✅ Pago Protegido habilitado</span>
+              <span>✅ Historial disponible</span>
+              <span>✅ IA antifraude activa</span>
+              <span>✅ Producto rastreable</span>
             </div>
           </div>
 
-          <div style={trustPanel}>
-            <span>🛡 Identidad validada</span>
-            <span>💰 Pago retenido</span>
-            <span>🤖 IA antifraude</span>
-            <span>📦 Código QSM</span>
-          </div>
-        </div>
-
-        <div style={heroDashboard}>
-          <div style={dashboardTop}>
-            <span>QSM Risk Engine</span>
-            <span style={liveBadge}>Live</span>
-          </div>
-
-          <div style={riskCircle}>
-            <span>96</span>
-            <small>/100</small>
-          </div>
-
-          <p style={riskText}>Nivel de confianza estimado</p>
-
-          <div style={progressTrack}>
-            <div style={progressFill}></div>
-          </div>
-
-          <div style={miniRows}>
-            <div>✅ Identidad verificada</div>
-            <div>✅ Escrow habilitado</div>
-            <div>✅ Historial disponible</div>
-            <div>✅ IA antifraude activa</div>
-            <div>✅ Producto rastreable</div>
-          </div>
-        </div>
-      </section>
-
-      <section id="nosotros" style={sectionGrid}>
-        <div style={glassCard}>
-          <p style={eyebrow}>SOBRE QSM</p>
-          <h2 style={sectionTitleLeft}>
-            Una plataforma diseñada para reducir fraudes digitales.
-          </h2>
-
-          <p>
-            Quick Secure Market nace como una propuesta tecnológica para mejorar
-            la confianza en las compras y ventas en línea en República Dominicana.
-          </p>
-
-          <p>
-            La plataforma combina identidad verificada, historial de productos,
-            escrow, alertas antifraude y revisión administrativa para proteger
-            cada transacción.
-          </p>
-        </div>
-
-        <div style={visionCard}>
-          <h2>Seguridad primero</h2>
-          <p>
-            QSM no es solo un marketplace. Es una capa de confianza entre
-            compradores, vendedores y productos.
-          </p>
-
-          <div style={visionGrid}>
-            <span>Verificación</span>
-            <span>Escrow</span>
-            <span>Historial</span>
-            <span>Disputas</span>
-          </div>
-        </div>
-      </section>
-
-      <section id="seguridad" style={section}>
-        <p style={eyebrowCenter}>TECNOLOGÍA ANTIFRAUDE</p>
-        <h2 style={centerTitle}>Seguridad integrada desde el primer clic.</h2>
-
-        <div style={cardsGrid}>
-          {[
-            ["🧾", "KYC de usuarios", "Validación de documento, datos personales y selfie."],
-            ["🖼", "Control de imágenes", "Detección de imágenes reutilizadas o sospechosas."],
-            ["📉", "Análisis de precio", "Alertas por precios demasiado bajos o incoherentes."],
-            ["⭐", "Trust Score", "Puntaje de confianza basado en comportamiento."],
-            ["📦", "QSM ID", "Código único para trazabilidad del producto."],
-            ["⚖", "Disputas", "Proceso documentado para resolver conflictos."]
-          ].map((item) => (
-            <div key={item[1]} style={featureCard}>
-              <div style={featureIcon}>{item[0]}</div>
-              <h3>{item[1]}</h3>
-              <p>{item[2]}</p>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section id="escrow" style={escrowSection}>
-        <div style={escrowContent}>
-          <p style={eyebrow}>ESCROW PROTECTION</p>
-
-          <h2 style={sectionTitleLeft}>
-            El dinero no va directo al vendedor. Primero lo protege QSM.
-          </h2>
-
-          <p style={escrowText}>
-            El comprador paga, QSM retiene el dinero, el vendedor entrega el producto
-            y solo después de la confirmación se libera el pago.
-          </p>
-
-          <div style={flowGrid}>
-            {[
-              ["1", "Comprador paga"],
-              ["2", "QSM retiene"],
-              ["3", "Producto entregado"],
-              ["4", "Pago liberado"]
-            ].map((step) => (
-              <div key={step[0]} style={flowCard}>
-                <div style={stepCircle}>{step[0]}</div>
-                <h3>{step[1]}</h3>
-              </div>
+          <div style={sliderDots}>
+            {heroSlides.map((item, index) => (
+              <button
+                key={item.meta}
+                onClick={() => setCurrentSlide(index)}
+                style={index === currentSlide ? activeDot : dot(isDark)}
+                aria-label={`Ver slide ${index + 1}`}
+              />
             ))}
           </div>
-        </div>
+        </section>
 
-        <div style={escrowPanel}>
-          <h3>Estado de transacción</h3>
+        <section id="seguridad" style={section(isDark)}>
+          <p style={eyebrowCenter}>TECNOLOGÍA + SEGURIDAD + CONFIANZA</p>
+          <h2 style={centerTitle(isDark)}>
+            Un ecosistema diseñado para <span style={accent}>protegerte</span>
+          </h2>
 
-          <div style={transactionRow}>
-            <span>Pago</span>
-            <strong>Retenido en garantía</strong>
+          <div className="features-grid" style={featuresGrid}>
+            {securityCards.map((card) => (
+              <article key={card.title} style={featureCard(isDark)}>
+                <div style={featureIcon(isDark)}>{card.icon}</div>
+                <h3>{card.title}</h3>
+                <p>{card.text}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section id="nosotros" style={aboutSection(isDark)}>
+          <div style={aboutCard(isDark)}>
+            <p style={eyebrow}>SOBRE QSM</p>
+            <h2 style={sectionTitle(isDark)}>¿Por qué nació Quick Secure Market?</h2>
+            <p style={sectionText(isDark)}>
+              Quick Secure Market nace como una respuesta a un problema real: muchas personas en República Dominicana compran y venden productos por internet sin una protección clara.
+            </p>
+            <p style={sectionText(isDark)}>
+              QSM busca reducir fraudes digitales mediante verificación de identidad, historial del producto, Pago Protegido, análisis de riesgo y un centro de reclamaciones documentado.
+            </p>
+            <button onClick={() => goToSection("#demo")} style={primaryLarge}>
+              Conocer el proyecto →
+            </button>
           </div>
 
-          <div style={transactionRow}>
-            <span>Producto</span>
-            <strong>En verificación</strong>
+          <div style={aboutImageCard(isDark)}>
+            <div style={aboutImageOverlay}></div>
+            <h3>Confianza digital para una nueva forma de comprar y vender.</h3>
           </div>
+        </section>
 
-          <div style={transactionRow}>
-            <span>Riesgo</span>
-            <strong style={{ color: "#86efac" }}>Bajo</strong>
-          </div>
+        <section id="pago-protegido" className="escrow-section" style={escrowSection(isDark)}>
+          <div>
+            <p style={eyebrow}>PAGO PROTEGIDO</p>
+            <h2 style={sectionTitle(isDark)}>
+              El dinero no va directo al vendedor. Primero lo protege QSM.
+            </h2>
+            <p style={sectionText(isDark)}>
+              El comprador paga, QSM retiene el dinero, el vendedor entrega el producto y solo después de la confirmación se libera el pago.
+            </p>
 
-          <div style={transactionRow}>
-            <span>PIN entrega</span>
-            <strong>******</strong>
-          </div>
-        </div>
-      </section>
-
-      <section style={section}>
-        <p style={eyebrowCenter}>PROCESO QSM</p>
-        <h2 style={centerTitle}>Cómo funciona la plataforma</h2>
-
-        <div style={stepsGrid}>
-          {[
-            ["1", "Registro", "El usuario crea su cuenta."],
-            ["2", "Verificación", "QSM valida identidad y documentos."],
-            ["3", "Publicación", "El vendedor publica el producto."],
-            ["4", "Compra protegida", "El pago queda retenido por QSM."],
-            ["5", "Entrega", "El comprador confirma recepción."],
-            ["6", "Liberación", "QSM libera el dinero al vendedor."]
-          ].map((item) => (
-            <div key={item[0]} style={stepCard}>
-              <div style={stepCircle}>{item[0]}</div>
-              <h3>{item[1]}</h3>
-              <p>{item[2]}</p>
+            <div style={flowGrid}>
+              {[
+                ["1", "Comprador paga"],
+                ["2", "QSM retiene"],
+                ["3", "Producto entregado"],
+                ["4", "Pago liberado"]
+              ].map((step) => (
+                <div key={step[0]} style={flowCard(isDark)}>
+                  <strong>{step[0]}</strong>
+                  <span>{step[1]}</span>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      </section>
+          </div>
 
-      <section id="demo" style={simulationSection}>
-        <div style={simulationCard}>
+          <div style={transactionCard(isDark)}>
+            <h3>Estado de transacción</h3>
+            <Transaction label="Pago" value="Retenido en garantía" />
+            <Transaction label="Producto" value="En verificación" />
+            <Transaction label="Riesgo" value="Bajo" green />
+            <Transaction label="PIN entrega" value="******" />
+          </div>
+        </section>
+
+        <section id="como-funciona" style={section(isDark)}>
+          <p style={eyebrowCenter}>PROCESO QSM</p>
+          <h2 style={centerTitle(isDark)}>Cómo funciona la plataforma</h2>
+
+          <div style={stepsGrid}>
+            {[
+              ["1", "Registro", "El usuario crea su cuenta."],
+              ["2", "Verificación", "QSM valida identidad y documentos."],
+              ["3", "Publicación", "El vendedor publica el producto."],
+              ["4", "Compra protegida", "El pago queda retenido por QSM."],
+              ["5", "Entrega", "El comprador confirma recepción."],
+              ["6", "Liberación", "QSM libera el dinero al vendedor."]
+            ].map((step) => (
+              <article key={step[0]} style={stepCard(isDark)}>
+                <div style={stepCircle}>{step[0]}</div>
+                <h3>{step[1]}</h3>
+                <p>{step[2]}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section id="demo" className="demo-section" style={demoSection(isDark)}>
           <div>
             <p style={eyebrow}>MODO DEMOSTRACIÓN</p>
-
-            <h2 style={sectionTitleLeft}>
+            <h2 style={sectionTitle(isDark)}>
               Explora cómo funcionará Quick Secure Market.
             </h2>
-
-            <p style={demoText}>
-              Accede a una simulación funcional con marketplace, publicación de
-              productos, checkout seguro, órdenes, disputas, certificación QSM y panel admin.
+            <p style={sectionText(isDark)}>
+              Accede a una simulación funcional con marketplace, publicación de productos, checkout seguro, órdenes, disputas, certificación QSM y panel administrativo.
             </p>
 
             <a
@@ -340,354 +452,284 @@ function LandingPage() {
             </a>
           </div>
 
-          <div style={mockupBox}>
-            <div style={mockupTop}>
-              <span>QSM Platform Preview</span>
-              <span style={{ color: "#35d0c3" }}>Demo</span>
+          <div style={demoPreview(isDark)}>
+            <div style={demoTop}>
+              <strong>QSM Platform Preview</strong>
+              <span>Demo</span>
             </div>
-
-            <div style={mockupHero}></div>
-
-            <div style={mockupGrid}>
-              <div style={mockupCard}></div>
-              <div style={mockupCard}></div>
-              <div style={mockupCard}></div>
+            <div style={demoMockHero}></div>
+            <div style={demoMockGrid}>
+              <div></div>
+              <div></div>
+              <div></div>
             </div>
           </div>
+        </section>
+
+        <section style={statsBar(isDark)}>
+          <Stat value="12K+" label="Usuarios proyectados" />
+          <Stat value="8K+" label="Productos protegidos" />
+          <Stat value="2K+" label="Fraudes prevenidos" />
+          <Stat value="98%" label="Confianza estimada" />
+        </section>
+
+        <section style={section(isDark)}>
+          <p style={eyebrowCenter}>CATÁLOGO SEGURO</p>
+          <h2 style={centerTitle(isDark)}>
+            Encuentra lo que necesitas con <span style={accent}>total seguridad</span>
+          </h2>
+
+          <div className="category-grid" style={categoryGrid}>
+            {categories.map((category) => (
+              <article
+                key={category.title}
+                style={{
+                  ...categoryCard,
+                  backgroundImage: `linear-gradient(180deg, rgba(2,6,23,.10), rgba(2,6,23,.86)), url(${category.image})`
+                }}
+              >
+                <h3>{category.title}</h3>
+              </article>
+            ))}
+          </div>
+        </section>
+
+        <section id="contacto" style={contactSection(isDark)}>
+          <div>
+            <p style={eyebrow}>CONTACTO</p>
+            <h2 style={sectionTitle(isDark)}>Hablemos de seguridad digital.</h2>
+            <p style={sectionText(isDark)}>
+              ¿Tienes preguntas sobre Quick Secure Market o quieres conocer más sobre el proyecto?
+            </p>
+
+            <input placeholder="Nombre completo" style={input(isDark)} />
+            <input placeholder="Correo electrónico" style={input(isDark)} />
+            <textarea placeholder="Mensaje" style={{ ...input(isDark), height: "130px" }} />
+            <button style={primaryLarge}>Enviar mensaje</button>
+          </div>
+
+          <div style={contactCard(isDark)}>
+            <h3>Soporte QSM</h3>
+            <p>📧 soporte@qsm.com</p>
+            <p>📍 Santo Domingo, República Dominicana</p>
+            <p>🕘 Lunes a viernes: 9:00 AM - 6:00 PM</p>
+            <p>Proyecto académico orientado a comercio electrónico seguro y prevención de fraudes digitales.</p>
+          </div>
+        </section>
+      </main>
+
+      <footer style={footer(isDark)}>
+        <div className="footer-grid" style={footerGrid}>
+          <div>
+            <h2>🛡 QSM</h2>
+            <p>Marketplace seguro en República Dominicana.</p>
+          </div>
+
+          <div>
+            <h3>Enlaces rápidos</h3>
+            <p>Inicio</p>
+            <p>Nosotros</p>
+            <p>Seguridad</p>
+            <p>Pago Protegido</p>
+          </div>
+
+          <div>
+            <h3>Soporte</h3>
+            <p>Centro de ayuda</p>
+            <p>Guías de seguridad</p>
+            <p>Políticas</p>
+            <p>Términos y condiciones</p>
+          </div>
+
+          <div>
+            <h3>Contacto</h3>
+            <p>📧 soporte@qsm.com</p>
+            <p>📍 Santo Domingo, RD</p>
+          </div>
         </div>
-      </section>
 
-      <section style={stats}>
-        <div><h2>12,450+</h2><p>Usuarios proyectados</p></div>
-        <div><h2>8,320+</h2><p>Productos publicados</p></div>
-        <div><h2>2,150+</h2><p>Fraudes prevenidos</p></div>
-        <div><h2>1,280+</h2><p>Disputas resueltas</p></div>
-      </section>
-
-      <section id="contacto" style={contactSection}>
-        <div>
-          <p style={eyebrow}>CONTACTO</p>
-          <h2 style={sectionTitleLeft}>Hablemos de seguridad digital.</h2>
-
-          <p style={{ color: "#cbd5e1", lineHeight: "30px" }}>
-            ¿Tienes preguntas sobre Quick Secure Market o quieres conocer más sobre el proyecto?
-          </p>
-
-          <input placeholder="Nombre completo" style={input} />
-          <input placeholder="Correo electrónico" style={input} />
-          <textarea placeholder="Mensaje" style={{ ...input, height: "130px" }} />
-
-          <button style={primaryLarge}>Enviar mensaje</button>
-        </div>
-
-        <div style={contactCard}>
-          <h3>Soporte QSM</h3>
-          <p>📧 soporte@qsm.com</p>
-          <p>📍 Santo Domingo, República Dominicana</p>
-          <p>🕘 Lunes a viernes: 9:00 AM - 6:00 PM</p>
-          <p>
-            Proyecto académico orientado a comercio electrónico seguro y prevención de fraudes digitales.
-          </p>
-        </div>
-      </section>
-
-      <footer style={footer}>
-        <h2>🛡 QSM</h2>
-        <p>Quick Secure Market — Marketplace seguro de República Dominicana.</p>
-        <p>© 2026 Quick Secure Market. Proyecto académico.</p>
+        <p style={{ textAlign: "center", marginTop: "34px" }}>
+          © 2026 Quick Secure Market. Todos los derechos reservados.
+        </p>
       </footer>
 
-      <AiAssistant />
+      <AiAssistant pageContext="landing" />
     </div>
   );
 }
 
-const page = {
+function renderTitle(title, highlight) {
+  const parts = title.split(highlight);
+
+  if (parts.length === 1) return title;
+
+  return (
+    <>
+      {parts[0]}
+      <span style={accent}>{highlight}</span>
+      {parts[1]}
+    </>
+  );
+}
+
+function Transaction({ label, value, green }) {
+  return (
+    <div style={transactionRow}>
+      <span>{label}</span>
+      <strong style={{ color: green ? "#86efac" : "inherit" }}>{value}</strong>
+    </div>
+  );
+}
+
+function Stat({ value, label }) {
+  return (
+    <div>
+      <h2>{value}</h2>
+      <p>{label}</p>
+    </div>
+  );
+}
+
+const page = (dark) => ({
   width: "100%",
   minHeight: "100vh",
-  background: "#020617",
-  color: "white",
-  fontFamily: "'Inter', system-ui, sans-serif"
-};
+  background: dark ? "#020617" : "#f8fafc",
+  color: dark ? "white" : "#0f172a"
+});
 
-const nav = {
+const topbar = (dark) => ({
   width: "100%",
   height: "78px",
   padding: "0 7vw",
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
-  background: "rgba(2, 6, 23, 0.58)",
-  borderBottom: "1px solid rgba(53,208,195,0.18)",
+  gap: "24px",
+  background: dark ? "rgba(2,6,23,.72)" : "rgba(255,255,255,.82)",
+  borderBottom: dark ? "1px solid rgba(148,163,184,.14)" : "1px solid rgba(15,23,42,.08)",
   backdropFilter: "blur(22px)",
   position: "fixed",
   top: 0,
   left: 0,
-  zIndex: 20
-};
+  zIndex: 50
+});
 
-const logoWrap = {
+const brand = {
   display: "flex",
   alignItems: "center",
-  gap: "12px"
+  gap: "12px",
+  textDecoration: "none"
 };
 
-const logoIcon = {
+const logoIcon = (dark) => ({
   width: "42px",
   height: "42px",
   borderRadius: "14px",
-  border: "1px solid rgba(53,208,195,0.45)",
+  border: dark ? "1px solid rgba(139,92,246,.55)" : "1px solid rgba(124,58,237,.25)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  color: "#35d0c3"
-};
+  background: dark ? "rgba(139,92,246,.12)" : "rgba(124,58,237,.08)"
+});
 
-const logo = {
-  fontSize: "30px",
+const logoText = (dark) => ({
+  color: dark ? "white" : "#0f172a",
+  fontSize: "29px",
   fontWeight: "900",
+  display: "block",
   lineHeight: "28px"
-};
+});
 
-const logoSub = {
-  color: "#94a3b8",
+const logoSub = (dark) => ({
+  color: dark ? "#94a3b8" : "#64748b",
   fontSize: "11px",
   fontWeight: "700"
-};
+});
 
 const navLinks = {
   display: "flex",
-  gap: "28px"
+  gap: "26px",
+  alignItems: "center"
 };
 
-const navLink = {
-  color: "#e5e7eb",
-  textDecoration: "none",
-  fontWeight: "700",
-  fontSize: "15px"
-};
+const navButton = (dark) => ({
+  position: "relative",
+  border: "none",
+  background: "transparent",
+  color: dark ? "#e5e7eb" : "#334155",
+  fontSize: "15px",
+  fontWeight: "800",
+  cursor: "pointer"
+});
 
 const navActions = {
   display: "flex",
-  gap: "12px"
+  gap: "12px",
+  alignItems: "center"
 };
 
-const primaryButton = {
-  background: "#35d0c3",
-  color: "#020617",
+const themeToggle = (dark) => ({
+  width: "48px",
+  height: "48px",
+  borderRadius: "50%",
+  border: dark ? "1px solid rgba(148,163,184,.18)" : "1px solid rgba(15,23,42,.12)",
+  background: dark ? "rgba(15,23,42,.72)" : "white",
+  color: dark ? "white" : "#0f172a",
+  cursor: "pointer"
+});
+
+const loginButton = (dark) => ({
+  color: dark ? "white" : "#0f172a",
   textDecoration: "none",
-  padding: "13px 20px",
+  padding: "14px 20px",
   borderRadius: "14px",
-  fontWeight: "800"
-};
+  border: dark ? "1px solid rgba(139,92,246,.45)" : "1px solid rgba(15,23,42,.14)",
+  fontWeight: "900"
+});
 
-const outlineButton = {
+const registerButton = {
+  background: "linear-gradient(135deg, #38bdf8, #8b5cf6, #ec4899)",
   color: "white",
   textDecoration: "none",
-  padding: "13px 20px",
+  padding: "15px 22px",
   borderRadius: "14px",
-  border: "1px solid rgba(53,208,195,0.7)",
-  fontWeight: "800"
+  fontWeight: "900",
+  boxShadow: "0 16px 46px rgba(139,92,246,.34)"
 };
 
 const hero = {
-  width: "100%",
   minHeight: "100vh",
   position: "relative",
-  overflow: "hidden",
   display: "flex",
   alignItems: "center",
+  overflow: "hidden",
   padding: "120px 7vw 70px"
 };
 
-const heroBackground = {
+const heroBg = {
   position: "absolute",
   inset: 0,
   backgroundSize: "cover",
-  backgroundPosition: "center",
-  animation: "slowZoom 17s ease-in-out forwards"
+  backgroundPosition: "center"
 };
 
-const heroOverlay = {
+const heroGlow = (dark) => ({
   position: "absolute",
   inset: 0,
-  background:
-    "radial-gradient(circle at 76% 36%, rgba(53,208,195,0.18), transparent 30%), radial-gradient(circle at 67% 70%, rgba(124,58,237,0.22), transparent 34%)"
-};
+  background: dark
+    ? "radial-gradient(circle at 78% 40%, rgba(139,92,246,.35), transparent 34%), radial-gradient(circle at 22% 70%, rgba(56,189,248,.16), transparent 28%)"
+    : "radial-gradient(circle at 78% 40%, rgba(139,92,246,.20), transparent 34%), radial-gradient(circle at 22% 70%, rgba(56,189,248,.12), transparent 28%)"
+});
 
 const heroContent = {
   position: "relative",
   zIndex: 2,
-  maxWidth: "780px",
-  animation: "fadeUp 1s ease"
-};
-
-const badge = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: "10px",
-  padding: "10px 16px",
-  borderRadius: "999px",
-  color: "#35d0c3",
-  background: "rgba(53,208,195,0.10)",
-  border: "1px solid rgba(53,208,195,0.30)",
-  fontSize: "13px",
-  fontWeight: "800",
-  letterSpacing: "0.4px",
-  marginBottom: "22px"
-};
-
-const badgeDot = {
-  width: "9px",
-  height: "9px",
-  borderRadius: "50%",
-  background: "#35d0c3",
-  boxShadow: "0 0 18px #35d0c3"
-};
-
-const heroTitle = {
-  fontSize: "clamp(46px, 5.3vw, 84px)",
-  lineHeight: "1.04",
-  letterSpacing: "-3.2px",
-  marginBottom: "24px",
-  fontWeight: "900"
-};
-
-const accent = {
-  color: "#35d0c3"
-};
-
-const heroText = {
-  color: "#cbd5e1",
-  fontSize: "20px",
-  lineHeight: "34px",
-  maxWidth: "720px",
-  fontWeight: "400"
-};
-
-const heroButtons = {
-  display: "flex",
-  gap: "16px",
-  marginTop: "32px",
-  flexWrap: "wrap"
-};
-
-const primaryLarge = {
-  display: "inline-block",
-  background: "#35d0c3",
-  color: "#020617",
-  textDecoration: "none",
-  padding: "16px 28px",
-  borderRadius: "14px",
-  fontWeight: "800",
-  border: "none",
-  cursor: "pointer",
-  boxShadow: "0 18px 45px rgba(53,208,195,0.22)"
-};
-
-const outlineLarge = {
-  display: "inline-block",
-  color: "white",
-  textDecoration: "none",
-  padding: "16px 28px",
-  borderRadius: "14px",
-  border: "1px solid rgba(53,208,195,0.8)",
-  fontWeight: "800"
-};
-
-const heroStats = {
-  display: "grid",
-  gridTemplateColumns: "repeat(3, minmax(120px, 1fr))",
-  gap: "16px",
-  marginTop: "34px",
-  maxWidth: "620px"
-};
-
-const trustPanel = {
-  display: "flex",
-  gap: "20px",
-  marginTop: "30px",
-  flexWrap: "wrap",
-  color: "#e5e7eb",
-  background: "rgba(15,23,42,0.42)",
-  border: "1px solid rgba(53,208,195,0.22)",
-  borderRadius: "20px",
-  padding: "18px",
-  backdropFilter: "blur(16px)"
-};
-
-const heroDashboard = {
-  position: "absolute",
-  right: "7vw",
-  bottom: "95px",
-  width: "360px",
-  background: "rgba(15,23,42,0.54)",
-  border: "1px solid rgba(53,208,195,0.28)",
-  borderRadius: "30px",
-  padding: "28px",
-  backdropFilter: "blur(24px)",
-  zIndex: 2,
-  animation: "floatSoft 6s ease-in-out infinite, glowPulse 4s infinite"
-};
-
-const dashboardTop = {
-  display: "flex",
-  justifyContent: "space-between",
-  marginBottom: "22px",
-  color: "#e5e7eb",
-  fontWeight: "800"
-};
-
-const liveBadge = {
-  color: "#35d0c3",
-  background: "rgba(53,208,195,0.12)",
-  padding: "5px 10px",
-  borderRadius: "999px"
-};
-
-const riskCircle = {
-  width: "132px",
-  height: "132px",
-  margin: "0 auto 12px",
-  borderRadius: "50%",
-  background: "linear-gradient(135deg, #35d0c3, #7c3aed)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  flexDirection: "column",
-  fontSize: "44px",
-  fontWeight: "900"
-};
-
-const riskText = {
-  color: "#cbd5e1",
-  textAlign: "center",
-  marginBottom: "18px"
-};
-
-const progressTrack = {
-  height: "10px",
-  width: "100%",
-  background: "rgba(148,163,184,0.18)",
-  borderRadius: "999px",
-  overflow: "hidden",
-  marginBottom: "20px"
-};
-
-const progressFill = {
-  height: "100%",
-  width: "96%",
-  background: "linear-gradient(90deg, #35d0c3, #7c3aed)"
-};
-
-const miniRows = {
-  display: "grid",
-  gap: "10px",
-  color: "#cbd5e1"
+  maxWidth: "680px",
+  animation: "fadeUp .8s ease"
 };
 
 const eyebrow = {
-  color: "#35d0c3",
+  color: "#38bdf8",
   letterSpacing: "4px",
   fontSize: "13px",
   fontWeight: "900",
@@ -699,150 +741,325 @@ const eyebrowCenter = {
   textAlign: "center"
 };
 
-const section = {
-  padding: "100px 7vw"
+const heroTitle = (dark) => ({
+  color: dark ? "white" : "#0f172a",
+  fontSize: "clamp(52px, 5vw, 84px)",
+  lineHeight: "1.02",
+  letterSpacing: "-3px",
+  margin: "16px 0 20px",
+  fontWeight: "950"
+});
+
+const accent = {
+  background: "linear-gradient(90deg, #38bdf8, #8b5cf6, #ec4899)",
+  WebkitBackgroundClip: "text",
+  color: "transparent"
 };
 
-const sectionGrid = {
-  padding: "100px 7vw",
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
-  gap: "32px"
-};
-
-const glassCard = {
-  background: "rgba(17, 24, 39, 0.58)",
-  border: "1px solid rgba(53,208,195,0.22)",
-  borderRadius: "30px",
-  padding: "44px",
-  fontSize: "18px",
-  lineHeight: "30px",
-  backdropFilter: "blur(18px)"
-};
-
-const visionCard = {
-  background: "linear-gradient(135deg, rgba(15,23,42,0.78), rgba(17,24,39,0.54))",
-  border: "1px solid rgba(53,208,195,0.42)",
-  borderRadius: "30px",
-  padding: "44px",
-  fontSize: "20px",
+const heroText = (dark) => ({
+  color: dark ? "#cbd5e1" : "#475569",
+  fontSize: "19px",
   lineHeight: "32px",
-  backdropFilter: "blur(18px)"
+  maxWidth: "620px"
+});
+
+const heroButtons = {
+  display: "flex",
+  gap: "14px",
+  marginTop: "30px",
+  flexWrap: "wrap"
 };
 
-const visionGrid = {
-  marginTop: "22px",
+const primaryLarge = {
+  display: "inline-block",
+  background: "linear-gradient(135deg, #38bdf8, #8b5cf6, #ec4899)",
+  color: "white",
+  textDecoration: "none",
+  padding: "16px 28px",
+  borderRadius: "14px",
+  fontWeight: "900",
+  border: "none",
+  cursor: "pointer",
+  boxShadow: "0 18px 54px rgba(139,92,246,.30)"
+};
+
+const outlineLarge = (dark) => ({
+  display: "inline-block",
+  color: dark ? "white" : "#0f172a",
+  background: dark ? "rgba(15,23,42,.58)" : "rgba(255,255,255,.75)",
+  textDecoration: "none",
+  padding: "16px 28px",
+  borderRadius: "14px",
+  border: dark ? "1px solid rgba(148,163,184,.24)" : "1px solid rgba(15,23,42,.12)",
+  fontWeight: "900",
+  cursor: "pointer",
+  backdropFilter: "blur(14px)"
+});
+
+const trustRow = (dark) => ({
+  display: "flex",
+  gap: "14px",
+  flexWrap: "wrap",
+  marginTop: "30px",
+  padding: "14px",
+  borderRadius: "18px",
+  background: dark ? "rgba(15,23,42,.56)" : "rgba(255,255,255,.76)",
+  border: dark ? "1px solid rgba(148,163,184,.14)" : "1px solid rgba(15,23,42,.08)",
+  color: dark ? "#e5e7eb" : "#334155",
+  backdropFilter: "blur(14px)"
+});
+
+const heroDashboard = (dark) => ({
+  position: "absolute",
+  right: "7vw",
+  bottom: "88px",
+  width: "360px",
+  background: dark ? "rgba(15,23,42,.64)" : "rgba(255,255,255,.76)",
+  color: dark ? "white" : "#0f172a",
+  border: dark ? "1px solid rgba(139,92,246,.30)" : "1px solid rgba(15,23,42,.10)",
+  borderRadius: "30px",
+  padding: "28px",
+  backdropFilter: "blur(22px)",
+  zIndex: 3,
+  boxShadow: "0 30px 90px rgba(0,0,0,.32)"
+});
+
+const dashboardTop = {
+  display: "flex",
+  justifyContent: "space-between",
+  marginBottom: "22px"
+};
+
+const liveBadge = {
+  color: "#35d0c3",
+  background: "rgba(53,208,195,.14)",
+  padding: "5px 10px",
+  borderRadius: "999px"
+};
+
+const riskCircle = {
+  width: "132px",
+  height: "132px",
+  margin: "0 auto 12px",
+  borderRadius: "50%",
+  background: "linear-gradient(135deg, #38bdf8, #8b5cf6)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  flexDirection: "column",
+  fontSize: "42px"
+};
+
+const riskText = (dark) => ({
+  color: dark ? "#cbd5e1" : "#475569",
+  textAlign: "center"
+});
+
+const progressTrack = {
+  height: "10px",
+  background: "rgba(148,163,184,.22)",
+  borderRadius: "999px",
+  overflow: "hidden",
+  marginBottom: "20px"
+};
+
+const progressFill = {
+  width: "96%",
+  height: "100%",
+  background: "linear-gradient(90deg, #38bdf8, #8b5cf6, #ec4899)"
+};
+
+const miniRows = (dark) => ({
   display: "grid",
-  gridTemplateColumns: "repeat(2, 1fr)",
-  gap: "12px"
+  gap: "10px",
+  color: dark ? "#cbd5e1" : "#475569"
+});
+
+const sliderDots = {
+  position: "absolute",
+  bottom: "34px",
+  left: "50%",
+  transform: "translateX(-50%)",
+  display: "flex",
+  gap: "10px",
+  zIndex: 4
 };
 
-const sectionTitleLeft = {
+const dot = (dark) => ({
+  width: "11px",
+  height: "11px",
+  borderRadius: "50%",
+  border: "none",
+  background: dark ? "rgba(255,255,255,.35)" : "rgba(15,23,42,.25)",
+  cursor: "pointer"
+});
+
+const activeDot = {
+  width: "44px",
+  height: "11px",
+  borderRadius: "999px",
+  border: "none",
+  background: "linear-gradient(90deg, #38bdf8, #8b5cf6, #ec4899)",
+  cursor: "pointer"
+};
+
+const section = (dark) => ({
+  padding: "90px 7vw",
+  background: dark ? "#020617" : "#f8fafc"
+});
+
+const centerTitle = (dark) => ({
+  textAlign: "center",
+  color: dark ? "white" : "#0f172a",
+  fontSize: "clamp(34px, 3.4vw, 58px)",
+  lineHeight: "1.08",
+  letterSpacing: "-2px",
+  marginBottom: "42px"
+});
+
+const featuresGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
+  gap: "22px"
+};
+
+const featureCard = (dark) => ({
+  background: dark ? "rgba(15,23,42,.72)" : "white",
+  border: dark ? "1px solid rgba(139,92,246,.18)" : "1px solid rgba(15,23,42,.08)",
+  borderRadius: "26px",
+  padding: "28px",
+  color: dark ? "#cbd5e1" : "#475569",
+  boxShadow: dark ? "none" : "0 20px 70px rgba(15,23,42,.08)"
+});
+
+const featureIcon = (dark) => ({
+  fontSize: "34px",
+  width: "58px",
+  height: "58px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  borderRadius: "20px",
+  background: dark ? "rgba(139,92,246,.16)" : "rgba(139,92,246,.10)",
+  marginBottom: "14px"
+});
+
+const aboutSection = (dark) => ({
+  padding: "90px 7vw",
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: "28px",
+  background: dark ? "#050b1f" : "#eef2ff"
+});
+
+const aboutCard = (dark) => ({
+  background: dark ? "rgba(15,23,42,.74)" : "rgba(255,255,255,.86)",
+  color: dark ? "white" : "#0f172a",
+  border: dark ? "1px solid rgba(56,189,248,.22)" : "1px solid rgba(15,23,42,.08)",
+  borderRadius: "30px",
+  padding: "44px"
+});
+
+const aboutImageCard = (dark) => ({
+  position: "relative",
+  minHeight: "420px",
+  borderRadius: "30px",
+  padding: "44px",
+  overflow: "hidden",
+  display: "flex",
+  alignItems: "flex-end",
+  color: "white",
+  backgroundImage:
+    "linear-gradient(180deg, rgba(2,6,23,.05), rgba(2,6,23,.82)), url(https://images.unsplash.com/photo-1518005020951-eccb494ad742?auto=format&fit=crop&w=1600&q=90)",
+  backgroundSize: "cover",
+  backgroundPosition: "center"
+});
+
+const aboutImageOverlay = {
+  position: "absolute",
+  inset: 0,
+  background: "radial-gradient(circle at center, rgba(139,92,246,.24), transparent 55%)"
+};
+
+const sectionTitle = (dark) => ({
+  color: dark ? "white" : "#0f172a",
   fontSize: "clamp(34px, 3vw, 56px)",
   lineHeight: "1.08",
-  letterSpacing: "-1.8px",
-  marginBottom: "22px",
-  fontWeight: "900"
-};
+  letterSpacing: "-2px",
+  margin: "10px 0 20px"
+});
 
-const centerTitle = {
-  textAlign: "center",
-  fontSize: "clamp(34px, 3.4vw, 58px)",
-  lineHeight: "1.1",
-  letterSpacing: "-1.8px",
-  marginBottom: "48px",
-  fontWeight: "900"
-};
+const sectionText = (dark) => ({
+  color: dark ? "#cbd5e1" : "#475569",
+  fontSize: "18px",
+  lineHeight: "31px"
+});
 
-const cardsGrid = {
+const escrowSection = (dark) => ({
+  padding: "90px 7vw",
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-  gap: "24px"
-};
-
-const featureCard = {
-  background: "rgba(15,23,42,0.64)",
-  border: "1px solid rgba(53,208,195,0.18)",
-  borderRadius: "26px",
-  padding: "34px",
-  textAlign: "center",
-  backdropFilter: "blur(18px)"
-};
-
-const featureIcon = {
-  fontSize: "48px"
-};
-
-const escrowSection = {
-  padding: "100px 7vw",
-  display: "grid",
-  gridTemplateColumns: "1.3fr 0.7fr",
+  gridTemplateColumns: "1.2fr .8fr",
   gap: "34px",
   alignItems: "center",
-  background:
-    "linear-gradient(135deg, rgba(2,6,23,1), rgba(8,17,35,0.94))"
-};
-
-const escrowContent = {
-  maxWidth: "900px"
-};
-
-const escrowText = {
-  color: "#cbd5e1",
-  fontSize: "19px",
-  lineHeight: "32px"
-};
+  background: dark
+    ? "linear-gradient(135deg, #020617, #08111f)"
+    : "linear-gradient(135deg, #f8fafc, #e0f2fe)"
+});
 
 const flowGrid = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
-  gap: "18px",
+  gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+  gap: "16px",
   marginTop: "28px"
 };
 
-const flowCard = {
-  background: "rgba(15,23,42,0.64)",
-  border: "1px solid rgba(53,208,195,0.22)",
+const flowCard = (dark) => ({
+  background: dark ? "rgba(15,23,42,.74)" : "rgba(255,255,255,.86)",
+  border: dark ? "1px solid rgba(56,189,248,.22)" : "1px solid rgba(15,23,42,.08)",
   borderRadius: "22px",
   padding: "24px",
-  textAlign: "center"
-};
+  textAlign: "center",
+  color: dark ? "white" : "#0f172a",
+  display: "grid",
+  gap: "10px"
+});
 
-const escrowPanel = {
-  background: "rgba(15,23,42,0.64)",
-  border: "1px solid rgba(53,208,195,0.34)",
+const transactionCard = (dark) => ({
+  background: dark ? "rgba(15,23,42,.74)" : "rgba(255,255,255,.88)",
+  border: dark ? "1px solid rgba(56,189,248,.26)" : "1px solid rgba(15,23,42,.08)",
   borderRadius: "30px",
   padding: "34px",
-  backdropFilter: "blur(18px)"
-};
+  color: dark ? "white" : "#0f172a"
+});
 
 const transactionRow = {
   display: "flex",
   justifyContent: "space-between",
+  gap: "20px",
   padding: "16px 0",
-  borderBottom: "1px solid rgba(148,163,184,0.16)"
+  borderBottom: "1px solid rgba(148,163,184,.18)"
 };
 
 const stepsGrid = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-  gap: "22px"
+  gap: "20px"
 };
 
-const stepCard = {
-  background: "rgba(15,23,42,0.64)",
-  border: "1px solid rgba(53,208,195,0.22)",
+const stepCard = (dark) => ({
+  background: dark ? "rgba(15,23,42,.72)" : "white",
+  border: dark ? "1px solid rgba(139,92,246,.18)" : "1px solid rgba(15,23,42,.08)",
   borderRadius: "24px",
   padding: "28px",
   textAlign: "center",
-  backdropFilter: "blur(18px)"
-};
+  color: dark ? "#cbd5e1" : "#475569"
+});
 
 const stepCircle = {
   width: "52px",
   height: "52px",
-  margin: "0 auto 14px",
   borderRadius: "50%",
+  margin: "0 auto 14px",
   background: "#35d0c3",
   color: "#020617",
   display: "flex",
@@ -851,109 +1068,111 @@ const stepCircle = {
   fontWeight: "900"
 };
 
-const simulationSection = {
-  padding: "100px 7vw"
-};
-
-const simulationCard = {
+const demoSection = (dark) => ({
+  padding: "90px 7vw",
   display: "grid",
   gridTemplateColumns: "1fr 1fr",
   gap: "34px",
   alignItems: "center",
-  background: "rgba(15,23,42,0.58)",
-  border: "1px solid rgba(53,208,195,0.25)",
-  borderRadius: "32px",
-  padding: "48px",
-  backdropFilter: "blur(18px)"
-};
+  background: dark ? "#050b1f" : "#eef2ff"
+});
 
-const demoText = {
-  color: "#cbd5e1",
-  fontSize: "18px",
-  lineHeight: "30px",
-  marginBottom: "28px"
-};
+const demoPreview = (dark) => ({
+  background: dark ? "rgba(15,23,42,.74)" : "rgba(255,255,255,.86)",
+  border: dark ? "1px solid rgba(139,92,246,.24)" : "1px solid rgba(15,23,42,.08)",
+  borderRadius: "28px",
+  padding: "24px",
+  minHeight: "310px"
+});
 
-const mockupBox = {
-  background: "rgba(2,6,23,0.78)",
-  border: "1px solid rgba(53,208,195,0.25)",
-  borderRadius: "24px",
-  padding: "20px",
-  minHeight: "280px"
-};
-
-const mockupTop = {
-  color: "#e5e7eb",
-  fontWeight: "800",
-  marginBottom: "18px",
+const demoTop = {
   display: "flex",
-  justifyContent: "space-between"
+  justifyContent: "space-between",
+  marginBottom: "18px"
 };
 
-const mockupHero = {
-  height: "90px",
+const demoMockHero = {
+  height: "100px",
   borderRadius: "18px",
-  background: "linear-gradient(135deg, rgba(53,208,195,0.24), rgba(124,58,237,0.24))",
-  marginBottom: "16px"
+  background: "linear-gradient(135deg, rgba(56,189,248,.30), rgba(139,92,246,.28), rgba(236,72,153,.22))",
+  marginBottom: "18px"
 };
 
-const mockupGrid = {
+const demoMockGrid = {
   display: "grid",
   gridTemplateColumns: "repeat(3, 1fr)",
   gap: "14px"
 };
 
-const mockupCard = {
-  height: "130px",
-  borderRadius: "16px",
-  background: "linear-gradient(135deg, rgba(53,208,195,0.16), rgba(124,58,237,0.16))",
-  border: "1px solid rgba(53,208,195,0.15)"
-};
-
-const stats = {
+const statsBar = (dark) => ({
   margin: "40px 7vw",
-  padding: "40px",
-  background: "rgba(15,23,42,0.64)",
-  border: "1px solid rgba(53,208,195,0.2)",
+  padding: "36px",
   borderRadius: "28px",
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-  gap: "24px",
+  gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
+  gap: "20px",
   textAlign: "center",
-  backdropFilter: "blur(18px)"
-};
+  background: dark ? "rgba(15,23,42,.72)" : "white",
+  border: dark ? "1px solid rgba(139,92,246,.18)" : "1px solid rgba(15,23,42,.08)",
+  color: dark ? "white" : "#0f172a"
+});
 
-const contactSection = {
-  padding: "100px 7vw",
+const categoryGrid = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))",
-  gap: "36px",
-  background: "#08111f"
+  gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+  gap: "20px"
 };
 
-const input = {
+const categoryCard = {
+  minHeight: "250px",
+  borderRadius: "24px",
+  padding: "24px",
+  backgroundSize: "cover",
+  backgroundPosition: "center",
+  display: "flex",
+  alignItems: "flex-end",
+  color: "white",
+  fontSize: "22px",
+  fontWeight: "900",
+  overflow: "hidden"
+};
+
+const contactSection = (dark) => ({
+  padding: "90px 7vw",
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: "34px",
+  background: dark ? "#08111f" : "#f8fafc"
+});
+
+const input = (dark) => ({
   width: "100%",
   padding: "16px",
   marginBottom: "14px",
   borderRadius: "14px",
-  border: "1px solid #334155",
-  background: "#020617",
-  color: "white",
-  fontFamily: "'Inter', system-ui, sans-serif"
-};
+  border: dark ? "1px solid rgba(148,163,184,.24)" : "1px solid rgba(15,23,42,.12)",
+  background: dark ? "#020617" : "white",
+  color: dark ? "white" : "#0f172a"
+});
 
-const contactCard = {
-  background: "rgba(15,23,42,0.64)",
-  border: "1px solid #35d0c3",
-  borderRadius: "26px",
+const contactCard = (dark) => ({
+  background: dark ? "rgba(15,23,42,.74)" : "white",
+  border: dark ? "1px solid rgba(56,189,248,.26)" : "1px solid rgba(15,23,42,.08)",
+  borderRadius: "28px",
   padding: "40px",
-  backdropFilter: "blur(18px)"
-};
+  color: dark ? "#cbd5e1" : "#475569"
+});
 
-const footer = {
-  padding: "46px 7vw",
-  background: "#020617",
-  color: "#94a3b8"
+const footer = (dark) => ({
+  padding: "60px 7vw 34px",
+  background: dark ? "#020617" : "#f1f5f9",
+  color: dark ? "#94a3b8" : "#475569"
+});
+
+const footerGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gap: "30px"
 };
 
 export default LandingPage;

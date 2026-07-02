@@ -379,8 +379,16 @@ function getProductImage(product) {
   if (product.images && product.images.length > 0) {
     const firstImage = product.images[0];
 
-    if (typeof firstImage === "string" && firstImage.startsWith("http")) {
-      return firstImage;
+    if (typeof firstImage === "string") {
+      if (firstImage.startsWith("http")) {
+        return firstImage;
+      }
+
+      if (firstImage.startsWith("/uploads")) {
+        return `http://localhost:5000${firstImage}`;
+      }
+
+      return `http://localhost:5000/uploads/products/images/${firstImage}`;
     }
   }
 
