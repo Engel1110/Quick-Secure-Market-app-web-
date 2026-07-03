@@ -1,13 +1,14 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api from "../api/axios";
+import Sidebar from "../components/Sidebar";
 import Topbar from "../components/Topbar";
 import AiAssistant from "../components/AiAssistant";
 
 function NewProduct() {
   const navigate = useNavigate();
 
-  const savedUser = JSON.parse(localStorage.getItem("qsm_user")) || {
+  const savedUser = safeJson(localStorage.getItem("qsm_user")) || {
     firstName: "Usuario",
     lastName: "QSM",
     email: "usuario@qsm.com",
@@ -39,14 +40,14 @@ function NewProduct() {
 
   const completion = useMemo(() => {
     const checks = [
-      !!form.title,
-      form.description.length >= 40,
-      !!form.price,
-      !!form.category,
-      !!form.condition,
-      !!form.location,
+      Boolean(form.title.trim()),
+      form.description.trim().length >= 40,
+      Boolean(form.price),
+      Boolean(form.category),
+      Boolean(form.condition),
+      Boolean(form.location.trim()),
       imageFiles.length >= 1,
-      !!videoFile
+      Boolean(videoFile)
     ];
 
     return Math.round((checks.filter(Boolean).length / checks.length) * 100);
@@ -63,19 +64,22 @@ function NewProduct() {
     imagePreviews[0] ||
     "https://images.unsplash.com/photo-1606813907291-d86efa9b94db?auto=format&fit=crop&w=900&q=90";
 
-  const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+  const handleChange = (event) => {
+    setForm({
+      ...form,
+      [event.target.name]: event.target.value
+    });
   };
 
-  const handleImages = (e) => {
-    const files = Array.from(e.target.files || []).slice(0, 8);
+  const handleImages = (event) => {
+    const files = Array.from(event.target.files || []).slice(0, 8);
 
     setImageFiles(files);
     setImagePreviews(files.map((file) => URL.createObjectURL(file)));
   };
 
-  const handleVideo = (e) => {
-    const file = e.target.files?.[0];
+  const handleVideo = (event) => {
+    const file = event.target.files?.[0];
 
     if (!file) return;
 
@@ -84,8 +88,8 @@ function NewProduct() {
   };
 
   const removeImage = (index) => {
-    setImageFiles(imageFiles.filter((_, i) => i !== index));
-    setImagePreviews(imagePreviews.filter((_, i) => i !== index));
+    setImageFiles((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
+    setImagePreviews((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
   };
 
   const removeVideo = () => {
@@ -93,13 +97,13 @@ function NewProduct() {
     setVideoPreview("");
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
     setMessage("");
 
     if (
-      !form.title ||
-      !form.description ||
+      !form.title.trim() ||
+      !form.description.trim() ||
       !form.price ||
       !form.category ||
       !form.condition
@@ -142,17 +146,17 @@ function NewProduct() {
       setUploadingText("Publicando producto en QSM...");
 
       const response = await api.post("/products", {
-        title: form.title,
-        description: form.description,
+        title: form.title.trim(),
+        description: form.description.trim(),
         price: Number(form.price),
         category: form.category,
         condition: form.condition,
         quality: form.quality,
-        location: form.location,
-        warranty: form.warranty,
+        location: form.location.trim(),
+        warranty: form.warranty.trim(),
         deliveryMethod: form.deliveryMethod,
         specialPriceReason: form.specialPriceReason,
-        specialPriceExplanation: form.specialPriceExplanation,
+        specialPriceExplanation: form.specialPriceExplanation.trim(),
         images: uploadedImages,
         video: uploadedVideo
       });
@@ -165,9 +169,9 @@ function NewProduct() {
         navigate(newProduct?._id ? `/product/${newProduct._id}` : "/marketplace");
       }, 700);
     } catch (error) {
-      console.error(error);
       setMessage(
-        error.response?.data?.message ||
+        error?.response?.data?.message ||
+          error?.response?.data?.error ||
           "No se pudo publicar el producto. Verifica el backend."
       );
     } finally {
@@ -177,7 +181,7 @@ function NewProduct() {
   };
 
   return (
-    <div style={page} className="qsm-new-product-page">
+    <div style={page}>
       <style>{`
         * { box-sizing: border-box; }
 
@@ -187,7 +191,7 @@ function NewProduct() {
           width: 100%;
           min-height: 100%;
           background: #020617;
-          font-family: Inter, system-ui, sans-serif;
+          font-family: Inter, "Plus Jakarta Sans", system-ui, sans-serif;
           overflow-x: hidden;
         }
 
@@ -199,9 +203,21 @@ function NewProduct() {
           color-scheme: dark;
         }
 
+        a, button, input, textarea, select {
+          font-family: inherit;
+        }
+
+        a, button {
+          transition: all .25s ease;
+        }
+
+        a:hover, button:hover {
+          transform: translateY(-2px);
+        }
+
         @keyframes floatGlow {
           0% { transform: translateY(0px); opacity: .65; }
-          50% { transform: translateY(-12px); opacity: 1; }
+          50% { transform: translateY(-10px); opacity: 1; }
           100% { transform: translateY(0px); opacity: .65; }
         }
 
@@ -210,388 +226,416 @@ function NewProduct() {
           70% { box-shadow: 0 0 0 18px rgba(53,208,195,0); }
           100% { box-shadow: 0 0 0 0 rgba(53,208,195,0); }
         }
+
+        @media (max-width: 1250px) {
+          .new-product-page {
+            grid-template-columns: 1fr !important;
+          }
+
+          .sidebar-wrapper {
+            display: none !important;
+          }
+
+          .new-product-layout {
+            grid-template-columns: 1fr !important;
+          }
+
+          .right-column {
+            position: static !important;
+          }
+
+          .button-row {
+            left: 24px !important;
+          }
+        }
+
+        @media (max-width: 760px) {
+          .main-content {
+            padding: 18px !important;
+          }
+
+          .new-product-hero {
+            grid-template-columns: 1fr !important;
+          }
+
+          .two-columns {
+            grid-template-columns: 1fr !important;
+          }
+
+          .media-grid {
+            grid-template-columns: repeat(4, 1fr) !important;
+          }
+
+          .button-row {
+            position: static !important;
+            grid-template-columns: 1fr !important;
+            margin-top: 20px !important;
+          }
+
+          .step-bar {
+            grid-template-columns: 1fr 1fr !important;
+          }
+        }
       `}</style>
 
-      <aside style={sidebar}>
-        <Link to="/" style={brand}>
-          <div style={brandIcon}>🛡</div>
-          <div>
-            <strong style={brandTitle}>QSM</strong>
-            <span style={brandSub}>Quick Secure Market</span>
-          </div>
-        </Link>
-
-        <nav style={menu}>
-          <Link style={menuItem} to="/dashboard">🏠 Inicio</Link>
-          <Link style={menuItem} to="/marketplace">🛒 Marketplace</Link>
-          <Link style={menuItem} to="/orders">📦 Mis órdenes</Link>
-          <Link style={menuItem} to="/profile">👤 Mi perfil</Link>
-          <Link style={activeMenuItem} to="/new-product">➕ Vender producto</Link>
-          <Link style={menuItem} to="/marketing">📈 Marketing Center</Link>
-          <Link style={menuItem} to="/disputes">⚖ Mis reclamos</Link>
-          <Link style={menuItem} to="/complete-profile">🧾 Verificación QSM</Link>
-        </nav>
-
-        <div style={sideCard}>
-          <p style={sideLabel}>PUBLICACIÓN SEGURA</p>
-          <h3>QSM AI</h3>
-          <p>
-            Analizamos fotos, video, descripción, precio y vendedor antes de publicar.
-          </p>
+      <div className="new-product-page" style={layoutPage}>
+        <div className="sidebar-wrapper">
+          <Sidebar />
         </div>
-      </aside>
 
-      <main style={main}>
-        <Topbar />
+        <main className="main-content" style={main}>
+          <Topbar />
 
-        <section style={hero}>
-          <div>
-            <p style={label}>MARKETPLACE / VENDER PRODUCTO</p>
-            <h1 style={title}>
-              Publica con <span style={gradientText}>Protección QSM</span>
-            </h1>
-            <p style={subtitle}>
-              Crea una publicación profesional con fotos, video, análisis de riesgo y Pago Protegido.
-            </p>
-          </div>
-
-          <div style={heroBadge}>
-            <div style={heroIcon}>🧠</div>
+          <section className="new-product-hero" style={hero}>
             <div>
-              <strong>Análisis inteligente activo</strong>
-              <p>Tu producto será evaluado antes de mostrarse.</p>
-            </div>
-          </div>
-        </section>
-
-        <section style={layout}>
-          <form onSubmit={handleSubmit} style={formCard}>
-            <div style={stepBar}>
-              <Step active number="1" text="Datos" />
-              <Step active={completion >= 35} number="2" text="Fotos" />
-              <Step active={completion >= 60} number="3" text="Video" />
-              <Step active={completion >= 85} number="4" text="Publicar" />
+              <p style={label}>MARKETPLACE / VENDER PRODUCTO</p>
+              <h1 style={title}>
+                Publica con <span style={gradientText}>Protección QSM</span>
+              </h1>
+              <p style={subtitle}>
+                Crea una publicación profesional con fotos, video, análisis de riesgo y Pago Protegido.
+              </p>
             </div>
 
-            <div style={sectionTitle}>Información principal</div>
-
-            <label style={fieldLabel}>Título del producto</label>
-            <input
-              name="title"
-              value={form.title}
-              onChange={handleChange}
-              placeholder="Ej: iPhone 15 Pro Max 256GB"
-              style={input}
-            />
-
-            <label style={fieldLabel}>Descripción</label>
-            <textarea
-              name="description"
-              value={form.description}
-              onChange={handleChange}
-              placeholder="Describe estado real, detalles, accesorios, garantía y motivo de venta."
-              style={textarea}
-              maxLength={2000}
-            />
-
-            <div style={twoColumns}>
+            <div style={heroBadge}>
+              <div style={heroIcon}>🧠</div>
               <div>
-                <label style={fieldLabel}>Precio RD$</label>
-                <input
-                  name="price"
-                  type="number"
-                  value={form.price}
-                  onChange={handleChange}
-                  placeholder="Ej: 65000"
-                  style={input}
-                />
-              </div>
-
-              <div>
-                <label style={fieldLabel}>Categoría</label>
-                <select
-                  name="category"
-                  value={form.category}
-                  onChange={handleChange}
-                  style={input}
-                >
-                  <option value="">Seleccionar</option>
-                  <option value="Gaming">Gaming</option>
-                  <option value="Celulares">Celulares</option>
-                  <option value="Laptops">Laptops</option>
-                  <option value="Vehículos">Vehículos</option>
-                  <option value="Hogar">Hogar</option>
-                  <option value="Moda">Moda</option>
-                  <option value="Otros">Otros</option>
-                </select>
+                <strong>Análisis inteligente activo</strong>
+                <p>Tu producto será evaluado antes de mostrarse.</p>
               </div>
             </div>
+          </section>
 
-            <div style={twoColumns}>
-              <div>
-                <label style={fieldLabel}>Condición</label>
-                <select
-                  name="condition"
-                  value={form.condition}
-                  onChange={handleChange}
-                  style={input}
-                >
-                  <option value="">Seleccionar</option>
-                  <option value="NEW">Nuevo</option>
-                  <option value="LIKE_NEW">Como nuevo</option>
-                  <option value="USED_GOOD">Buen estado</option>
-                  <option value="USED_DETAILS">Usado con detalles</option>
-                  <option value="FOR_PARTS">Para piezas</option>
-                </select>
+          <section className="new-product-layout" style={contentLayout}>
+            <form onSubmit={handleSubmit} style={formCard}>
+              <div className="step-bar" style={stepBar}>
+                <Step active number="1" text="Datos" />
+                <Step active={completion >= 35} number="2" text="Fotos" />
+                <Step active={completion >= 60} number="3" text="Video" />
+                <Step active={completion >= 85} number="4" text="Publicar" />
               </div>
 
-              <div>
-                <label style={fieldLabel}>Calidad</label>
-                <select
-                  name="quality"
-                  value={form.quality}
-                  onChange={handleChange}
-                  style={input}
-                >
-                  <option value="UNKNOWN">No especificada</option>
-                  <option value="EXCELLENT">Excelente</option>
-                  <option value="GOOD">Buena</option>
-                  <option value="FAIR">Aceptable</option>
-                  <option value="DAMAGED">Dañado</option>
-                </select>
-              </div>
-            </div>
+              <div style={sectionTitle}>Información principal</div>
 
-            <div style={twoColumns}>
-              <div>
-                <label style={fieldLabel}>Ubicación</label>
-                <input
-                  name="location"
-                  value={form.location}
-                  onChange={handleChange}
-                  placeholder="Ej: Santo Domingo"
-                  style={input}
-                />
-              </div>
-
-              <div>
-                <label style={fieldLabel}>Garantía</label>
-                <input
-                  name="warranty"
-                  value={form.warranty}
-                  onChange={handleChange}
-                  placeholder="Ej: 30 días / No aplica"
-                  style={input}
-                />
-              </div>
-            </div>
-
-            <label style={fieldLabel}>Método de entrega</label>
-            <select
-              name="deliveryMethod"
-              value={form.deliveryMethod}
-              onChange={handleChange}
-              style={input}
-            >
-              <option value="">Seleccionar</option>
-              <option value="Punto seguro QSM">Punto seguro QSM</option>
-              <option value="Entrega acordada">Entrega acordada</option>
-              <option value="Envío nacional">Envío nacional</option>
-              <option value="Retiro presencial">Retiro presencial</option>
-            </select>
-
-            <div style={sectionTitle}>Fotos y video</div>
-
-            <label style={uploadBox}>
+              <label style={fieldLabel}>Título del producto</label>
               <input
-                type="file"
-                accept="image/*"
-                multiple
-                onChange={handleImages}
-                style={{ display: "none" }}
+                name="title"
+                value={form.title}
+                onChange={handleChange}
+                placeholder="Ej: iPhone 15 Pro Max 256GB"
+                style={input}
               />
-              <div style={uploadIcon}>📷</div>
-              <strong>Subir hasta 8 imágenes reales</strong>
-              <p>Fotos claras aumentan la confianza del comprador.</p>
-            </label>
 
-            <div style={mediaGrid}>
-              {Array.from({ length: 8 }).map((_, index) => (
-                <div key={index} style={mediaSlot}>
-                  {imagePreviews[index] ? (
-                    <>
-                      <img src={imagePreviews[index]} alt="preview" style={mediaImg} />
-                      <button
-                        type="button"
-                        onClick={() => removeImage(index)}
-                        style={removeBtn}
-                      >
-                        ×
-                      </button>
-                    </>
-                  ) : (
-                    <span>+</span>
-                  )}
+              <label style={fieldLabel}>Descripción</label>
+              <textarea
+                name="description"
+                value={form.description}
+                onChange={handleChange}
+                placeholder="Describe estado real, detalles, accesorios, garantía y motivo de venta."
+                style={textarea}
+                maxLength={2000}
+              />
+
+              <div className="two-columns" style={twoColumns}>
+                <div>
+                  <label style={fieldLabel}>Precio RD$</label>
+                  <input
+                    name="price"
+                    type="number"
+                    value={form.price}
+                    onChange={handleChange}
+                    placeholder="Ej: 65000"
+                    style={input}
+                  />
                 </div>
-              ))}
-            </div>
 
-            <label style={uploadBoxVideo}>
+                <div>
+                  <label style={fieldLabel}>Categoría</label>
+                  <select
+                    name="category"
+                    value={form.category}
+                    onChange={handleChange}
+                    style={input}
+                  >
+                    <option value="">Seleccionar</option>
+                    <option value="Gaming">Gaming</option>
+                    <option value="Tecnología">Tecnología</option>
+                    <option value="Celulares">Celulares</option>
+                    <option value="Laptops">Laptops</option>
+                    <option value="Vehículos">Vehículos</option>
+                    <option value="Hogar">Hogar</option>
+                    <option value="Moda">Moda</option>
+                    <option value="Otros">Otros</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="two-columns" style={twoColumns}>
+                <div>
+                  <label style={fieldLabel}>Condición</label>
+                  <select
+                    name="condition"
+                    value={form.condition}
+                    onChange={handleChange}
+                    style={input}
+                  >
+                    <option value="">Seleccionar</option>
+                    <option value="NEW">Nuevo</option>
+                    <option value="LIKE_NEW">Como nuevo</option>
+                    <option value="USED_GOOD">Buen estado</option>
+                    <option value="USED_DETAILS">Usado con detalles</option>
+                    <option value="FOR_PARTS">Para piezas</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label style={fieldLabel}>Calidad</label>
+                  <select
+                    name="quality"
+                    value={form.quality}
+                    onChange={handleChange}
+                    style={input}
+                  >
+                    <option value="UNKNOWN">No especificada</option>
+                    <option value="EXCELLENT">Excelente</option>
+                    <option value="GOOD">Buena</option>
+                    <option value="FAIR">Aceptable</option>
+                    <option value="DAMAGED">Dañado</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="two-columns" style={twoColumns}>
+                <div>
+                  <label style={fieldLabel}>Ubicación</label>
+                  <input
+                    name="location"
+                    value={form.location}
+                    onChange={handleChange}
+                    placeholder="Ej: Santo Domingo"
+                    style={input}
+                  />
+                </div>
+
+                <div>
+                  <label style={fieldLabel}>Garantía</label>
+                  <input
+                    name="warranty"
+                    value={form.warranty}
+                    onChange={handleChange}
+                    placeholder="Ej: 30 días / No aplica"
+                    style={input}
+                  />
+                </div>
+              </div>
+
+              <label style={fieldLabel}>Método de entrega</label>
+              <select
+                name="deliveryMethod"
+                value={form.deliveryMethod}
+                onChange={handleChange}
+                style={input}
+              >
+                <option value="">Seleccionar</option>
+                <option value="Punto seguro QSM">Punto seguro QSM</option>
+                <option value="Entrega acordada">Entrega acordada</option>
+                <option value="Envío nacional">Envío nacional</option>
+                <option value="Retiro presencial">Retiro presencial</option>
+              </select>
+
+              <div style={sectionTitle}>Fotos y video</div>
+
+              <label style={uploadBox}>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleImages}
+                  style={{ display: "none" }}
+                />
+                <div style={uploadIcon}>📷</div>
+                <strong>Subir hasta 8 imágenes reales</strong>
+                <p>Fotos claras aumentan la confianza del comprador.</p>
+              </label>
+
+              <div className="media-grid" style={mediaGrid}>
+                {Array.from({ length: 8 }).map((_, index) => (
+                  <div key={index} style={mediaSlot}>
+                    {imagePreviews[index] ? (
+                      <>
+                        <img src={imagePreviews[index]} alt="preview" style={mediaImg} />
+                        <button
+                          type="button"
+                          onClick={() => removeImage(index)}
+                          style={removeBtn}
+                        >
+                          ×
+                        </button>
+                      </>
+                    ) : (
+                      <span>+</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <label style={uploadBoxVideo}>
+                <input
+                  type="file"
+                  accept="video/*"
+                  onChange={handleVideo}
+                  style={{ display: "none" }}
+                />
+                <div style={uploadIcon}>🎥</div>
+                <strong>Subir video del producto</strong>
+                <p>Máximo 1 video. Ideal mostrando que el producto funciona.</p>
+              </label>
+
+              {videoPreview && (
+                <div style={videoBox}>
+                  <video src={videoPreview} controls style={videoPlayer} />
+                  <button type="button" onClick={removeVideo} style={removeVideoButton}>
+                    Eliminar video
+                  </button>
+                </div>
+              )}
+
+              <label style={fieldLabel}>Motivo de precio especial</label>
+              <select
+                name="specialPriceReason"
+                value={form.specialPriceReason}
+                onChange={handleChange}
+                style={input}
+              >
+                <option value="NONE">No aplica</option>
+                <option value="URGENT_MONEY">Necesito vender rápido</option>
+                <option value="MOVING">Mudanza</option>
+                <option value="BOUGHT_ANOTHER">Compré otro producto</option>
+                <option value="NO_LONGER_USED">Ya no lo uso</option>
+                <option value="MEDICAL_EXPENSE">Gasto médico</option>
+                <option value="BUSINESS_LIQUIDATION">Liquidación</option>
+                <option value="OTHER">Otro</option>
+              </select>
+
+              <label style={fieldLabel}>Explicación adicional</label>
               <input
-                type="file"
-                accept="video/*"
-                onChange={handleVideo}
-                style={{ display: "none" }}
+                name="specialPriceExplanation"
+                value={form.specialPriceExplanation}
+                onChange={handleChange}
+                placeholder="Ej: Lo vendo porque compré otro. Incluye caja y cargador."
+                style={input}
               />
-              <div style={uploadIcon}>🎥</div>
-              <strong>Subir video del producto</strong>
-              <p>Máximo 1 video. Ideal mostrando que el producto funciona.</p>
-            </label>
 
-            {videoPreview && (
-              <div style={videoBox}>
-                <video src={videoPreview} controls style={videoPlayer} />
-                <button type="button" onClick={removeVideo} style={removeVideoButton}>
-                  Eliminar video
+              {message && <div style={messageBox}>{message}</div>}
+              {uploadingText && <div style={uploadingBox}>{uploadingText}</div>}
+
+              <div className="button-row" style={buttonRow}>
+                <Link to="/marketplace" style={cancelButton}>
+                  Cancelar
+                </Link>
+
+                <button type="button" style={draftButton}>
+                  Guardar borrador
+                </button>
+
+                <button type="submit" disabled={submitting} style={submitButton}>
+                  {submitting ? "Publicando..." : "Publicar producto seguro →"}
                 </button>
               </div>
-            )}
+            </form>
 
-            <label style={fieldLabel}>Motivo de precio especial</label>
-            <select
-              name="specialPriceReason"
-              value={form.specialPriceReason}
-              onChange={handleChange}
-              style={input}
-            >
-              <option value="NONE">No aplica</option>
-              <option value="URGENT_MONEY">Necesito vender rápido</option>
-              <option value="MOVING">Mudanza</option>
-              <option value="BOUGHT_ANOTHER">Compré otro producto</option>
-              <option value="NO_LONGER_USED">Ya no lo uso</option>
-              <option value="MEDICAL_EXPENSE">Gasto médico</option>
-              <option value="BUSINESS_LIQUIDATION">Liquidación</option>
-              <option value="OTHER">Otro</option>
-            </select>
-
-            <label style={fieldLabel}>Explicación adicional</label>
-            <input
-              name="specialPriceExplanation"
-              value={form.specialPriceExplanation}
-              onChange={handleChange}
-              placeholder="Ej: Lo vendo porque compré otro. Incluye caja y cargador."
-              style={input}
-            />
-
-            {message && <div style={messageBox}>{message}</div>}
-            {uploadingText && <div style={uploadingBox}>{uploadingText}</div>}
-
-            <div style={buttonRow}>
-              <Link to="/marketplace" style={cancelButton}>
-                Cancelar
-              </Link>
-
-              <button type="button" style={draftButton}>
-                Guardar borrador
-              </button>
-
-              <button type="submit" disabled={submitting} style={submitButton}>
-                {submitting ? "Publicando..." : "Publicar producto seguro →"}
-              </button>
-            </div>
-          </form>
-
-          <aside style={rightColumn}>
-            <section style={aiCard}>
-              <div style={aiHeader}>
-                <div style={aiBrain}>🧠</div>
-                <div>
-                  <h2>QSM AI</h2>
-                  <p>Análisis inteligente en tiempo real</p>
+            <aside className="right-column" style={rightColumn}>
+              <section style={aiCard}>
+                <div style={aiHeader}>
+                  <div style={aiBrain}>🧠</div>
+                  <div>
+                    <h2>QSM AI</h2>
+                    <p>Análisis inteligente en tiempo real</p>
+                  </div>
                 </div>
-              </div>
 
-              <div style={scoreCircle}>
-                <span>{completion}%</span>
-              </div>
-
-              <div style={scoreBar}>
-                <div style={{ ...scoreFill, width: `${completion}%` }}></div>
-              </div>
-
-              <AnalysisLine
-                icon="📷"
-                title="Fotos del producto"
-                value={`${imageFiles.length}/8 imágenes`}
-                done={imageFiles.length > 0}
-              />
-              <AnalysisLine
-                icon="🎥"
-                title="Video funcional"
-                value={videoFile ? "Video agregado" : "Pendiente"}
-                done={!!videoFile}
-              />
-              <AnalysisLine
-                icon="💰"
-                title="Precio publicado"
-                value={
-                  form.price
-                    ? `RD$ ${Number(form.price).toLocaleString("es-DO")}`
-                    : "Pendiente"
-                }
-                done={!!form.price}
-              />
-              <AnalysisLine
-                icon="📝"
-                title="Descripción"
-                value={form.description.length >= 40 ? "Aceptable" : "Muy corta"}
-                done={form.description.length >= 40}
-              />
-              <AnalysisLine
-                icon="👤"
-                title="Vendedor"
-                value={`Nivel ${savedUser.trustScore || 60}/100`}
-                done
-              />
-              <AnalysisLine
-                icon="🛡"
-                title="Riesgo QSM"
-                value={riskLevel}
-                done={completion >= 60}
-              />
-            </section>
-
-            <section style={previewCard}>
-              <h2>Vista previa</h2>
-
-              <div style={previewImageWrap}>
-                <img src={previewImage} alt="preview" style={previewImageStyle} />
-                <span style={previewBadge}>Pago Protegido</span>
-              </div>
-
-              <h3>{form.title || "Tu producto aparecerá aquí"}</h3>
-              <h2 style={previewPrice}>
-                RD$ {form.price ? Number(form.price).toLocaleString("es-DO") : "0"}
-              </h2>
-              <p style={previewText}>
-                {form.description || "Agrega una descripción clara para generar confianza."}
-              </p>
-
-              <div style={sellerPreview}>
-                <div style={avatar}>
-                  {savedUser.firstName?.charAt(0)?.toUpperCase() || "U"}
+                <div style={scoreCircle}>
+                  <span>{completion}%</span>
                 </div>
-                <div>
-                  <strong>
-                    {savedUser.firstName} {savedUser.lastName}
-                  </strong>
-                  <p>Nivel de confianza {savedUser.trustScore || 60}/100</p>
+
+                <div style={scoreBar}>
+                  <div style={{ ...scoreFill, width: `${completion}%` }}></div>
                 </div>
-              </div>
-            </section>
-          </aside>
-        </section>
-      </main>
+
+                <AnalysisLine
+                  icon="📷"
+                  title="Fotos del producto"
+                  value={`${imageFiles.length}/8 imágenes`}
+                  done={imageFiles.length > 0}
+                />
+                <AnalysisLine
+                  icon="🎥"
+                  title="Video funcional"
+                  value={videoFile ? "Video agregado" : "Pendiente"}
+                  done={Boolean(videoFile)}
+                />
+                <AnalysisLine
+                  icon="💰"
+                  title="Precio publicado"
+                  value={
+                    form.price
+                      ? `RD$ ${Number(form.price).toLocaleString("es-DO")}`
+                      : "Pendiente"
+                  }
+                  done={Boolean(form.price)}
+                />
+                <AnalysisLine
+                  icon="📝"
+                  title="Descripción"
+                  value={form.description.length >= 40 ? "Aceptable" : "Muy corta"}
+                  done={form.description.length >= 40}
+                />
+                <AnalysisLine
+                  icon="👤"
+                  title="Vendedor"
+                  value={`Nivel ${savedUser.trustScore || 60}/100`}
+                  done
+                />
+                <AnalysisLine
+                  icon="🛡"
+                  title="Riesgo QSM"
+                  value={riskLevel}
+                  done={completion >= 60}
+                />
+              </section>
+
+              <section style={previewCard}>
+                <h2>Vista previa</h2>
+
+                <div style={previewImageWrap}>
+                  <img src={previewImage} alt="preview" style={previewImageStyle} />
+                  <span style={previewBadge}>Pago Protegido</span>
+                </div>
+
+                <h3>{form.title || "Tu producto aparecerá aquí"}</h3>
+                <h2 style={previewPrice}>
+                  RD$ {form.price ? Number(form.price).toLocaleString("es-DO") : "0"}
+                </h2>
+                <p style={previewText}>
+                  {form.description || "Agrega una descripción clara para generar confianza."}
+                </p>
+
+                <div style={sellerPreview}>
+                  <div style={avatar}>
+                    {savedUser.firstName?.charAt(0)?.toUpperCase() || "U"}
+                  </div>
+                  <div>
+                    <strong>
+                      {savedUser.firstName} {savedUser.lastName}
+                    </strong>
+                    <p>Nivel de confianza {savedUser.trustScore || 60}/100</p>
+                  </div>
+                </div>
+              </section>
+            </aside>
+          </section>
+        </main>
+      </div>
 
       <AiAssistant pageContext="new-product" />
     </div>
@@ -620,94 +664,28 @@ function AnalysisLine({ icon, title, value, done }) {
   );
 }
 
+function safeJson(value) {
+  try {
+    return value ? JSON.parse(value) : null;
+  } catch {
+    return null;
+  }
+}
+
 const page = {
   minHeight: "100vh",
-  width: "100vw",
-  display: "grid",
-  gridTemplateColumns: "280px minmax(0, 1fr)",
+  width: "100%",
   background:
     "radial-gradient(circle at 80% 10%, rgba(124,58,237,.20), transparent 30%), radial-gradient(circle at 25% 15%, rgba(53,208,195,.13), transparent 28%), #020617",
-  color: "white",
-  overflowX: "hidden"
+  color: "white"
 };
 
-const sidebar = {
-  background: "rgba(8,17,35,.94)",
-  borderRight: "1px solid rgba(53,208,195,.18)",
-  padding: "24px 16px",
+const layoutPage = {
+  width: "100%",
   minHeight: "100vh",
-  position: "sticky",
-  top: 0,
-  width: "280px"
-};
-
-const brand = {
-  display: "flex",
-  alignItems: "center",
-  gap: "12px",
-  textDecoration: "none",
-  color: "white",
-  marginBottom: "38px"
-};
-
-const brandIcon = {
-  width: "46px",
-  height: "46px",
-  borderRadius: "16px",
-  border: "1px solid rgba(53,208,195,.45)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center"
-};
-
-const brandTitle = {
-  display: "block",
-  fontSize: "28px",
-  lineHeight: "28px"
-};
-
-const brandSub = {
-  color: "#94a3b8",
-  fontSize: "12px"
-};
-
-const menu = {
   display: "grid",
-  gap: "11px"
-};
-
-const menuItem = {
-  color: "#cbd5e1",
-  textDecoration: "none",
-  padding: "13px 14px",
-  borderRadius: "15px",
-  background: "rgba(15,23,42,.38)",
-  border: "1px solid rgba(148,163,184,.10)",
-  fontWeight: "800"
-};
-
-const activeMenuItem = {
-  ...menuItem,
-  color: "#35d0c3",
-  background: "rgba(53,208,195,.14)",
-  border: "1px solid rgba(53,208,195,.35)"
-};
-
-const sideCard = {
-  marginTop: "34px",
-  padding: "22px",
-  borderRadius: "24px",
-  background:
-    "linear-gradient(145deg, rgba(53,208,195,.13), rgba(124,58,237,.12))",
-  border: "1px solid rgba(53,208,195,.22)",
-  color: "#cbd5e1"
-};
-
-const sideLabel = {
-  color: "#35d0c3",
-  letterSpacing: "4px",
-  fontSize: "11px",
-  fontWeight: "900"
+  gridTemplateColumns: "280px minmax(0, 1fr)",
+  overflowX: "hidden"
 };
 
 const main = {
@@ -775,9 +753,9 @@ const heroIcon = {
   animation: "pulseRing 2.4s infinite"
 };
 
-const layout = {
+const contentLayout = {
   display: "grid",
-  gridTemplateColumns: "minmax(0, 1fr) 560px",
+  gridTemplateColumns: "minmax(0, 1fr) 520px",
   gap: "20px",
   alignItems: "start",
   width: "100%"
@@ -975,10 +953,9 @@ const buttonRow = {
   right: "26px",
   bottom: "18px",
   display: "grid",
-  gridTemplateColumns: "280px 1fr 1.1fr",
+  gridTemplateColumns: "260px 1fr 1.1fr",
   gap: "14px",
-  zIndex: 50,
-  padding: 0
+  zIndex: 50
 };
 
 const cancelButton = {

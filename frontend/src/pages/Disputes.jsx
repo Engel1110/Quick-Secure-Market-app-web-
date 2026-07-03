@@ -1,1163 +1,1460 @@
-import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useLocation } from "react-router-dom";
+import api from "../api/axios";
+import Sidebar from "../components/Sidebar";
+import Topbar from "../components/Topbar";
 import AiAssistant from "../components/AiAssistant";
 
 function Disputes() {
-  const order = JSON.parse(localStorage.getItem("qsm_last_order"));
+  const location = useLocation();
 
-  const savedUser = JSON.parse(localStorage.getItem("qsm_user")) || {
-    firstName: "Usuario",
-    lastName: "QSM",
-    email: "usuario@qsm.com",
-    trustScore: 60,
-    kycStatus: "PENDING"
-  };
+  const params = new URLSearchParams(location.search);
+  const orderIdFromUrl = params.get("orderId") || "";
+  const productIdFromUrl = params.get("productId") || "";
+
+  const savedUser =
+    safeJson(localStorage.getItem("qsm_user")) ||
+    safeJson(localStorage.getItem("user")) ||
+    {};
+
+  const currentUserId = savedUser._id || savedUser.id || savedUser.userId || "";
+
+  const [disputes, setDisputes] = useState([]);
+  const [activeDispute, setActiveDispute] = useState(null);
+  const [orders, setOrders] = useState([]);
 
   const [reason, setReason] = useState("");
-  const [evidence, setEvidence] = useState("");
-  const [evidenceFiles, setEvidenceFiles] = useState([]);
-  const [message, setMessage] = useState("");
-  const [chatText, setChatText] = useState("");
+  const [details, setDetails] = useState("");
+  const [selectedOrderId, setSelectedOrderId] = useState(orderIdFromUrl);
+  const [selectedProductId, setSelectedProductId] = useState(productIdFromUrl);
+  const [evidenceText, setEvidenceText] = useState("");
+  const [messageText, setMessageText] = useState("");
 
-  const [dispute, setDispute] = useState(
-    JSON.parse(localStorage.getItem("qsm_last_dispute")) || null
-  );
+  const [statusFilter, setStatusFilter] = useState("ALL");
+  const [search, setSearch] = useState("");
+  const [activeTab, setActiveTab] = useState(orderIdFromUrl ? "new" : "list");
 
-  const [chatMessages, setChatMessages] = useState([
-    {
-      role: "Comprador",
-      text: "El producto recibido no corresponde a lo publicado.",
-      time: "10:35 AM"
-    },
-    {
-      role: "Vendedor",
-      text: "Ese daño no estaba cuando lo envié. Puedo revisar con la empresa de envío.",
-      time: "11:20 AM"
-    },
-    {
-      role: "Moderador QSM",
-      text: "Hemos recibido la evidencia. QSM AI está analizando el caso.",
-      time: "12:10 PM"
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [updatingId, setUpdatingId] = useState("");
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  useEffect(() => {
+    if (orderIdFromUrl) {
+      setSelectedOrderId(orderIdFromUrl);
+      setSelectedProductId(productIdFromUrl);
+      setActiveTab("new");
     }
-  ]);
+  }, [orderIdFromUrl, productIdFromUrl]);
 
-  const activeDispute = dispute || {
-    disputeCode: "DSP-660939",
-    orderCode: order?.orderCode || "QSM-502600",
-    productId: order?.productId || "5",
-    productName: order?.productName || "iPhone 11",
-    sellerName: "Juan Pérez",
-    sellerTrust: 90,
-    reason: "Producto diferente al descrito",
-    evidence: "El producto llegó con la pantalla rota y no enciende correctamente.",
-    status: "OPEN",
-    createdAt: "11 de junio de 2026, 10:30 AM",
-    escrowAmount: order?.total || 45000
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      setError("");
+      setNotice("");
+
+      const [disputesResponse, ordersResponse] = await Promise.allSettled([
+        api.get("/disputes"),
+        api.get("/orders/my-orders")
+      ]);
+
+      if (disputesResponse.status === "fulfilled") {
+        const backendDisputes =
+          disputesResponse.value.data.disputes ||
+          disputesResponse.value.data.data ||
+          disputesResponse.value.data ||
+          [];
+
+        const safeDisputes = Array.isArray(backendDisputes) ? backendDisputes : [];
+        setDisputes(safeDisputes);
+
+        if (!activeDispute && safeDisputes.length > 0) {
+          setActiveDispute(safeDisputes[0]);
+        }
+      } else {
+        setError(
+          disputesResponse.reason?.response?.data?.message ||
+            "No se pudieron cargar los reclamos. Verifica GET /disputes en el backend."
+        );
+      }
+
+      if (ordersResponse.status === "fulfilled") {
+        const backendOrders =
+          ordersResponse.value.data.orders ||
+          ordersResponse.value.data.data ||
+          ordersResponse.value.data.myOrders ||
+          [];
+
+        setOrders(Array.isArray(backendOrders) ? backendOrders : []);
+      }
+    } catch (err) {
+      setError(
+        err?.response?.data?.message ||
+          "No se pudo cargar el Centro de Reclamos."
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const completion = useMemo(() => {
-    const checks = [
-      !!activeDispute.orderCode,
-      !!activeDispute.productId,
-      !!activeDispute.reason,
-      !!activeDispute.evidence,
-      evidenceFiles.length > 0 || !!evidence,
-      !!activeDispute.sellerTrust
-    ];
+  const filteredDisputes = useMemo(() => {
+    let result = [...disputes];
 
-    return Math.round((checks.filter(Boolean).length / checks.length) * 100);
-  }, [activeDispute, evidenceFiles, evidence]);
+    if (statusFilter !== "ALL") {
+      result = result.filter(
+        (dispute) => normalizeStatus(dispute.status) === statusFilter
+      );
+    }
 
-  const handleEvidenceFiles = (e) => {
-    const files = Array.from(e.target.files || []);
-    const previews = files.slice(0, 6).map((file) => ({
-      name: file.name,
-      size: `${(file.size / 1024 / 1024).toFixed(1)} MB`,
-      type: file.type,
-      url: file.type.startsWith("image/") ? URL.createObjectURL(file) : ""
-    }));
+    if (search.trim()) {
+      const term = search.toLowerCase();
 
-    setEvidenceFiles(previews);
-  };
+      result = result.filter((dispute) => {
+        const product = dispute.product || {};
+        const order = dispute.order || {};
+        const buyer = dispute.buyer || {};
+        const seller = dispute.seller || {};
 
-  const handleCreateDispute = (e) => {
-    e.preventDefault();
+        return `${dispute.disputeCode || ""} ${dispute.reason || ""} ${dispute.details || ""} ${product.title || ""} ${order.orderCode || ""} ${buyer.firstName || ""} ${seller.firstName || ""}`
+          .toLowerCase()
+          .includes(term);
+      });
+    }
 
-    if (!reason || !evidence) {
-      setMessage("Debes seleccionar un motivo y escribir una evidencia antes de abrir la disputa.");
+    return result;
+  }, [disputes, statusFilter, search]);
+
+  const stats = useMemo(() => {
+    return {
+      total: disputes.length,
+      open: disputes.filter((item) =>
+        ["OPEN", "IN_REVIEW", "WAITING_EVIDENCE"].includes(normalizeStatus(item.status))
+      ).length,
+      resolved: disputes.filter((item) =>
+        ["RESOLVED_BUYER", "RESOLVED_SELLER", "CLOSED"].includes(normalizeStatus(item.status))
+      ).length,
+      escrow: disputes.reduce(
+        (total, item) => total + Number(item.escrowAmount || item.order?.total || 0),
+        0
+      )
+    };
+  }, [disputes]);
+
+  const selectedOrder = useMemo(() => {
+    return orders.find((order) => String(order._id || order.id) === String(selectedOrderId));
+  }, [orders, selectedOrderId]);
+
+  const createDispute = async (event) => {
+    event.preventDefault();
+
+    if (!reason || !details.trim()) {
+      setError("Selecciona un motivo y escribe los detalles del reclamo.");
       return;
     }
 
-    const newDispute = {
-      disputeCode: "DSP-" + Date.now().toString().slice(-6),
-      orderCode: order?.orderCode || "QSM-502600",
-      productId: order?.productId || "5",
-      productName: order?.productName || "Producto QSM",
-      sellerName: order?.sellerName || "Vendedor QSM",
-      sellerTrust: order?.sellerTrust || 90,
-      reason,
-      evidence,
-      status: "OPEN",
-      createdAt: new Date().toLocaleString("es-DO"),
-      escrowAmount: order?.total || 45000
-    };
+    try {
+      setCreating(true);
+      setError("");
+      setNotice("");
 
-    localStorage.setItem("qsm_last_dispute", JSON.stringify(newDispute));
-    setDispute(newDispute);
-    setMessage("Disputa creada correctamente. El pago queda retenido por QSM.");
+      const payload = {
+        orderId: selectedOrderId || undefined,
+        productId:
+          selectedProductId ||
+          selectedOrder?.product?._id ||
+          selectedOrder?.product ||
+          undefined,
+        reason,
+        details: details.trim(),
+        evidenceText: evidenceText.trim() || undefined
+      };
+
+      const response = await api.post("/disputes", payload);
+
+      const dispute =
+        response.data.dispute ||
+        response.data.data ||
+        response.data;
+
+      setNotice("Reclamo creado correctamente. QSM inició el proceso de revisión.");
+      setDisputes((prev) => [dispute, ...prev]);
+      setActiveDispute(dispute);
+      setActiveTab("detail");
+
+      setReason("");
+      setDetails("");
+      setEvidenceText("");
+      setSelectedOrderId("");
+      setSelectedProductId("");
+    } catch (err) {
+      setError(
+        err?.response?.data?.message ||
+          "No se pudo crear el reclamo. Verifica POST /disputes en el backend."
+      );
+    } finally {
+      setCreating(false);
+    }
   };
 
-  const sendChat = () => {
-    if (!chatText.trim()) return;
+  const sendDisputeMessage = async (event) => {
+    event.preventDefault();
 
-    setChatMessages([
-      ...chatMessages,
-      {
-        role: "Comprador",
-        text: chatText,
-        time: "Ahora"
-      }
-    ]);
+    if (!messageText.trim() || !activeDispute?._id) return;
 
-    setChatText("");
+    try {
+      setSending(true);
+      setError("");
+      setNotice("");
+
+      const response = await api.post(`/disputes/${activeDispute._id}/messages`, {
+        text: messageText.trim()
+      });
+
+      const updated =
+        response.data.dispute ||
+        response.data.data ||
+        response.data;
+
+      setActiveDispute(updated);
+      setDisputes((prev) =>
+        prev.map((item) => String(item._id) === String(updated._id) ? updated : item)
+      );
+      setMessageText("");
+      setNotice("Mensaje agregado al reclamo.");
+    } catch (err) {
+      setError(
+        err?.response?.data?.message ||
+          "No se pudo enviar el mensaje. Verifica POST /disputes/:id/messages."
+      );
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const updateStatus = async (disputeId, nextStatus) => {
+    if (!disputeId) return;
+
+    try {
+      setUpdatingId(disputeId);
+      setError("");
+      setNotice("");
+
+      const response = await api.patch(`/disputes/${disputeId}/status`, {
+        status: nextStatus
+      });
+
+      const updated =
+        response.data.dispute ||
+        response.data.data ||
+        response.data;
+
+      setDisputes((prev) =>
+        prev.map((item) => String(item._id) === String(updated._id) ? updated : item)
+      );
+      setActiveDispute(updated);
+      setNotice("Estado del reclamo actualizado.");
+    } catch (err) {
+      setError(
+        err?.response?.data?.message ||
+          "No se pudo actualizar el estado. Verifica PATCH /disputes/:id/status."
+      );
+    } finally {
+      setUpdatingId("");
+    }
   };
 
   return (
     <div style={page}>
-      <style>
-        {`
-          * {
-            box-sizing: border-box;
+      <style>{`
+        * { box-sizing: border-box; }
+
+        html, body, #root {
+          margin: 0;
+          padding: 0;
+          width: 100%;
+          min-height: 100%;
+          background: #020617;
+          font-family: Inter, "Plus Jakarta Sans", system-ui, sans-serif;
+          overflow-x: hidden;
+        }
+
+        a, button, input, select, textarea {
+          font-family: inherit;
+        }
+
+        a, button {
+          transition: all .25s ease;
+        }
+
+        a:hover, button:hover {
+          transform: translateY(-2px);
+        }
+
+        @keyframes fadeUp {
+          from { opacity: 0; transform: translateY(18px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (max-width: 1240px) {
+          .disputes-page {
+            grid-template-columns: 1fr !important;
           }
 
-          html, body, #root {
-            width: 100%;
-            min-height: 100%;
-            margin: 0;
-            padding: 0;
-            overflow-x: hidden;
-            background: #020617;
-            font-family: 'Inter', system-ui, sans-serif;
+          .sidebar-wrapper {
+            display: none !important;
           }
 
-          input::placeholder,
-          textarea::placeholder {
-            color: #64748b;
+          .stats-grid,
+          .disputes-layout,
+          .filters-row,
+          .two-columns {
+            grid-template-columns: 1fr !important;
           }
 
-          select {
-            color-scheme: dark;
+          .hero-row {
+            flex-direction: column !important;
+            align-items: flex-start !important;
           }
-        `}
-      </style>
+        }
 
-      <aside style={sidebar}>
-        <Link to="/" style={brand}>
-          <div style={brandIcon}>🛡</div>
-          <div>
-            <strong style={brandTitle}>QSM</strong>
-            <span style={brandSub}>Quick Secure Market</span>
-          </div>
-        </Link>
+        @media (max-width: 760px) {
+          .main-content {
+            padding: 18px !important;
+          }
 
-        <nav style={menu}>
-          <Link style={menuItem} to="/dashboard">🏠 Inicio</Link>
-          <Link style={menuItem} to="/marketplace">🛒 Marketplace</Link>
-          <Link style={menuItem} to="/orders">📦 Mis órdenes</Link>
-          <Link style={menuItem} to="/profile">👤 Mi perfil</Link>
-          <Link style={menuItem} to="/new-product">➕ Vender producto</Link>
-          <Link style={menuItem} to="/marketing">📈 Marketing Center</Link>
-          <Link style={activeMenuItem} to="/disputes">⚖ Mis disputas</Link>
-          <Link style={menuItem} to="/complete-profile">🧾 Verificación QSM</Link>
-        </nav>
+          .tab-row,
+          .action-row {
+            grid-template-columns: 1fr !important;
+          }
+        }
+      `}</style>
 
-        <div style={aiSideCard}>
-          <h3>🤖 QSM AI</h3>
-          <p>Te ayudamos a resolver disputas de forma segura, justa y documentada.</p>
-          <button style={sideButton}>Pregúntame algo</button>
+      <div className="disputes-page" style={layout}>
+        <div className="sidebar-wrapper">
+          <Sidebar />
         </div>
-      </aside>
 
-      <main style={main}>
-        <header style={topbar}>
-          <div style={searchBox}>
-            <span>🔎</span>
-            <input placeholder="Buscar órdenes, disputas o productos..." style={searchInput} />
-          </div>
+        <main className="main-content" style={main}>
+          <Topbar />
 
-          <div style={topIcons}>
-            <TopIcon icon="🔔" number="3" label="Notificaciones" />
-            <TopIcon icon="✉️" number="2" label="Mensajes" />
-            <TopIcon icon="🛒" number="1" label="Carrito" />
-          </div>
-
-          <div style={userMini}>
-            <div style={userAvatar}>
-              {savedUser.firstName?.charAt(0) || "U"}
-            </div>
+          <section className="hero-row" style={hero}>
             <div>
-              <strong>{savedUser.firstName || "Usuario"} {savedUser.lastName || "QSM"}</strong>
-              <p>{savedUser.kycStatus === "VERIFIED" ? "Verificado" : "Pendiente"}</p>
-            </div>
-          </div>
-        </header>
-
-        <section style={hero}>
-          <div>
-            <p style={label}>CENTRO DE RESOLUCIÓN QSM</p>
-            <h1 style={title}>Centro de Disputas QSM</h1>
-            <p style={subtitle}>
-              Reporta problemas con una orden. QSM retiene el pago mediante escrow mientras revisa evidencia,
-              conversación, historial del vendedor y señales de fraude.
-            </p>
-          </div>
-
-          <Link to="/orders" style={secondaryButton}>
-            Ver mis órdenes
-          </Link>
-        </section>
-
-        <section style={statsGrid}>
-          <StatCard icon="✅" title="Disputas resueltas" value="Proyección" text="Métrica futura del sistema" />
-          <StatCard icon="🟡" title="En revisión" value={dispute ? "1" : "0"} text="Activas ahora" />
-          <StatCard icon="⏱️" title="Tiempo promedio" value="24h" text="Objetivo de resolución" />
-          <StatCard icon="💰" title="Dinero protegido" value={`RD$ ${formatMoney(activeDispute.escrowAmount)}`} text="Retenido por escrow" />
-        </section>
-
-        {!order && (
-          <div style={warningBox}>
-            ⚠ No tienes una orden reciente conectada. Se muestra una disputa de demostración para visualizar el flujo QSM.
-          </div>
-        )}
-
-        {message && <div style={messageBox}>{message}</div>}
-
-        <section style={layout}>
-          <aside style={leftColumn}>
-            <div style={panel}>
-              <div style={panelHeader}>
-                <h2>Información de la disputa</h2>
-                <span style={codeBadge}>#{activeDispute.disputeCode}</span>
-              </div>
-
-              <InfoLine title="Orden" value={activeDispute.orderCode} />
-              <InfoLine title="Producto" value={activeDispute.productName || activeDispute.productId} />
-              <InfoLine title="Vendedor" value={activeDispute.sellerName} />
-              <InfoLine title="Trust vendedor" value={`${activeDispute.sellerTrust}/100`} />
-              <InfoLine title="Fecha apertura" value={activeDispute.createdAt} />
-              <InfoLine title="Estado" value={statusText(activeDispute.status)} />
-              <InfoLine title="Motivo" value={activeDispute.reason} />
-
-              <div style={descriptionBox}>
-                <strong>Descripción</strong>
-                <p>{activeDispute.evidence}</p>
-              </div>
-
-              <button style={primaryButton}>+ Abrir nueva disputa</button>
+              <p style={label}>CENTRO DE RECLAMOS QSM</p>
+              <h1 style={title}>Mis reclamos y disputas</h1>
+              <p style={subtitle}>
+                Abre reclamos, sube evidencia, conversa con QSM y protege el dinero retenido por Pago Protegido.
+              </p>
             </div>
 
-            <div style={panel}>
-              <h2>Línea de tiempo</h2>
-
-              <Timeline done title="Disputa creada" time="11/06/2026 10:30 AM" />
-              <Timeline done title="Evidencia agregada" time="11/06/2026 11:15 AM" />
-              <Timeline done title="IA QSM analizó el caso" time="11/06/2026 12:02 PM" />
-              <Timeline done title="Asignada a moderador" time="11/06/2026 12:10 PM" />
-              <Timeline active title="Esperando respuesta del vendedor" time="En proceso" />
-              <Timeline title="Resolución final" time="Pendiente" />
-            </div>
-
-            <div style={panel}>
-              <h2>Abrir disputa</h2>
-
-              <form onSubmit={handleCreateDispute}>
-                <label style={fieldLabel}>Orden</label>
-                <input
-                  value={order?.orderCode || "QSM-502600"}
-                  disabled
-                  style={input}
-                />
-
-                <label style={fieldLabel}>Motivo</label>
-                <select
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  required
-                  style={input}
-                >
-                  <option value="">Selecciona un motivo</option>
-                  <option value="Producto diferente al descrito">Producto diferente al descrito</option>
-                  <option value="Producto dañado">Producto dañado</option>
-                  <option value="No recibí el producto">No recibí el producto</option>
-                  <option value="Producto incompleto">Producto incompleto</option>
-                  <option value="Sospecha de fraude">Sospecha de fraude</option>
-                </select>
-
-                <label style={fieldLabel}>Evidencia</label>
-                <textarea
-                  placeholder="Describe lo ocurrido y adjunta pruebas si las tienes."
-                  value={evidence}
-                  onChange={(e) => setEvidence(e.target.value)}
-                  required
-                  style={textarea}
-                />
-
-                <button style={warningButton}>
-                  Abrir disputa y retener pago
-                </button>
-              </form>
-            </div>
-          </aside>
-
-          <section style={centerColumn}>
-            <div style={panel}>
-              <div style={panelHeader}>
-                <h2>Evidencias del comprador</h2>
-
-                <label style={smallButton}>
-                  Agregar evidencia
-                  <input
-                    type="file"
-                    multiple
-                    accept="image/*,video/*,.pdf"
-                    onChange={handleEvidenceFiles}
-                    style={{ display: "none" }}
-                  />
-                </label>
-              </div>
-
-              <div style={evidenceGrid}>
-                {(evidenceFiles.length > 0 ? evidenceFiles : defaultEvidence).map((file, index) => (
-                  <EvidenceCard key={index} file={file} />
-                ))}
-              </div>
-
-              <button style={outlineButton}>Ver todas las evidencias</button>
-            </div>
-
-            <div style={panel}>
-              <div style={panelHeader}>
-                <div>
-                  <h2>Conversación protegida</h2>
-                  <p style={muted}>Solo visible para comprador, vendedor y moderador QSM.</p>
-                </div>
-
-                <button style={smallButton}>Invitar moderador</button>
-              </div>
-
-              <div style={chatBox}>
-                {chatMessages.map((msg, index) => (
-                  <ChatMessage key={index} msg={msg} />
-                ))}
-              </div>
-
-              <div style={chatInputRow}>
-                <input
-                  value={chatText}
-                  onChange={(e) => setChatText(e.target.value)}
-                  placeholder="Escribe un mensaje..."
-                  style={chatInput}
-                />
-                <button onClick={sendChat} style={sendButton}>➤</button>
+            <div style={heroBadge}>
+              <span>⚖️</span>
+              <div>
+                <strong>Resolución protegida</strong>
+                <p>QSM analiza evidencias y estado del pago.</p>
               </div>
             </div>
           </section>
 
-          <aside style={rightColumn}>
-            <div style={aiPanel}>
-              <div style={panelHeader}>
-                <h2>Análisis QSM AI</h2>
-                <span style={successBadge}>Completado</span>
-              </div>
+          <section className="stats-grid" style={statsGrid}>
+            <StatCard icon="⚖️" title="Reclamos totales" value={stats.total} />
+            <StatCard icon="🟡" title="En revisión" value={stats.open} />
+            <StatCard icon="✅" title="Resueltos" value={stats.resolved} />
+            <StatCard icon="🛡" title="Monto protegido" value={formatMoney(stats.escrow)} />
+          </section>
 
-              <div style={aiRiskCircle}>🛡</div>
+          <section style={controlPanel}>
+            <div className="tab-row" style={tabRow}>
+              <button
+                onClick={() => setActiveTab("list")}
+                style={activeTab === "list" ? activeTabButton : tabButton}
+              >
+                📋 Reclamos
+              </button>
 
-              <p style={muted}>Nivel de riesgo</p>
-              <h2 style={riskTitle}>Bajo</h2>
+              <button
+                onClick={() => setActiveTab("new")}
+                style={activeTab === "new" ? activeTabButton : tabButton}
+              >
+                ➕ Abrir reclamo
+              </button>
 
-              <div style={checkList}>
-                <Check text="Producto verificado" />
-                <Check text="Pago protegido por escrow" />
-                <Check text="Evidencia suficiente" />
-                <Check text="Vendedor identificado" />
-                <Check text="Historial del vendedor positivo" />
-              </div>
-
-              <div style={successRate}>
-                <span>Probabilidad de éxito</span>
-                <strong>87%</strong>
-              </div>
-
-              <div style={track}>
-                <div style={{ ...fill, width: `${completion}%` }}></div>
-              </div>
+              <button
+                onClick={() => setActiveTab("detail")}
+                style={activeTab === "detail" ? activeTabButton : tabButton}
+              >
+                🔍 Detalle
+              </button>
             </div>
 
-            <div style={panel}>
-              <h2>Estado del dinero</h2>
-              <div style={escrowAmount}>RD$ {formatMoney(activeDispute.escrowAmount)}</div>
-              <p style={escrowStatus}>● Retenido por QSM</p>
+            <div className="filters-row" style={filtersRow}>
+              <div style={searchBox}>
+                <span>⌕</span>
+                <input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Buscar reclamos por producto, orden, código o motivo..."
+                  style={searchInput}
+                />
+              </div>
 
-              <InfoLine title="Liberación automática" value="Suspendida" />
-              <InfoLine title="Motivo" value="Disputa abierta" />
+              <select
+                value={statusFilter}
+                onChange={(event) => setStatusFilter(event.target.value)}
+                style={selectInput}
+              >
+                <option value="ALL">Todos los estados</option>
+                <option value="OPEN">Abierto</option>
+                <option value="IN_REVIEW">En revisión</option>
+                <option value="WAITING_EVIDENCE">Esperando evidencia</option>
+                <option value="RESOLVED_BUYER">Resuelto a comprador</option>
+                <option value="RESOLVED_SELLER">Resuelto a vendedor</option>
+                <option value="CLOSED">Cerrado</option>
+              </select>
 
-              <button style={outlineButton}>Ver detalles del escrow</button>
+              <button onClick={loadData} style={ghostButton}>Actualizar</button>
             </div>
+          </section>
 
-            <div style={panel}>
-              <h2>Acciones disponibles</h2>
-              <button style={outlineButton}>Agregar más evidencia</button>
-              <button style={dangerButton}>Cancelar disputa</button>
+          {notice && <div style={successBox}>{notice}</div>}
+          {error && <div style={errorBox}>{error}</div>}
+
+          {loading && (
+            <div style={centerCard}>
+              <h2>Cargando reclamos...</h2>
+              <p>QSM está consultando el módulo de disputas.</p>
             </div>
-          </aside>
-        </section>
-      </main>
+          )}
+
+          {!loading && activeTab === "list" && (
+            <section className="disputes-layout" style={disputesLayout}>
+              <div style={listPanel}>
+                <h2>Reclamos registrados</h2>
+
+                {filteredDisputes.length === 0 && (
+                  <div style={emptyBox}>
+                    <h3>No hay reclamos</h3>
+                    <p>No existen reclamos para los filtros seleccionados.</p>
+                    <button onClick={() => setActiveTab("new")} style={primaryButton}>
+                      Abrir reclamo
+                    </button>
+                  </div>
+                )}
+
+                {filteredDisputes.map((dispute) => (
+                  <DisputeListCard
+                    key={dispute._id}
+                    dispute={dispute}
+                    active={activeDispute?._id === dispute._id}
+                    onOpen={() => {
+                      setActiveDispute(dispute);
+                      setActiveTab("detail");
+                    }}
+                  />
+                ))}
+              </div>
+
+              <div style={rightPanel}>
+                <h2>Proceso QSM</h2>
+                <ProcessCard />
+              </div>
+            </section>
+          )}
+
+          {!loading && activeTab === "new" && (
+            <section style={formPanel}>
+              <div>
+                <p style={label}>NUEVO RECLAMO</p>
+                <h2>Abrir reclamo protegido</h2>
+                <p style={muted}>
+                  Explica claramente lo sucedido. QSM utilizará esta información para revisar la orden, el pago y la evidencia.
+                </p>
+              </div>
+
+              <form onSubmit={createDispute} style={form}>
+                <div className="two-columns" style={twoColumns}>
+                  <div>
+                    <label style={fieldLabel}>Orden relacionada</label>
+                    <select
+                      value={selectedOrderId}
+                      onChange={(event) => {
+                        const value = event.target.value;
+                        setSelectedOrderId(value);
+                        const order = orders.find((item) => String(item._id || item.id) === String(value));
+                        setSelectedProductId(order?.product?._id || order?.product || "");
+                      }}
+                      style={input}
+                    >
+                      <option value="">Sin orden / seleccionar luego</option>
+                      {orders.map((order) => (
+                        <option key={order._id || order.id} value={order._id || order.id}>
+                          {order.orderCode || `Orden ${String(order._id || order.id).slice(-6)}`} · {order.product?.title || order.productTitle || "Producto QSM"}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={fieldLabel}>Producto ID</label>
+                    <input
+                      value={selectedProductId}
+                      onChange={(event) => setSelectedProductId(event.target.value)}
+                      placeholder="ID del producto"
+                      style={input}
+                    />
+                  </div>
+                </div>
+
+                <label style={fieldLabel}>Motivo del reclamo</label>
+                <select value={reason} onChange={(event) => setReason(event.target.value)} style={input}>
+                  <option value="">Seleccionar motivo</option>
+                  <option value="PRODUCT_NOT_AS_DESCRIBED">Producto diferente al descrito</option>
+                  <option value="DAMAGED_PRODUCT">Producto dañado</option>
+                  <option value="NOT_DELIVERED">Producto no entregado</option>
+                  <option value="FAKE_PRODUCT">Producto falso o sospechoso</option>
+                  <option value="PAYMENT_PROBLEM">Problema con el pago</option>
+                  <option value="SELLER_PROBLEM">Problema con el vendedor</option>
+                  <option value="BUYER_PROBLEM">Problema con el comprador</option>
+                  <option value="OTHER">Otro</option>
+                </select>
+
+                <label style={fieldLabel}>Detalles del caso</label>
+                <textarea
+                  value={details}
+                  onChange={(event) => setDetails(event.target.value)}
+                  placeholder="Describe qué ocurrió, cuándo pasó, qué esperabas recibir y qué evidencia tienes."
+                  style={textarea}
+                />
+
+                <label style={fieldLabel}>Evidencia o notas adicionales</label>
+                <textarea
+                  value={evidenceText}
+                  onChange={(event) => setEvidenceText(event.target.value)}
+                  placeholder="Ej: el equipo no enciende, llegó sin cargador, el serial no coincide, etc."
+                  style={textareaSmall}
+                />
+
+                <div style={securityNotice}>
+                  <strong>🛡 Pago Protegido QSM</strong>
+                  <p>
+                    Si la orden tiene escrow activo, QSM puede mantener el dinero retenido mientras se revisa el reclamo.
+                  </p>
+                </div>
+
+                <div className="action-row" style={actionRow}>
+                  <button type="button" onClick={() => setActiveTab("list")} style={outlineButton}>
+                    Cancelar
+                  </button>
+
+                  <button type="submit" disabled={creating} style={primaryButton}>
+                    {creating ? "Creando reclamo..." : "Abrir reclamo →"}
+                  </button>
+                </div>
+              </form>
+            </section>
+          )}
+
+          {!loading && activeTab === "detail" && (
+            <section>
+              {!activeDispute ? (
+                <div style={centerCard}>
+                  <h2>Selecciona un reclamo</h2>
+                  <p>No hay reclamo seleccionado para revisar.</p>
+                  <button onClick={() => setActiveTab("list")} style={primaryButton}>
+                    Ver reclamos
+                  </button>
+                </div>
+              ) : (
+                <DisputeDetail
+                  dispute={activeDispute}
+                  currentUserId={currentUserId}
+                  messageText={messageText}
+                  setMessageText={setMessageText}
+                  sending={sending}
+                  sendDisputeMessage={sendDisputeMessage}
+                  updateStatus={updateStatus}
+                  updatingId={updatingId}
+                />
+              )}
+            </section>
+          )}
+        </main>
+      </div>
 
       <AiAssistant pageContext="disputes" />
     </div>
   );
 }
 
-const defaultEvidence = [
-  {
-    name: "foto_producto_1.jpg",
-    size: "1.2 MB",
-    url: "https://images.unsplash.com/photo-1603816245457-fe9c80b740ff?auto=format&fit=crop&w=500&q=80"
-  },
-  {
-    name: "foto_producto_2.jpg",
-    size: "1.1 MB",
-    url: "https://images.unsplash.com/photo-1603816245457-fe9c80b740ff?auto=format&fit=crop&w=500&q=80"
-  },
-  {
-    name: "video_evidencia.mp4",
-    size: "12.4 MB",
-    video: true
-  },
-  {
-    name: "factura.pdf",
-    size: "534 KB",
-    pdf: true
-  }
-];
+function DisputeListCard({ dispute, active, onOpen }) {
+  const product = dispute.product || {};
+  const order = dispute.order || {};
 
-function TopIcon({ icon, number, label }) {
   return (
-    <div style={topIconBox}>
-      <span style={notification}>{number}</span>
-      <div>{icon}</div>
-      <small>{label}</small>
+    <button onClick={onOpen} style={active ? activeDisputeCard : disputeCard}>
+      <div style={cardHeader}>
+        <div>
+          <p style={smallLabel}>Reclamo</p>
+          <h3>{dispute.disputeCode || `DSP-${String(dispute._id).slice(-6)}`}</h3>
+        </div>
+        <span style={statusBadge(dispute.status)}>{formatStatus(dispute.status)}</span>
+      </div>
+
+      <p style={muted}>
+        {product.title || dispute.productTitle || "Producto QSM"} · {order.orderCode || "Orden pendiente"}
+      </p>
+
+      <strong>{formatReason(dispute.reason)}</strong>
+      <span style={dateText}>{formatDate(dispute.createdAt)}</span>
+    </button>
+  );
+}
+
+function DisputeDetail({
+  dispute,
+  currentUserId,
+  messageText,
+  setMessageText,
+  sending,
+  sendDisputeMessage,
+  updateStatus,
+  updatingId
+}) {
+  const product = dispute.product || {};
+  const order = dispute.order || {};
+  const buyer = dispute.buyer || {};
+  const seller = dispute.seller || {};
+  const messages = dispute.messages || [];
+
+  return (
+    <div className="disputes-layout" style={disputesLayout}>
+      <section style={detailPanel}>
+        <div style={cardHeader}>
+          <div>
+            <p style={label}>DETALLE DEL RECLAMO</p>
+            <h2>{dispute.disputeCode || `DSP-${String(dispute._id).slice(-6)}`}</h2>
+          </div>
+          <span style={statusBadge(dispute.status)}>{formatStatus(dispute.status)}</span>
+        </div>
+
+        <div style={productBox}>
+          <div style={productIcon}>⚖️</div>
+          <div>
+            <h3>{product.title || dispute.productTitle || "Producto QSM"}</h3>
+            <p style={muted}>Orden: {order.orderCode || dispute.orderCode || "Pendiente"}</p>
+            <strong style={priceText}>
+              Monto protegido: {formatMoney(dispute.escrowAmount || order.total || order.price || 0)}
+            </strong>
+          </div>
+        </div>
+
+        <div style={infoGrid}>
+          <Info title="Comprador" value={formatUser(buyer, "Comprador QSM")} />
+          <Info title="Vendedor" value={formatUser(seller, "Vendedor QSM")} />
+          <Info title="Motivo" value={formatReason(dispute.reason)} />
+          <Info title="Fecha" value={formatDate(dispute.createdAt)} />
+        </div>
+
+        <div style={sectionBox}>
+          <h3>Descripción del caso</h3>
+          <p>{dispute.details || "Sin detalles registrados."}</p>
+        </div>
+
+        <div style={sectionBox}>
+          <h3>Evidencia registrada</h3>
+          <p>{dispute.evidenceText || "No se registró evidencia adicional."}</p>
+        </div>
+
+        <div style={timelineBox}>
+          <h3>Seguimiento QSM</h3>
+          <ProgressItem active text="Reclamo creado" />
+          <ProgressItem active={isStatusReached(dispute.status, ["IN_REVIEW", "WAITING_EVIDENCE", "RESOLVED_BUYER", "RESOLVED_SELLER", "CLOSED"])} text="QSM revisa el caso" />
+          <ProgressItem active={isStatusReached(dispute.status, ["WAITING_EVIDENCE"])} text="Esperando evidencia adicional" />
+          <ProgressItem active={isStatusReached(dispute.status, ["RESOLVED_BUYER", "RESOLVED_SELLER", "CLOSED"])} text="Resolución tomada" />
+        </div>
+
+        <div className="action-row" style={actionRow}>
+          <button
+            onClick={() => updateStatus(dispute._id, "IN_REVIEW")}
+            disabled={updatingId === dispute._id}
+            style={warningButton}
+          >
+            En revisión
+          </button>
+
+          <button
+            onClick={() => updateStatus(dispute._id, "WAITING_EVIDENCE")}
+            disabled={updatingId === dispute._id}
+            style={outlineButton}
+          >
+            Pedir evidencia
+          </button>
+
+          <button
+            onClick={() => updateStatus(dispute._id, "RESOLVED_BUYER")}
+            disabled={updatingId === dispute._id}
+            style={successButton}
+          >
+            Resolver comprador
+          </button>
+
+          <button
+            onClick={() => updateStatus(dispute._id, "RESOLVED_SELLER")}
+            disabled={updatingId === dispute._id}
+            style={successButton}
+          >
+            Resolver vendedor
+          </button>
+        </div>
+      </section>
+
+      <aside style={chatPanel}>
+        <h2>Mensajes del reclamo</h2>
+        <p style={muted}>Comunicación interna del caso y notas para la resolución.</p>
+
+        <div style={messagesBox}>
+          {messages.length === 0 && (
+            <div style={emptyBox}>
+              <h3>Sin mensajes</h3>
+              <p>Aún no hay mensajes en este reclamo.</p>
+            </div>
+          )}
+
+          {messages.map((message, index) => {
+            const senderId =
+              message.sender?._id ||
+              message.sender?.id ||
+              message.sender ||
+              message.senderId;
+
+            const mine = String(senderId || "") === String(currentUserId);
+
+            return (
+              <div key={message._id || index} style={mine ? myMessageRow : otherMessageRow}>
+                <div style={mine ? myBubble : otherBubble}>
+                  <strong>{formatUser(message.sender, mine ? "Tú" : "Usuario QSM")}</strong>
+                  <p>{message.text}</p>
+                  <span>{formatDate(message.createdAt)}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <form onSubmit={sendDisputeMessage} style={messageForm}>
+          <textarea
+            value={messageText}
+            onChange={(event) => setMessageText(event.target.value)}
+            placeholder="Agregar mensaje o nota al reclamo..."
+            style={messageInput}
+          />
+
+          <button type="submit" disabled={sending || !messageText.trim()} style={primaryButton}>
+            {sending ? "Enviando..." : "Enviar mensaje"}
+          </button>
+        </form>
+      </aside>
     </div>
   );
 }
 
-function StatCard({ icon, title, value, text }) {
+function ProcessCard() {
   return (
-    <div style={statCard}>
-      <div style={statIcon}>{icon}</div>
+    <div style={processCard}>
+      <ProcessStep number="1" title="Comprador abre reclamo" text="Se registra el motivo y la evidencia." />
+      <ProcessStep number="2" title="QSM retiene el pago" text="El escrow se mantiene protegido mientras se revisa." />
+      <ProcessStep number="3" title="Revisión de evidencia" text="QSM analiza mensajes, producto, vendedor y comprador." />
+      <ProcessStep number="4" title="Resolución" text="QSM libera, reembolsa o escala el caso." />
+    </div>
+  );
+}
+
+function ProcessStep({ number, title, text }) {
+  return (
+    <div style={processStep}>
+      <span>{number}</span>
       <div>
-        <p>{title}</p>
-        <h2>{value}</h2>
-        <span>{text}</span>
+        <strong>{title}</strong>
+        <p>{text}</p>
       </div>
     </div>
   );
 }
 
-function InfoLine({ title, value }) {
+function StatCard({ icon, title, value }) {
   return (
-    <div style={infoLine}>
+    <div style={statCard}>
+      <div style={statIcon}>{icon}</div>
+      <div>
+        <span>{title}</span>
+        <strong>{value}</strong>
+      </div>
+    </div>
+  );
+}
+
+function Info({ title, value }) {
+  return (
+    <div style={infoItem}>
       <span>{title}</span>
       <strong>{value}</strong>
     </div>
   );
 }
 
-function Timeline({ title, time, done, active }) {
+function ProgressItem({ active, text }) {
   return (
-    <div style={timeline}>
-      <div style={done ? timelineDotDone : active ? timelineDotActive : timelineDot}></div>
-      <div>
-        <strong>{title}</strong>
-        <p>{time}</p>
-      </div>
-    </div>
-  );
-}
-
-function EvidenceCard({ file }) {
-  return (
-    <div style={evidenceCard}>
-      <div style={evidencePreview}>
-        {file.url ? (
-          <img src={file.url} alt={file.name} style={evidenceImage} />
-        ) : file.video ? (
-          <div style={evidenceIcon}>▶</div>
-        ) : file.pdf ? (
-          <div style={evidenceIcon}>📄</div>
-        ) : (
-          <div style={evidenceIcon}>📎</div>
-        )}
-      </div>
-      <strong>{file.name}</strong>
-      <p>{file.size}</p>
-    </div>
-  );
-}
-
-function ChatMessage({ msg }) {
-  const isModerator = msg.role === "Moderador QSM";
-
-  return (
-    <div style={isModerator ? moderatorMessage : chatMessage}>
-      <div style={chatAvatar}>
-        {isModerator ? "🛡" : msg.role.charAt(0)}
-      </div>
-
-      <div>
-        <div style={chatHeaderSmall}>
-          <strong>{msg.role}</strong>
-          <span>{msg.time}</span>
-        </div>
-        <p>{msg.text}</p>
-      </div>
-    </div>
-  );
-}
-
-function Check({ text }) {
-  return (
-    <div style={check}>
-      <span>✅</span>
+    <div style={progressItem}>
+      <span style={active ? dotActive : dotInactive}>{active ? "✓" : "•"}</span>
       <p>{text}</p>
     </div>
   );
 }
 
-function statusText(status) {
+function safeJson(value) {
+  try {
+    return value ? JSON.parse(value) : null;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeStatus(status) {
+  return String(status || "OPEN").toUpperCase();
+}
+
+function isStatusReached(status, validStatuses) {
+  return validStatuses.includes(normalizeStatus(status));
+}
+
+function formatStatus(status) {
   const map = {
-    OPEN: "Abierta",
-    REVIEWING: "En revisión",
-    RESOLVED: "Resuelta"
+    OPEN: "Abierto",
+    IN_REVIEW: "En revisión",
+    WAITING_EVIDENCE: "Esperando evidencia",
+    RESOLVED_BUYER: "Resuelto a comprador",
+    RESOLVED_SELLER: "Resuelto a vendedor",
+    CLOSED: "Cerrado"
   };
 
-  return map[status] || status || "Pendiente";
+  return map[normalizeStatus(status)] || "Abierto";
+}
+
+function formatReason(reason) {
+  const map = {
+    PRODUCT_NOT_AS_DESCRIBED: "Producto diferente al descrito",
+    DAMAGED_PRODUCT: "Producto dañado",
+    NOT_DELIVERED: "Producto no entregado",
+    FAKE_PRODUCT: "Producto falso o sospechoso",
+    PAYMENT_PROBLEM: "Problema con el pago",
+    SELLER_PROBLEM: "Problema con el vendedor",
+    BUYER_PROBLEM: "Problema con el comprador",
+    OTHER: "Otro"
+  };
+
+  return map[reason] || reason || "Sin motivo";
+}
+
+function formatUser(user, fallback) {
+  if (!user || typeof user !== "object") return fallback;
+
+  const name = `${user.firstName || ""} ${user.lastName || ""}`.trim();
+
+  return name || user.name || user.email || fallback;
 }
 
 function formatMoney(value) {
-  if (!value) return "0";
-  return Number(value).toLocaleString("es-DO");
+  return new Intl.NumberFormat("es-DO", {
+    style: "currency",
+    currency: "DOP",
+    maximumFractionDigits: 0
+  }).format(Number(value || 0));
+}
+
+function formatDate(value) {
+  if (!value) return "Pendiente";
+
+  return new Date(value).toLocaleString("es-DO", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
 }
 
 const page = {
   minHeight: "100vh",
   width: "100%",
   background:
-    "radial-gradient(circle at top right, rgba(53,208,195,0.10), transparent 35%), #020617",
-  color: "white",
-  display: "grid",
-  gridTemplateColumns: "260px minmax(0, 1fr)",
-  overflowX: "hidden"
+    "radial-gradient(circle at top right, rgba(245,158,11,.12), transparent 34%), radial-gradient(circle at 18% 15%, rgba(56,189,248,.09), transparent 28%), #020617",
+  color: "white"
 };
 
-const sidebar = {
-  minHeight: "100vh",
-  background: "rgba(8,17,35,0.94)",
-  borderRight: "1px solid rgba(53,208,195,0.18)",
-  padding: "28px 16px",
-  position: "sticky",
-  top: 0
-};
-
-const brand = {
-  display: "flex",
-  alignItems: "center",
-  gap: "12px",
-  color: "white",
-  textDecoration: "none",
-  marginBottom: "40px"
-};
-
-const brandIcon = {
-  width: "46px",
-  height: "46px",
-  borderRadius: "16px",
-  border: "1px solid rgba(53,208,195,0.45)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  color: "#35d0c3"
-};
-
-const brandTitle = {
-  display: "block",
-  fontSize: "28px",
-  lineHeight: "28px"
-};
-
-const brandSub = {
-  color: "#94a3b8",
-  fontSize: "12px"
-};
-
-const menu = {
-  display: "grid",
-  gap: "11px"
-};
-
-const menuItem = {
-  color: "#cbd5e1",
-  textDecoration: "none",
-  padding: "13px 14px",
-  borderRadius: "15px",
-  background: "rgba(15,23,42,0.38)",
-  border: "1px solid rgba(148,163,184,0.10)",
-  fontWeight: "700",
-  fontSize: "15px"
-};
-
-const activeMenuItem = {
-  ...menuItem,
-  background: "rgba(53,208,195,0.14)",
-  border: "1px solid rgba(53,208,195,0.35)",
-  color: "#35d0c3"
-};
-
-const aiSideCard = {
-  marginTop: "34px",
-  background: "rgba(53,208,195,0.08)",
-  border: "1px solid rgba(53,208,195,0.18)",
-  borderRadius: "22px",
-  padding: "20px",
-  color: "#cbd5e1"
-};
-
-const sideButton = {
+const layout = {
   width: "100%",
-  background: "rgba(15,23,42,0.72)",
-  color: "#35d0c3",
-  border: "1px solid rgba(53,208,195,0.24)",
-  padding: "12px",
-  borderRadius: "14px",
-  cursor: "pointer",
-  fontWeight: "900"
+  minHeight: "100vh",
+  display: "grid",
+  gridTemplateColumns: "280px minmax(0, 1fr)",
+  overflowX: "hidden"
 };
 
 const main = {
   width: "100%",
   minWidth: 0,
-  maxWidth: "1760px",
-  margin: "0 auto",
-  padding: "28px 34px 60px",
+  padding: "26px 34px 56px",
   overflowX: "hidden"
-};
-
-const topbar = {
-  display: "grid",
-  gridTemplateColumns: "minmax(0, 1fr) auto 260px",
-  gap: "18px",
-  alignItems: "center",
-  marginBottom: "28px"
-};
-
-const searchBox = {
-  display: "flex",
-  alignItems: "center",
-  gap: "10px",
-  background: "rgba(15,23,42,0.72)",
-  border: "1px solid rgba(53,208,195,0.18)",
-  borderRadius: "18px",
-  padding: "0 16px"
-};
-
-const searchInput = {
-  width: "100%",
-  background: "transparent",
-  border: "none",
-  outline: "none",
-  color: "white",
-  padding: "16px 0",
-  fontSize: "15px"
-};
-
-const topIcons = {
-  display: "flex",
-  gap: "18px"
-};
-
-const topIconBox = {
-  position: "relative",
-  textAlign: "center",
-  color: "#cbd5e1",
-  fontSize: "13px"
-};
-
-const notification = {
-  position: "absolute",
-  top: "-8px",
-  right: "8px",
-  background: "#ef4444",
-  color: "white",
-  width: "18px",
-  height: "18px",
-  borderRadius: "50%",
-  fontSize: "11px",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontWeight: "900"
-};
-
-const userMini = {
-  display: "flex",
-  alignItems: "center",
-  gap: "12px",
-  background: "rgba(15,23,42,0.52)",
-  border: "1px solid rgba(53,208,195,0.16)",
-  borderRadius: "18px",
-  padding: "12px"
-};
-
-const userAvatar = {
-  width: "46px",
-  height: "46px",
-  borderRadius: "50%",
-  background: "linear-gradient(135deg, #35d0c3, #7c3aed)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontWeight: "900"
 };
 
 const hero = {
   display: "flex",
   justifyContent: "space-between",
-  gap: "24px",
   alignItems: "center",
-  marginBottom: "24px"
+  gap: "24px",
+  margin: "22px 0"
 };
 
 const label = {
-  color: "#35d0c3",
+  color: "#38bdf8",
   letterSpacing: "4px",
   fontSize: "12px",
-  fontWeight: "900"
+  fontWeight: "950",
+  textTransform: "uppercase",
+  margin: 0
 };
 
 const title = {
-  fontSize: "clamp(40px, 4vw, 68px)",
-  lineHeight: "1.04",
-  margin: "8px 0",
+  fontSize: "clamp(40px, 3.6vw, 62px)",
+  lineHeight: "1",
+  margin: "10px 0",
   letterSpacing: "-2px"
 };
 
 const subtitle = {
   color: "#cbd5e1",
-  lineHeight: "28px",
-  maxWidth: "950px"
+  lineHeight: "29px",
+  maxWidth: "840px",
+  margin: 0
 };
 
-const secondaryButton = {
-  color: "#35d0c3",
-  textDecoration: "none",
-  border: "1px solid rgba(53,208,195,0.35)",
-  padding: "14px 20px",
-  borderRadius: "14px",
-  fontWeight: "900"
+const heroBadge = {
+  display: "flex",
+  alignItems: "center",
+  gap: "14px",
+  minWidth: "300px",
+  background: "rgba(15,23,42,.72)",
+  border: "1px solid rgba(245,158,11,.24)",
+  borderRadius: "22px",
+  padding: "18px"
 };
 
 const statsGrid = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-  gap: "18px",
+  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+  gap: "16px",
   marginBottom: "20px"
 };
 
 const statCard = {
   display: "flex",
-  gap: "16px",
   alignItems: "center",
-  background: "rgba(15,23,42,0.62)",
-  border: "1px solid rgba(53,208,195,0.16)",
+  gap: "14px",
+  background: "rgba(15,23,42,.72)",
+  border: "1px solid rgba(56,189,248,.15)",
   borderRadius: "22px",
   padding: "20px"
 };
 
 const statIcon = {
-  width: "56px",
-  height: "56px",
-  borderRadius: "18px",
-  background: "rgba(53,208,195,0.12)",
+  width: "52px",
+  height: "52px",
+  borderRadius: "17px",
+  background: "rgba(245,158,11,.14)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   fontSize: "24px"
 };
 
-const warningBox = {
-  background: "rgba(245,158,11,0.12)",
-  border: "1px solid rgba(245,158,11,0.28)",
-  color: "#fde68a",
-  borderRadius: "16px",
-  padding: "14px",
-  marginBottom: "20px",
-  fontWeight: "800"
+const controlPanel = {
+  background: "rgba(15,23,42,.62)",
+  border: "1px solid rgba(56,189,248,.14)",
+  borderRadius: "24px",
+  padding: "18px",
+  marginBottom: "18px"
 };
 
-const messageBox = {
-  background: "rgba(6,78,59,0.25)",
-  border: "1px solid rgba(134,239,172,0.28)",
-  color: "#86efac",
-  borderRadius: "16px",
-  padding: "14px",
-  marginBottom: "20px",
-  fontWeight: "800"
-};
-
-const layout = {
+const tabRow = {
   display: "grid",
-  gridTemplateColumns: "340px minmax(0, 1fr) 340px",
-  gap: "18px",
-  alignItems: "start"
+  gridTemplateColumns: "repeat(3, 1fr)",
+  gap: "10px",
+  marginBottom: "14px"
 };
 
-const leftColumn = {
-  display: "grid",
-  gap: "18px"
-};
-
-const centerColumn = {
-  display: "grid",
-  gap: "18px",
-  minWidth: 0
-};
-
-const rightColumn = {
-  display: "grid",
-  gap: "18px"
-};
-
-const panel = {
-  background: "rgba(15,23,42,0.62)",
-  border: "1px solid rgba(53,208,195,0.16)",
-  borderRadius: "22px",
-  padding: "20px",
-  minWidth: 0
-};
-
-const panelHeader = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: "12px",
-  alignItems: "center"
-};
-
-const codeBadge = {
-  background: "rgba(53,208,195,0.16)",
-  color: "#35d0c3",
-  padding: "8px 11px",
-  borderRadius: "999px",
-  fontWeight: "900",
-  fontSize: "12px"
-};
-
-const infoLine = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: "18px",
-  padding: "11px 0",
-  borderBottom: "1px solid rgba(148,163,184,0.12)",
-  color: "#cbd5e1"
-};
-
-const descriptionBox = {
-  marginTop: "16px",
-  background: "rgba(2,6,23,0.44)",
-  border: "1px solid rgba(148,163,184,0.12)",
-  borderRadius: "16px",
-  padding: "16px",
+const tabButton = {
+  background: "rgba(2,6,23,.45)",
+  border: "1px solid rgba(148,163,184,.14)",
   color: "#cbd5e1",
-  lineHeight: "25px"
-};
-
-const primaryButton = {
-  width: "100%",
-  marginTop: "16px",
-  background: "#35d0c3",
-  color: "#020617",
-  border: "none",
-  padding: "14px",
+  padding: "13px",
   borderRadius: "14px",
   cursor: "pointer",
   fontWeight: "900"
 };
 
-const warningButton = {
-  ...primaryButton,
-  background: "#f59e0b"
+const activeTabButton = {
+  ...tabButton,
+  background: "linear-gradient(135deg, rgba(245,158,11,.18), rgba(139,92,246,.20))",
+  border: "1px solid rgba(245,158,11,.38)",
+  color: "white"
+};
+
+const filtersRow = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr) 240px 130px",
+  gap: "12px"
+};
+
+const searchBox = {
+  height: "56px",
+  display: "flex",
+  alignItems: "center",
+  gap: "12px",
+  background: "rgba(2,6,23,.45)",
+  border: "1px solid rgba(148,163,184,.14)",
+  borderRadius: "15px",
+  padding: "0 14px"
+};
+
+const searchInput = {
+  flex: 1,
+  height: "100%",
+  background: "transparent",
+  border: "none",
+  outline: "none",
+  color: "white"
+};
+
+const selectInput = {
+  background: "rgba(2,6,23,.45)",
+  border: "1px solid rgba(148,163,184,.14)",
+  borderRadius: "15px",
+  padding: "0 14px",
+  color: "white",
+  outline: "none"
+};
+
+const ghostButton = {
+  background: "rgba(15,23,42,.70)",
+  border: "1px solid rgba(148,163,184,.16)",
+  color: "white",
+  borderRadius: "15px",
+  fontWeight: "900",
+  cursor: "pointer"
+};
+
+const successBox = {
+  background: "rgba(34,197,94,.14)",
+  border: "1px solid rgba(34,197,94,.32)",
+  color: "#bbf7d0",
+  padding: "14px 18px",
+  borderRadius: "16px",
+  marginBottom: "16px",
+  fontWeight: "800"
+};
+
+const errorBox = {
+  background: "rgba(127,29,29,.24)",
+  border: "1px solid rgba(248,113,113,.30)",
+  color: "#fecaca",
+  padding: "14px 18px",
+  borderRadius: "16px",
+  marginBottom: "16px",
+  fontWeight: "800"
+};
+
+const centerCard = {
+  background: "rgba(15,23,42,.72)",
+  border: "1px solid rgba(56,189,248,.14)",
+  borderRadius: "24px",
+  padding: "44px",
+  textAlign: "center",
+  color: "#cbd5e1"
+};
+
+const disputesLayout = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1.2fr) minmax(360px, .8fr)",
+  gap: "20px"
+};
+
+const listPanel = {
+  background: "rgba(15,23,42,.72)",
+  border: "1px solid rgba(56,189,248,.16)",
+  borderRadius: "26px",
+  padding: "22px",
+  display: "grid",
+  gap: "12px"
+};
+
+const rightPanel = {
+  background: "rgba(15,23,42,.72)",
+  border: "1px solid rgba(56,189,248,.16)",
+  borderRadius: "26px",
+  padding: "22px"
+};
+
+const disputeCard = {
+  width: "100%",
+  textAlign: "left",
+  background: "rgba(2,6,23,.45)",
+  border: "1px solid rgba(148,163,184,.12)",
+  color: "white",
+  borderRadius: "20px",
+  padding: "16px",
+  cursor: "pointer",
+  display: "grid",
+  gap: "8px"
+};
+
+const activeDisputeCard = {
+  ...disputeCard,
+  background: "linear-gradient(135deg, rgba(245,158,11,.14), rgba(139,92,246,.16))",
+  border: "1px solid rgba(245,158,11,.38)"
+};
+
+const cardHeader = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: "14px"
+};
+
+const smallLabel = {
+  color: "#38bdf8",
+  fontSize: "12px",
+  letterSpacing: "3px",
+  fontWeight: "950",
+  margin: 0
+};
+
+const statusBadge = (status) => {
+  const normalized = normalizeStatus(status);
+  const colors = {
+    OPEN: ["rgba(245,158,11,.16)", "#fde68a", "rgba(245,158,11,.34)"],
+    IN_REVIEW: ["rgba(56,189,248,.16)", "#7dd3fc", "rgba(56,189,248,.34)"],
+    WAITING_EVIDENCE: ["rgba(168,85,247,.16)", "#d8b4fe", "rgba(168,85,247,.34)"],
+    RESOLVED_BUYER: ["rgba(34,197,94,.16)", "#86efac", "rgba(34,197,94,.34)"],
+    RESOLVED_SELLER: ["rgba(34,197,94,.16)", "#86efac", "rgba(34,197,94,.34)"],
+    CLOSED: ["rgba(148,163,184,.14)", "#cbd5e1", "rgba(148,163,184,.24)"]
+  };
+  const selected = colors[normalized] || colors.OPEN;
+
+  return {
+    background: selected[0],
+    color: selected[1],
+    border: `1px solid ${selected[2]}`,
+    borderRadius: "999px",
+    padding: "8px 12px",
+    fontWeight: "950",
+    whiteSpace: "nowrap",
+    fontSize: "12px"
+  };
+};
+
+const muted = {
+  color: "#cbd5e1",
+  lineHeight: "25px"
+};
+
+const dateText = {
+  color: "#94a3b8",
+  fontSize: "13px"
+};
+
+const emptyBox = {
+  background: "rgba(2,6,23,.35)",
+  border: "1px solid rgba(148,163,184,.12)",
+  borderRadius: "18px",
+  padding: "22px",
+  color: "#cbd5e1",
+  textAlign: "center"
+};
+
+const primaryButton = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "linear-gradient(135deg, #38bdf8, #8b5cf6, #ec4899)",
+  color: "white",
+  textDecoration: "none",
+  border: "none",
+  padding: "14px 20px",
+  borderRadius: "14px",
+  fontWeight: "950",
+  cursor: "pointer",
+  boxShadow: "0 18px 54px rgba(139,92,246,.22)"
+};
+
+const formPanel = {
+  background: "rgba(15,23,42,.72)",
+  border: "1px solid rgba(56,189,248,.16)",
+  borderRadius: "26px",
+  padding: "26px"
+};
+
+const form = {
+  display: "grid",
+  gap: "14px",
+  marginTop: "18px"
+};
+
+const twoColumns = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: "14px"
 };
 
 const fieldLabel = {
   display: "block",
-  margin: "14px 0 8px",
-  color: "#e5e7eb",
+  marginBottom: "8px",
   fontWeight: "900"
 };
 
 const input = {
   width: "100%",
-  background: "rgba(2,6,23,0.60)",
-  border: "1px solid rgba(148,163,184,0.22)",
+  minHeight: "54px",
+  background: "rgba(2,6,23,.55)",
+  border: "1px solid rgba(148,163,184,.16)",
   color: "white",
-  outline: "none",
-  padding: "13px",
-  borderRadius: "13px",
-  fontFamily: "'Inter', system-ui, sans-serif"
+  borderRadius: "15px",
+  padding: "0 14px",
+  outline: "none"
 };
 
 const textarea = {
   ...input,
-  minHeight: "110px",
-  resize: "vertical",
-  lineHeight: "24px"
-};
-
-const timeline = {
-  display: "flex",
-  gap: "14px",
-  padding: "12px 0",
-  color: "#cbd5e1"
-};
-
-const timelineDot = {
-  width: "18px",
-  height: "18px",
-  borderRadius: "50%",
-  background: "rgba(148,163,184,0.25)",
-  marginTop: "4px",
-  flexShrink: 0
-};
-
-const timelineDotDone = {
-  ...timelineDot,
-  background: "#35d0c3"
-};
-
-const timelineDotActive = {
-  ...timelineDot,
-  background: "#f59e0b"
-};
-
-const evidenceGrid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
-  gap: "14px",
-  marginTop: "16px"
-};
-
-const evidenceCard = {
-  background: "rgba(2,6,23,0.44)",
-  border: "1px solid rgba(148,163,184,0.12)",
-  borderRadius: "16px",
-  padding: "12px",
-  color: "#cbd5e1"
-};
-
-const evidencePreview = {
-  height: "130px",
-  borderRadius: "12px",
-  overflow: "hidden",
-  background: "rgba(2,6,23,0.75)",
-  marginBottom: "10px",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center"
-};
-
-const evidenceImage = {
-  width: "100%",
-  height: "100%",
-  objectFit: "cover"
-};
-
-const evidenceIcon = {
-  fontSize: "36px"
-};
-
-const smallButton = {
-  background: "rgba(15,23,42,0.72)",
-  color: "#e5e7eb",
-  border: "1px solid rgba(148,163,184,0.22)",
-  padding: "10px 13px",
-  borderRadius: "12px",
-  cursor: "pointer",
-  fontWeight: "800"
-};
-
-const outlineButton = {
-  width: "100%",
-  marginTop: "16px",
-  background: "transparent",
-  border: "1px solid rgba(53,208,195,0.28)",
-  color: "#e5e7eb",
-  padding: "13px",
-  borderRadius: "14px",
-  cursor: "pointer",
-  fontWeight: "900"
-};
-
-const muted = {
-  color: "#94a3b8",
-  margin: 0
-};
-
-const chatBox = {
-  display: "grid",
-  gap: "12px",
-  marginTop: "18px"
-};
-
-const chatMessage = {
-  display: "flex",
-  gap: "12px",
-  background: "rgba(2,6,23,0.42)",
-  border: "1px solid rgba(148,163,184,0.10)",
-  borderRadius: "16px",
+  minHeight: "150px",
   padding: "14px",
-  color: "#cbd5e1"
+  resize: "vertical"
 };
 
-const moderatorMessage = {
-  ...chatMessage,
-  border: "1px solid rgba(53,208,195,0.24)"
+const textareaSmall = {
+  ...textarea,
+  minHeight: "100px"
 };
 
-const chatAvatar = {
-  width: "42px",
-  height: "42px",
-  borderRadius: "50%",
-  background: "linear-gradient(135deg, #35d0c3, #7c3aed)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  flexShrink: 0,
-  fontWeight: "900"
+const securityNotice = {
+  background: "rgba(53,208,195,.10)",
+  border: "1px solid rgba(53,208,195,.26)",
+  color: "#cbd5e1",
+  borderRadius: "16px",
+  padding: "14px"
 };
 
-const chatHeaderSmall = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: "18px",
-  color: "white"
-};
-
-const chatInputRow = {
-  display: "flex",
-  gap: "10px",
-  marginTop: "16px"
-};
-
-const chatInput = {
-  flex: 1,
-  background: "rgba(2,6,23,0.60)",
-  border: "1px solid rgba(148,163,184,0.22)",
-  color: "white",
-  outline: "none",
-  padding: "13px",
-  borderRadius: "13px"
-};
-
-const sendButton = {
-  width: "48px",
-  borderRadius: "13px",
-  border: "none",
-  background: "#35d0c3",
-  color: "#020617",
-  cursor: "pointer",
-  fontWeight: "900"
-};
-
-const aiPanel = {
-  ...panel,
-  border: "1px solid rgba(34,197,94,0.25)"
-};
-
-const successBadge = {
-  background: "rgba(34,197,94,0.18)",
-  color: "#86efac",
-  padding: "8px 11px",
-  borderRadius: "999px",
-  fontWeight: "900",
-  fontSize: "12px"
-};
-
-const aiRiskCircle = {
-  width: "96px",
-  height: "96px",
-  margin: "18px auto",
-  borderRadius: "50%",
-  background: "rgba(53,208,195,0.12)",
-  border: "1px solid rgba(53,208,195,0.24)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: "42px"
-};
-
-const riskTitle = {
-  color: "#35d0c3",
-  fontSize: "34px",
-  margin: "0 0 18px"
-};
-
-const checkList = {
+const actionRow = {
   display: "grid",
-  gap: "9px"
-};
-
-const check = {
-  display: "flex",
+  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
   gap: "10px",
-  color: "#cbd5e1"
-};
-
-const successRate = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  marginTop: "18px",
-  color: "#cbd5e1"
-};
-
-const track = {
-  height: "10px",
-  background: "rgba(148,163,184,0.18)",
-  borderRadius: "999px",
-  overflow: "hidden",
   marginTop: "10px"
 };
 
-const fill = {
-  height: "100%",
-  background: "linear-gradient(90deg, #35d0c3, #22c55e)"
+const outlineButton = {
+  textAlign: "center",
+  background: "rgba(15,23,42,.64)",
+  border: "1px solid rgba(148,163,184,.16)",
+  color: "white",
+  borderRadius: "13px",
+  padding: "12px",
+  fontWeight: "950",
+  cursor: "pointer"
 };
 
-const escrowAmount = {
-  color: "#facc15",
-  fontSize: "34px",
-  fontWeight: "900",
+const warningButton = {
+  ...outlineButton,
+  background: "rgba(245,158,11,.16)",
+  color: "#fde68a",
+  border: "1px solid rgba(245,158,11,.32)"
+};
+
+const successButton = {
+  ...outlineButton,
+  background: "rgba(34,197,94,.16)",
+  color: "#bbf7d0",
+  border: "1px solid rgba(34,197,94,.32)"
+};
+
+const detailPanel = {
+  background: "rgba(15,23,42,.72)",
+  border: "1px solid rgba(56,189,248,.16)",
+  borderRadius: "26px",
+  padding: "24px"
+};
+
+const productBox = {
+  display: "grid",
+  gridTemplateColumns: "86px 1fr",
+  gap: "16px",
+  alignItems: "center",
+  background: "rgba(2,6,23,.40)",
+  border: "1px solid rgba(148,163,184,.10)",
+  borderRadius: "18px",
+  padding: "14px",
   margin: "18px 0"
 };
 
-const escrowStatus = {
-  color: "#fde68a",
-  fontWeight: "900"
+const productIcon = {
+  width: "86px",
+  height: "86px",
+  borderRadius: "18px",
+  background: "linear-gradient(135deg, rgba(245,158,11,.18), rgba(139,92,246,.18))",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: "38px"
 };
 
-const dangerButton = {
-  ...outlineButton,
-  color: "#fca5a5",
-  border: "1px solid rgba(248,113,113,0.30)"
+const priceText = {
+  display: "block",
+  color: "#35d0c3",
+  marginTop: "6px"
+};
+
+const infoGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(2, 1fr)",
+  gap: "12px",
+  marginBottom: "16px"
+};
+
+const infoItem = {
+  background: "rgba(2,6,23,.35)",
+  border: "1px solid rgba(148,163,184,.10)",
+  borderRadius: "14px",
+  padding: "12px"
+};
+
+const sectionBox = {
+  background: "rgba(2,6,23,.35)",
+  border: "1px solid rgba(148,163,184,.10)",
+  borderRadius: "18px",
+  padding: "16px",
+  marginBottom: "16px"
+};
+
+const timelineBox = {
+  ...sectionBox
+};
+
+const progressItem = {
+  display: "flex",
+  alignItems: "center",
+  gap: "10px",
+  color: "#cbd5e1",
+  marginBottom: "8px"
+};
+
+const dotActive = {
+  width: "24px",
+  height: "24px",
+  borderRadius: "50%",
+  background: "#35d0c3",
+  color: "#020617",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontWeight: "950"
+};
+
+const dotInactive = {
+  ...dotActive,
+  background: "rgba(148,163,184,.18)",
+  color: "#94a3b8"
+};
+
+const chatPanel = {
+  background: "rgba(15,23,42,.72)",
+  border: "1px solid rgba(56,189,248,.16)",
+  borderRadius: "26px",
+  padding: "22px",
+  display: "flex",
+  flexDirection: "column",
+  minHeight: "680px"
+};
+
+const messagesBox = {
+  flex: 1,
+  display: "flex",
+  flexDirection: "column",
+  gap: "12px",
+  overflowY: "auto",
+  margin: "12px 0",
+  paddingRight: "4px"
+};
+
+const myMessageRow = {
+  display: "flex",
+  justifyContent: "flex-end"
+};
+
+const otherMessageRow = {
+  display: "flex",
+  justifyContent: "flex-start"
+};
+
+const myBubble = {
+  maxWidth: "80%",
+  background: "linear-gradient(135deg, #38bdf8, #8b5cf6)",
+  color: "white",
+  padding: "13px 15px",
+  borderRadius: "18px 18px 4px 18px"
+};
+
+const otherBubble = {
+  maxWidth: "80%",
+  background: "rgba(2,6,23,.55)",
+  border: "1px solid rgba(148,163,184,.12)",
+  color: "white",
+  padding: "13px 15px",
+  borderRadius: "18px 18px 18px 4px"
+};
+
+const messageForm = {
+  display: "grid",
+  gap: "10px"
+};
+
+const messageInput = {
+  width: "100%",
+  minHeight: "96px",
+  resize: "vertical",
+  outline: "none",
+  background: "rgba(2,6,23,.55)",
+  border: "1px solid rgba(148,163,184,.14)",
+  color: "white",
+  borderRadius: "16px",
+  padding: "14px",
+  lineHeight: "22px"
+};
+
+const processCard = {
+  display: "grid",
+  gap: "14px"
+};
+
+const processStep = {
+  display: "grid",
+  gridTemplateColumns: "42px 1fr",
+  gap: "12px",
+  alignItems: "start",
+  background: "rgba(2,6,23,.35)",
+  border: "1px solid rgba(148,163,184,.10)",
+  borderRadius: "16px",
+  padding: "14px"
 };
 
 export default Disputes;

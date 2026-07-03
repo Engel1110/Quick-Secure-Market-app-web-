@@ -1,576 +1,869 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import api from "../api/axios";
+import Sidebar from "../components/Sidebar";
+import Topbar from "../components/Topbar";
+import AiAssistant from "../components/AiAssistant";
 
 function CompleteProfile() {
-  const navigate = useNavigate();
+  const savedUser =
+    safeJson(localStorage.getItem("qsm_user")) ||
+    safeJson(localStorage.getItem("user")) ||
+    {};
 
-  const savedUser = JSON.parse(localStorage.getItem("qsm_user")) || {};
-
+  const [profile, setProfile] = useState(null);
   const [form, setForm] = useState({
     firstName: savedUser.firstName || "",
     lastName: savedUser.lastName || "",
     phone: savedUser.phone || "",
-    address: savedUser.address || "",
-    city: savedUser.city || "",
-    documentId: savedUser.documentId || ""
+    documentType: "CEDULA",
+    documentNumber: "",
+    address: "",
+    city: "",
+    province: "",
+    gender: "",
+    birthDate: ""
   });
 
-  const [files, setFiles] = useState({
-    documentFront: null,
-    documentBack: null,
-    selfie: null
-  });
+  const [frontFile, setFrontFile] = useState(null);
+  const [backFile, setBackFile] = useState(null);
+  const [selfieFile, setSelfieFile] = useState(null);
 
-  const [previews, setPreviews] = useState({
-    documentFront: "",
-    documentBack: "",
-    selfie: ""
-  });
+  const [frontPreview, setFrontPreview] = useState("");
+  const [backPreview, setBackPreview] = useState("");
+  const [selfiePreview, setSelfiePreview] = useState("");
 
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [checking, setChecking] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  const progress = calculateProgress(form, files);
+  useEffect(() => {
+    loadVerification();
+  }, []);
 
-  const handleChange = (e) => {
+  const completion = useMemo(() => {
+    const checks = [
+      Boolean(form.firstName.trim()),
+      Boolean(form.lastName.trim()),
+      Boolean(form.phone.trim()),
+      Boolean(form.documentNumber.trim()),
+      Boolean(form.address.trim()),
+      Boolean(form.city.trim()),
+      Boolean(form.province.trim()),
+      Boolean(form.gender),
+      Boolean(form.birthDate),
+      Boolean(frontFile || profile?.documentFrontUrl),
+      Boolean(backFile || profile?.documentBackUrl),
+      Boolean(selfieFile || profile?.selfieUrl)
+    ];
+
+    return Math.round((checks.filter(Boolean).length / checks.length) * 100);
+  }, [form, frontFile, backFile, selfieFile, profile]);
+
+  const status = profile?.status || "NOT_SUBMITTED";
+
+  const loadVerification = async () => {
+    try {
+      setLoading(true);
+      setError("");
+      setMessage("");
+
+      const response = await api.get("/verification/me");
+      const data = response.data.verification || response.data.data || null;
+
+      if (data) {
+        setProfile(data);
+        setForm((prev) => ({
+          ...prev,
+          firstName: data.firstName || prev.firstName,
+          lastName: data.lastName || prev.lastName,
+          phone: data.phone || prev.phone,
+          documentType: data.documentType || "CEDULA",
+          documentNumber: data.documentNumber || "",
+          address: data.address || "",
+          city: data.city || "",
+          province: data.province || "",
+          gender: data.gender || "",
+          birthDate: data.birthDate ? String(data.birthDate).slice(0, 10) : ""
+        }));
+      }
+    } catch (err) {
+      setError(
+        err?.response?.data?.message ||
+          "No se pudo cargar tu verificación. Verifica GET /verification/me."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleChange = (event) => {
     setForm({
       ...form,
-      [e.target.name]: e.target.value
+      [event.target.name]: event.target.value
     });
   };
 
-  const handleFileChange = (e) => {
-    const { name, files: selectedFiles } = e.target;
-    const file = selectedFiles[0];
-
+  const handleFile = (event, type) => {
+    const file = event.target.files?.[0];
     if (!file) return;
 
-    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+    const preview = URL.createObjectURL(file);
 
-    if (!allowedTypes.includes(file.type)) {
-      setError("Solo se permiten imágenes JPG, PNG o WEBP.");
-      return;
+    if (type === "front") {
+      setFrontFile(file);
+      setFrontPreview(preview);
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      setError("La imagen no puede superar los 5 MB.");
-      return;
+    if (type === "back") {
+      setBackFile(file);
+      setBackPreview(preview);
     }
 
-    setError("");
-
-    setFiles({
-      ...files,
-      [name]: file
-    });
-
-    setPreviews({
-      ...previews,
-      [name]: URL.createObjectURL(file)
-    });
+    if (type === "selfie") {
+      setSelfieFile(file);
+      setSelfiePreview(preview);
+    }
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    setMessage("");
-    setError("");
+  const submitVerification = async (event) => {
+    event.preventDefault();
 
-    if (progress < 100) {
-      setError("Completa todos los campos y carga las tres imágenes requeridas.");
+    if (completion < 80) {
+      setError("Completa la mayor cantidad de campos y sube documento frontal, reverso y selfie.");
       return;
     }
 
-    const updatedUser = {
-      ...savedUser,
-      ...form,
-      documentFront: files.documentFront?.name || "",
-      documentBack: files.documentBack?.name || "",
-      selfie: files.selfie?.name || "",
-      kycStatus: "PENDING_REVIEW",
-      status: "PENDING",
-      sellerEnabled: false,
-      buyerEnabled: true,
-      verificationSubmittedAt: new Date().toISOString()
-    };
+    try {
+      setSubmitting(true);
+      setError("");
+      setMessage("");
 
-    localStorage.setItem("qsm_user", JSON.stringify(updatedUser));
+      const formData = new FormData();
 
-    setMessage("Perfil enviado a revisión QSM correctamente.");
+      Object.entries(form).forEach(([key, value]) => {
+        formData.append(key, value);
+      });
 
-    setTimeout(() => {
-      navigate("/dashboard");
-    }, 1600);
+      if (frontFile) formData.append("documentFront", frontFile);
+      if (backFile) formData.append("documentBack", backFile);
+      if (selfieFile) formData.append("selfie", selfieFile);
+
+      const response = await api.post("/verification/submit", formData, {
+        headers: { "Content-Type": "multipart/form-data" }
+      });
+
+      const verification = response.data.verification || response.data.data || response.data;
+
+      setProfile(verification);
+      setMessage("Verificación enviada correctamente. QSM revisará tu identidad.");
+      await loadVerification();
+    } catch (err) {
+      setError(
+        err?.response?.data?.message ||
+          "No se pudo enviar la verificación. Verifica POST /verification/submit."
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const runDailyCheck = async () => {
+    try {
+      setChecking(true);
+      setError("");
+      setMessage("");
+
+      const response = await api.post("/verification/daily-check", {});
+      const verification = response.data.verification || response.data.data || response.data;
+
+      setProfile(verification);
+      setMessage("Validación diaria registrada correctamente.");
+    } catch (err) {
+      setError(
+        err?.response?.data?.message ||
+          "No se pudo completar la validación diaria. Verifica POST /verification/daily-check."
+      );
+    } finally {
+      setChecking(false);
+    }
   };
 
   return (
     <div style={page}>
-      <style>
-        {`
-          * { box-sizing: border-box; }
+      <style>{`
+        * { box-sizing: border-box; }
+        html, body, #root {
+          margin: 0;
+          padding: 0;
+          width: 100%;
+          min-height: 100%;
+          background: #020617;
+          font-family: Inter, "Plus Jakarta Sans", system-ui, sans-serif;
+          overflow-x: hidden;
+        }
+        input, select, textarea, button, a { font-family: inherit; }
+        button, a { transition: all .25s ease; }
+        button:hover, a:hover { transform: translateY(-2px); }
+        @keyframes fadeUp {
+          from { opacity: 0; transform: translateY(18px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @media (max-width: 1240px) {
+          .verification-page { grid-template-columns: 1fr !important; }
+          .sidebar-wrapper { display: none !important; }
+          .verification-layout,
+          .stats-grid,
+          .two-columns,
+          .file-grid { grid-template-columns: 1fr !important; }
+          .hero-row { flex-direction: column !important; align-items: flex-start !important; }
+        }
+        @media (max-width: 760px) {
+          .main-content { padding: 18px !important; }
+          .action-row { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
 
-          html, body, #root {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            min-height: 100%;
-            background: #020617;
-            font-family: 'Inter', system-ui, sans-serif;
-          }
+      <div className="verification-page" style={layout}>
+        <div className="sidebar-wrapper">
+          <Sidebar />
+        </div>
 
-          @keyframes fadeUp {
-            from { opacity: 0; transform: translateY(24px); }
-            to { opacity: 1; transform: translateY(0); }
-          }
+        <main className="main-content" style={main}>
+          <Topbar />
 
-          @keyframes slowZoom {
-            from { transform: scale(1); }
-            to { transform: scale(1.08); }
-          }
-        `}
-      </style>
-
-      <div style={background}></div>
-      <div style={overlay}></div>
-
-      <div style={container}>
-        <div style={leftPanel}>
-          <Link to="/" style={brand}>
-            <span style={brandIcon}>🛡</span>
+          <section className="hero-row" style={hero}>
             <div>
-              <strong>QSM</strong>
-              <small>Quick Secure Market</small>
-            </div>
-          </Link>
-
-          <p style={eyebrow}>VERIFICACIÓN QSM</p>
-
-          <h1 style={title}>
-            Confirma tu identidad para activar la protección completa.
-          </h1>
-
-          <p style={description}>
-            Este proceso ayuda a prevenir perfiles falsos, cuentas duplicadas y
-            publicaciones sospechosas dentro de Quick Secure Market.
-          </p>
-
-          <div style={progressCard}>
-            <div style={progressTop}>
-              <strong>Progreso de verificación</strong>
-              <span>{progress}%</span>
+              <p style={label}>VERIFICACIÓN QSM</p>
+              <h1 style={title}>Verifica tu identidad</h1>
+              <p style={subtitle}>
+                Completa tu documento, dirección y selfie para aumentar tu confianza, publicar productos y comprar con mayor seguridad.
+              </p>
             </div>
 
-            <div style={progressTrack}>
-              <div style={{ ...progressFill, width: `${progress}%` }}></div>
+            <div style={heroBadge}>
+              <span>🛡️</span>
+              <div>
+                <strong>{formatStatus(status)}</strong>
+                <p>Nivel de avance {completion}%</p>
+              </div>
             </div>
+          </section>
 
-            <div style={checkList}>
-              <span>{form.firstName && form.lastName ? "✅" : "⬜"} Nombre real</span>
-              <span>{form.phone ? "✅" : "⬜"} Teléfono</span>
-              <span>{form.address ? "✅" : "⬜"} Dirección</span>
-              <span>{form.documentId ? "✅" : "⬜"} Documento</span>
-              <span>{files.documentFront ? "✅" : "⬜"} Frente documento</span>
-              <span>{files.documentBack ? "✅" : "⬜"} Reverso documento</span>
-              <span>{files.selfie ? "✅" : "⬜"} Selfie</span>
+          <section className="stats-grid" style={statsGrid}>
+            <StatCard icon="🧾" title="Estado" value={formatStatus(status)} />
+            <StatCard icon="⭐" title="Avance" value={`${completion}%`} />
+            <StatCard icon="🔐" title="Nivel QSM" value={profile?.trustScore || 50} />
+            <StatCard icon="📅" title="Última validación" value={formatDate(profile?.lastDailyCheck)} />
+          </section>
+
+          {message && <div style={successBox}>{message}</div>}
+          {error && <div style={errorBox}>{error}</div>}
+
+          {loading ? (
+            <div style={centerCard}>
+              <h2>Cargando verificación...</h2>
+              <p>QSM está consultando tu estado de identidad.</p>
             </div>
-          </div>
+          ) : (
+            <section className="verification-layout" style={verificationLayout}>
+              <form onSubmit={submitVerification} style={formPanel}>
+                <div style={sectionHeader}>
+                  <p style={label}>DATOS DEL USUARIO</p>
+                  <h2>Información personal</h2>
+                  <p style={muted}>
+                    Estos datos ayudan a QSM a validar que cada comprador y vendedor sea una persona real.
+                  </p>
+                </div>
 
-          <div style={noticeBox}>
-            🔒 Un documento solo puede estar vinculado a una cuenta QSM.
-            Esta regla ayuda a evitar duplicidad de identidades.
-          </div>
-        </div>
+                <div className="two-columns" style={twoColumns}>
+                  <Field label="Nombre">
+                    <input name="firstName" value={form.firstName} onChange={handleChange} style={input} />
+                  </Field>
 
-        <div style={formCard}>
-          <div style={cardHeader}>
-            <p style={eyebrow}>KYC / IDENTIDAD</p>
-            <h2>Completar perfil</h2>
-            <p>
-              Carga tus datos reales y las imágenes requeridas para enviar tu cuenta a revisión.
-            </p>
-          </div>
+                  <Field label="Apellido">
+                    <input name="lastName" value={form.lastName} onChange={handleChange} style={input} />
+                  </Field>
+                </div>
 
-          <form onSubmit={handleSubmit}>
-            <div style={twoColumns}>
-              <input
-                name="firstName"
-                placeholder="Nombre real"
-                value={form.firstName}
-                onChange={handleChange}
-                required
-                style={input}
-              />
+                <div className="two-columns" style={twoColumns}>
+                  <Field label="Teléfono">
+                    <input name="phone" value={form.phone} onChange={handleChange} placeholder="809-000-0000" style={input} />
+                  </Field>
 
-              <input
-                name="lastName"
-                placeholder="Apellido"
-                value={form.lastName}
-                onChange={handleChange}
-                required
-                style={input}
-              />
-            </div>
+                  <Field label="Género">
+                    <select name="gender" value={form.gender} onChange={handleChange} style={input}>
+                      <option value="">Seleccionar</option>
+                      <option value="MASCULINO">Masculino</option>
+                      <option value="FEMENINO">Femenino</option>
+                      <option value="OTRO">Otro</option>
+                    </select>
+                  </Field>
+                </div>
 
-            <div style={twoColumns}>
-              <input
-                name="phone"
-                placeholder="Teléfono"
-                value={form.phone}
-                onChange={handleChange}
-                required
-                style={input}
-              />
+                <div className="two-columns" style={twoColumns}>
+                  <Field label="Tipo de documento">
+                    <select name="documentType" value={form.documentType} onChange={handleChange} style={input}>
+                      <option value="CEDULA">Cédula</option>
+                      <option value="PASAPORTE">Pasaporte</option>
+                      <option value="LICENCIA">Licencia</option>
+                    </select>
+                  </Field>
 
-              <input
-                name="city"
-                placeholder="Ciudad"
-                value={form.city}
-                onChange={handleChange}
-                required
-                style={input}
-              />
-            </div>
+                  <Field label="Número de documento">
+                    <input name="documentNumber" value={form.documentNumber} onChange={handleChange} placeholder="000-0000000-0" style={input} />
+                  </Field>
+                </div>
 
-            <input
-              name="address"
-              placeholder="Dirección completa"
-              value={form.address}
-              onChange={handleChange}
-              required
-              style={input}
-            />
+                <div className="two-columns" style={twoColumns}>
+                  <Field label="Fecha de nacimiento">
+                    <input name="birthDate" type="date" value={form.birthDate} onChange={handleChange} style={input} />
+                  </Field>
 
-            <input
-              name="documentId"
-              placeholder="Cédula o documento"
-              value={form.documentId}
-              onChange={handleChange}
-              required
-              style={input}
-            />
+                  <Field label="Provincia">
+                    <input name="province" value={form.province} onChange={handleChange} placeholder="Distrito Nacional" style={input} />
+                  </Field>
+                </div>
 
-            <div style={uploadGrid}>
-              <FileUpload
-                label="Frente del documento"
-                name="documentFront"
-                preview={previews.documentFront}
-                onChange={handleFileChange}
-              />
+                <div className="two-columns" style={twoColumns}>
+                  <Field label="Ciudad">
+                    <input name="city" value={form.city} onChange={handleChange} placeholder="Santo Domingo" style={input} />
+                  </Field>
 
-              <FileUpload
-                label="Reverso del documento"
-                name="documentBack"
-                preview={previews.documentBack}
-                onChange={handleFileChange}
-              />
+                  <Field label="Dirección">
+                    <input name="address" value={form.address} onChange={handleChange} placeholder="Dirección general, no pública" style={input} />
+                  </Field>
+                </div>
 
-              <FileUpload
-                label="Selfie de verificación"
-                name="selfie"
-                preview={previews.selfie}
-                onChange={handleFileChange}
-              />
-            </div>
+                <div style={sectionHeader}>
+                  <p style={label}>DOCUMENTOS</p>
+                  <h2>Evidencia de identidad</h2>
+                </div>
 
-            {error && <p style={errorText}>{error}</p>}
-            {message && <p style={successText}>{message}</p>}
+                <div className="file-grid" style={fileGrid}>
+                  <UploadBox
+                    title="Documento frontal"
+                    description="Foto clara del frente"
+                    preview={frontPreview || toAbsoluteFile(profile?.documentFrontUrl)}
+                    onChange={(event) => handleFile(event, "front")}
+                  />
 
-            <button type="submit" style={submitButton}>
-              Enviar perfil a revisión QSM →
-            </button>
-          </form>
-        </div>
+                  <UploadBox
+                    title="Documento reverso"
+                    description="Foto clara del reverso"
+                    preview={backPreview || toAbsoluteFile(profile?.documentBackUrl)}
+                    onChange={(event) => handleFile(event, "back")}
+                  />
+
+                  <UploadBox
+                    title="Selfie de validación"
+                    description="Rostro visible y buena luz"
+                    preview={selfiePreview || toAbsoluteFile(profile?.selfieUrl)}
+                    onChange={(event) => handleFile(event, "selfie")}
+                  />
+                </div>
+
+                <div style={securityNotice}>
+                  <strong>🔒 Seguridad QSM</strong>
+                  <p>
+                    Tus documentos no se muestran públicamente. Solo se usan para validación, seguridad y prevención de fraude.
+                  </p>
+                </div>
+
+                <div className="action-row" style={actionRow}>
+                  <button type="button" onClick={loadVerification} style={outlineButton}>
+                    Actualizar
+                  </button>
+
+                  <button type="submit" disabled={submitting} style={primaryButton}>
+                    {submitting ? "Enviando..." : "Enviar verificación →"}
+                  </button>
+                </div>
+              </form>
+
+              <aside style={sidePanel}>
+                <section style={aiCard}>
+                  <h2>QSM AI recomienda</h2>
+                  <p>
+                    Completa tu identidad para desbloquear publicaciones, compras protegidas y mayor reputación.
+                  </p>
+
+                  <div style={scoreCircle}>
+                    <span>{completion}%</span>
+                  </div>
+
+                  <div style={scoreBar}>
+                    <div style={{ ...scoreFill, width: `${completion}%` }}></div>
+                  </div>
+
+                  <CheckLine done={Boolean(form.documentNumber)} text="Documento registrado" />
+                  <CheckLine done={Boolean(frontFile || profile?.documentFrontUrl)} text="Frente del documento" />
+                  <CheckLine done={Boolean(backFile || profile?.documentBackUrl)} text="Reverso del documento" />
+                  <CheckLine done={Boolean(selfieFile || profile?.selfieUrl)} text="Selfie de validación" />
+                  <CheckLine done={status === "APPROVED"} text="Aprobación administrativa" />
+                </section>
+
+                <section style={statusPanel}>
+                  <h2>Validación diaria</h2>
+                  <p style={muted}>
+                    Simula la validación diaria estilo Uber: una selfie o check rápido para confirmar actividad segura.
+                  </p>
+
+                  <button onClick={runDailyCheck} disabled={checking} style={primaryButtonFull}>
+                    {checking ? "Validando..." : "Realizar check diario"}
+                  </button>
+                </section>
+
+                <section style={statusPanel}>
+                  <h2>Beneficios al verificarte</h2>
+                  <Benefit text="Publicar productos con mayor confianza." />
+                  <Benefit text="Aumentar tu puntuación QSM." />
+                  <Benefit text="Reducir riesgo en compras y ventas." />
+                  <Benefit text="Resolver reclamos con mejor trazabilidad." />
+                </section>
+              </aside>
+            </section>
+          )}
+        </main>
       </div>
+
+      <AiAssistant pageContext="verification" />
     </div>
   );
 }
 
-function FileUpload({ label, name, preview, onChange }) {
+function Field({ label, children }) {
   return (
-    <div style={uploadBox}>
-      <div style={uploadHeader}>
-        <strong>{label}</strong>
-        <span>{preview ? "✅ Cargado" : "Pendiente"}</span>
+    <label style={fieldWrap}>
+      <span style={fieldLabel}>{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function UploadBox({ title, description, preview, onChange }) {
+  return (
+    <label style={uploadBox}>
+      <input type="file" accept="image/*" onChange={onChange} style={{ display: "none" }} />
+
+      {preview ? (
+        <img src={preview} alt={title} style={uploadPreview} />
+      ) : (
+        <div style={uploadPlaceholder}>
+          <span>📷</span>
+          <strong>{title}</strong>
+          <p>{description}</p>
+        </div>
+      )}
+    </label>
+  );
+}
+
+function StatCard({ icon, title, value }) {
+  return (
+    <div style={statCard}>
+      <div style={statIcon}>{icon}</div>
+      <div>
+        <span>{title}</span>
+        <strong>{value}</strong>
       </div>
-
-      <label style={dropZone}>
-        {preview ? (
-          <img src={preview} alt={label} style={previewImage} />
-        ) : (
-          <div style={emptyUpload}>
-            <div style={{ fontSize: "28px" }}>📷</div>
-            <p>Seleccionar imagen</p>
-            <small>JPG, PNG o WEBP · Máx. 5 MB</small>
-          </div>
-        )}
-
-        <input
-          type="file"
-          name={name}
-          accept="image/png,image/jpeg,image/webp"
-          onChange={onChange}
-          required
-          style={{ display: "none" }}
-        />
-      </label>
     </div>
   );
 }
 
-function calculateProgress(form, files) {
-  const checks = [
-    form.firstName,
-    form.lastName,
-    form.phone,
-    form.address,
-    form.city,
-    form.documentId,
-    files.documentFront,
-    files.documentBack,
-    files.selfie
-  ];
+function CheckLine({ done, text }) {
+  return (
+    <div style={checkLine}>
+      <span style={done ? checkDone : checkPending}>{done ? "✓" : "•"}</span>
+      <p>{text}</p>
+    </div>
+  );
+}
 
-  const completed = checks.filter(Boolean).length;
+function Benefit({ text }) {
+  return (
+    <div style={benefit}>
+      <span>✓</span>
+      <p>{text}</p>
+    </div>
+  );
+}
 
-  return Math.round((completed / checks.length) * 100);
+function safeJson(value) {
+  try {
+    return value ? JSON.parse(value) : null;
+  } catch {
+    return null;
+  }
+}
+
+function formatStatus(status) {
+  const map = {
+    NOT_SUBMITTED: "Pendiente",
+    PENDING: "En revisión",
+    APPROVED: "Verificado",
+    REJECTED: "Rechazado",
+    NEEDS_REVIEW: "Requiere revisión"
+  };
+
+  return map[status] || "Pendiente";
+}
+
+function formatDate(value) {
+  if (!value) return "Pendiente";
+
+  return new Date(value).toLocaleDateString("es-DO", {
+    year: "numeric",
+    month: "short",
+    day: "2-digit"
+  });
+}
+
+function toAbsoluteFile(path) {
+  if (!path) return "";
+  if (String(path).startsWith("http")) return path;
+  if (String(path).startsWith("/uploads")) return `http://localhost:5000${path}`;
+  if (String(path).startsWith("uploads")) return `http://localhost:5000/${path}`;
+  return `http://localhost:5000/uploads/verification/${path}`;
 }
 
 const page = {
   minHeight: "100vh",
   width: "100%",
-  position: "relative",
-  background: "#020617",
-  color: "white",
-  overflow: "hidden"
-};
-
-const background = {
-  position: "absolute",
-  inset: 0,
-  backgroundImage:
-    "url('https://images.unsplash.com/photo-1519608487953-e999c86e7455?auto=format&fit=crop&w=1920&q=90')",
-  backgroundSize: "cover",
-  backgroundPosition: "center",
-  animation: "slowZoom 18s ease-in-out forwards"
-};
-
-const overlay = {
-  position: "absolute",
-  inset: 0,
   background:
-    "linear-gradient(90deg, rgba(2,6,23,0.98), rgba(2,6,23,0.84), rgba(2,6,23,0.58)), radial-gradient(circle at 85% 25%, rgba(53,208,195,0.20), transparent 30%)"
+    "radial-gradient(circle at top right, rgba(53,208,195,.13), transparent 34%), radial-gradient(circle at 18% 15%, rgba(139,92,246,.10), transparent 28%), #020617",
+  color: "white"
 };
 
-const container = {
-  position: "relative",
-  zIndex: 2,
+const layout = {
+  width: "100%",
   minHeight: "100vh",
   display: "grid",
-  gridTemplateColumns: "0.9fr 1.1fr",
-  gap: "50px",
-  alignItems: "center",
-  padding: "60px 7vw",
-  animation: "fadeUp 0.8s ease"
+  gridTemplateColumns: "280px minmax(0, 1fr)",
+  overflowX: "hidden"
 };
 
-const leftPanel = {
-  maxWidth: "680px"
+const main = {
+  width: "100%",
+  minWidth: 0,
+  padding: "26px 34px 56px",
+  overflowX: "hidden"
 };
 
-const brand = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: "12px",
-  color: "white",
-  textDecoration: "none",
-  marginBottom: "70px"
-};
-
-const brandIcon = {
-  width: "48px",
-  height: "48px",
-  borderRadius: "16px",
-  border: "1px solid rgba(53,208,195,0.45)",
+const hero = {
   display: "flex",
+  justifyContent: "space-between",
   alignItems: "center",
-  justifyContent: "center",
-  color: "#35d0c3"
+  gap: "24px",
+  margin: "22px 0"
 };
 
-const eyebrow = {
+const label = {
   color: "#35d0c3",
   letterSpacing: "4px",
-  fontSize: "13px",
-  fontWeight: "900",
-  textTransform: "uppercase"
+  fontSize: "12px",
+  fontWeight: "950",
+  textTransform: "uppercase",
+  margin: 0
 };
 
 const title = {
-  fontSize: "clamp(42px, 4.8vw, 72px)",
-  lineHeight: "1.04",
-  letterSpacing: "-2.6px",
-  margin: "16px 0 24px",
-  fontWeight: "900"
+  fontSize: "clamp(40px, 3.6vw, 62px)",
+  lineHeight: "1",
+  margin: "10px 0",
+  letterSpacing: "-2px"
 };
 
-const description = {
+const subtitle = {
   color: "#cbd5e1",
-  fontSize: "19px",
-  lineHeight: "33px"
+  lineHeight: "29px",
+  maxWidth: "840px",
+  margin: 0
 };
 
-const progressCard = {
-  marginTop: "34px",
-  background: "rgba(15,23,42,0.58)",
-  border: "1px solid rgba(53,208,195,0.24)",
-  borderRadius: "24px",
-  padding: "24px",
-  backdropFilter: "blur(18px)"
-};
-
-const progressTop = {
+const heroBadge = {
   display: "flex",
-  justifyContent: "space-between",
-  marginBottom: "14px"
+  alignItems: "center",
+  gap: "14px",
+  minWidth: "270px",
+  background: "rgba(15,23,42,.72)",
+  border: "1px solid rgba(53,208,195,.24)",
+  borderRadius: "22px",
+  padding: "18px"
 };
 
-const progressTrack = {
-  width: "100%",
-  height: "10px",
-  background: "rgba(148,163,184,0.18)",
-  borderRadius: "999px",
-  overflow: "hidden",
-  marginBottom: "18px"
-};
-
-const progressFill = {
-  height: "100%",
-  background: "linear-gradient(90deg, #35d0c3, #7c3aed)"
-};
-
-const checkList = {
+const statsGrid = {
   display: "grid",
-  gridTemplateColumns: "1fr 1fr",
-  gap: "10px",
+  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+  gap: "16px",
+  marginBottom: "20px"
+};
+
+const statCard = {
+  display: "flex",
+  alignItems: "center",
+  gap: "14px",
+  background: "rgba(15,23,42,.72)",
+  border: "1px solid rgba(56,189,248,.15)",
+  borderRadius: "22px",
+  padding: "20px"
+};
+
+const statIcon = {
+  width: "52px",
+  height: "52px",
+  borderRadius: "17px",
+  background: "rgba(53,208,195,.14)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: "24px"
+};
+
+const verificationLayout = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1.25fr) minmax(360px, .75fr)",
+  gap: "20px"
+};
+
+const formPanel = {
+  background: "rgba(15,23,42,.72)",
+  border: "1px solid rgba(56,189,248,.16)",
+  borderRadius: "26px",
+  padding: "26px"
+};
+
+const sectionHeader = {
+  margin: "10px 0 18px"
+};
+
+const muted = {
   color: "#cbd5e1",
-  fontSize: "14px"
-};
-
-const noticeBox = {
-  marginTop: "18px",
-  background: "rgba(53,208,195,0.10)",
-  border: "1px solid rgba(53,208,195,0.25)",
-  color: "#cbd5e1",
-  padding: "16px",
-  borderRadius: "18px",
-  lineHeight: "24px"
-};
-
-const formCard = {
-  width: "100%",
-  background: "rgba(15,23,42,0.66)",
-  border: "1px solid rgba(53,208,195,0.28)",
-  borderRadius: "30px",
-  padding: "34px",
-  backdropFilter: "blur(24px)",
-  boxShadow: "0 40px 100px rgba(0,0,0,0.55)"
-};
-
-const cardHeader = {
-  marginBottom: "24px"
+  lineHeight: "25px"
 };
 
 const twoColumns = {
   display: "grid",
   gridTemplateColumns: "1fr 1fr",
-  gap: "12px"
+  gap: "14px",
+  marginBottom: "14px"
+};
+
+const fieldWrap = {
+  display: "grid",
+  gap: "8px"
+};
+
+const fieldLabel = {
+  fontWeight: "900",
+  color: "#e2e8f0"
 };
 
 const input = {
   width: "100%",
-  padding: "15px",
-  marginBottom: "13px",
-  borderRadius: "15px",
-  border: "1px solid rgba(148,163,184,0.22)",
-  background: "rgba(2,6,23,0.78)",
+  minHeight: "54px",
+  background: "rgba(2,6,23,.55)",
+  border: "1px solid rgba(148,163,184,.16)",
   color: "white",
-  outline: "none",
-  fontFamily: "'Inter', system-ui, sans-serif"
+  borderRadius: "15px",
+  padding: "0 14px",
+  outline: "none"
 };
 
-const uploadGrid = {
+const fileGrid = {
   display: "grid",
   gridTemplateColumns: "repeat(3, 1fr)",
-  gap: "14px",
-  marginTop: "8px"
+  gap: "14px"
 };
 
 const uploadBox = {
-  background: "rgba(2,6,23,0.58)",
-  border: "1px solid rgba(148,163,184,0.18)",
-  borderRadius: "20px",
-  padding: "12px"
+  minHeight: "230px",
+  borderRadius: "22px",
+  border: "1px dashed rgba(53,208,195,.38)",
+  background: "linear-gradient(145deg, rgba(53,208,195,.08), rgba(124,58,237,.08))",
+  overflow: "hidden",
+  cursor: "pointer",
+  display: "flex"
 };
 
-const uploadHeader = {
+const uploadPlaceholder = {
+  width: "100%",
+  minHeight: "230px",
   display: "flex",
-  justifyContent: "space-between",
-  gap: "8px",
-  fontSize: "13px",
-  marginBottom: "10px",
-  color: "#cbd5e1"
-};
-
-const dropZone = {
-  height: "170px",
-  borderRadius: "16px",
-  border: "1px dashed rgba(53,208,195,0.42)",
-  display: "flex",
+  flexDirection: "column",
   alignItems: "center",
   justifyContent: "center",
-  cursor: "pointer",
-  overflow: "hidden",
-  background: "rgba(15,23,42,0.42)"
-};
-
-const emptyUpload = {
   textAlign: "center",
-  color: "#94a3b8"
+  color: "#cbd5e1",
+  padding: "18px"
 };
 
-const previewImage = {
+const uploadPreview = {
   width: "100%",
-  height: "100%",
+  height: "230px",
   objectFit: "cover"
 };
 
-const submitButton = {
-  width: "100%",
-  marginTop: "18px",
-  padding: "16px",
+const securityNotice = {
+  background: "rgba(53,208,195,.10)",
+  border: "1px solid rgba(53,208,195,.26)",
+  color: "#cbd5e1",
   borderRadius: "16px",
+  padding: "14px",
+  marginTop: "18px"
+};
+
+const actionRow = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1.5fr",
+  gap: "10px",
+  marginTop: "18px"
+};
+
+const outlineButton = {
+  textAlign: "center",
+  background: "rgba(15,23,42,.64)",
+  border: "1px solid rgba(148,163,184,.16)",
+  color: "white",
+  borderRadius: "13px",
+  padding: "14px",
+  fontWeight: "950",
+  cursor: "pointer"
+};
+
+const primaryButton = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "linear-gradient(135deg, #35d0c3, #38bdf8, #8b5cf6)",
+  color: "white",
+  textDecoration: "none",
   border: "none",
+  padding: "14px 20px",
+  borderRadius: "14px",
+  fontWeight: "950",
+  cursor: "pointer",
+  boxShadow: "0 18px 54px rgba(53,208,195,.18)"
+};
+
+const primaryButtonFull = {
+  ...primaryButton,
+  width: "100%"
+};
+
+const sidePanel = {
+  display: "grid",
+  gap: "18px",
+  alignSelf: "start"
+};
+
+const aiCard = {
+  background: "linear-gradient(145deg, rgba(15,23,42,.86), rgba(30,41,59,.58))",
+  border: "1px solid rgba(53,208,195,.20)",
+  borderRadius: "26px",
+  padding: "22px"
+};
+
+const scoreCircle = {
+  width: "128px",
+  height: "128px",
+  borderRadius: "50%",
+  border: "10px solid rgba(53,208,195,.25)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  margin: "22px auto",
+  color: "#35d0c3",
+  fontSize: "30px",
+  fontWeight: "950"
+};
+
+const scoreBar = {
+  height: "10px",
+  background: "rgba(148,163,184,.16)",
+  borderRadius: "999px",
+  overflow: "hidden",
+  marginBottom: "18px"
+};
+
+const scoreFill = {
+  height: "100%",
+  background: "linear-gradient(90deg, #35d0c3, #38bdf8, #8b5cf6)",
+  borderRadius: "999px"
+};
+
+const checkLine = {
+  display: "flex",
+  gap: "10px",
+  alignItems: "center",
+  padding: "10px 0",
+  borderBottom: "1px solid rgba(148,163,184,.10)"
+};
+
+const checkDone = {
+  width: "26px",
+  height: "26px",
+  borderRadius: "50%",
   background: "#35d0c3",
   color: "#020617",
-  fontWeight: "900",
-  cursor: "pointer",
-  fontSize: "16px",
-  boxShadow: "0 20px 50px rgba(53,208,195,0.24)"
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontWeight: "950"
 };
 
-const errorText = {
-  color: "#fca5a5",
-  background: "rgba(127,29,29,0.22)",
-  border: "1px solid rgba(248,113,113,0.28)",
-  padding: "12px",
-  borderRadius: "14px"
+const checkPending = {
+  ...checkDone,
+  background: "rgba(148,163,184,.16)",
+  color: "#94a3b8"
 };
 
-const successText = {
-  color: "#86efac",
-  background: "rgba(6,78,59,0.28)",
-  border: "1px solid rgba(134,239,172,0.28)",
-  padding: "12px",
-  borderRadius: "14px"
+const statusPanel = {
+  background: "rgba(15,23,42,.72)",
+  border: "1px solid rgba(56,189,248,.16)",
+  borderRadius: "26px",
+  padding: "22px"
+};
+
+const benefit = {
+  display: "flex",
+  gap: "10px",
+  alignItems: "center",
+  background: "rgba(2,6,23,.35)",
+  border: "1px solid rgba(148,163,184,.10)",
+  borderRadius: "14px",
+  padding: "10px 12px",
+  marginTop: "10px"
+};
+
+const successBox = {
+  background: "rgba(34,197,94,.14)",
+  border: "1px solid rgba(34,197,94,.32)",
+  color: "#bbf7d0",
+  padding: "14px 18px",
+  borderRadius: "16px",
+  marginBottom: "16px",
+  fontWeight: "800"
+};
+
+const errorBox = {
+  background: "rgba(127,29,29,.24)",
+  border: "1px solid rgba(248,113,113,.30)",
+  color: "#fecaca",
+  padding: "14px 18px",
+  borderRadius: "16px",
+  marginBottom: "16px",
+  fontWeight: "800"
+};
+
+const centerCard = {
+  background: "rgba(15,23,42,.72)",
+  border: "1px solid rgba(56,189,248,.14)",
+  borderRadius: "24px",
+  padding: "44px",
+  textAlign: "center",
+  color: "#cbd5e1"
 };
 
 export default CompleteProfile;

@@ -6,12 +6,15 @@ import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import Profile from "./pages/Profile";
 import Marketplace from "./pages/Marketplace";
-import MarketingCenter from "./pages/MarketingCenter";
 import NewProduct from "./pages/NewProduct";
 import ProductDetails from "./pages/ProductDetails";
 import Checkout from "./pages/Checkout";
 import Orders from "./pages/Orders";
+import Sales from "./pages/Sales";
+import Favorites from "./pages/Favorites";
+import Messages from "./pages/Messages";
 import Disputes from "./pages/Disputes";
+import Settings from "./pages/Settings";
 import AdminPanel from "./pages/AdminPanel";
 import ProductHistory from "./pages/ProductHistory";
 import CompleteProfile from "./pages/CompleteProfile";
@@ -22,124 +25,29 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Landing */}
         <Route path="/" element={<LandingPage />} />
 
-        {/* Auth */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
-        {/* Dashboard */}
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+        <Route path="/complete-profile" element={<ProtectedRoute><CompleteProfile /></ProtectedRoute>} />
 
-        {/* Perfil */}
-        <Route
-          path="/profile"
-          element={
-            <ProtectedRoute>
-              <Profile />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="/marketplace" element={<ProtectedRoute><Marketplace /></ProtectedRoute>} />
+        <Route path="/new-product" element={<ProtectedRoute><NewProduct /></ProtectedRoute>} />
 
-        {/* Verificación QSM */}
-        <Route
-          path="/complete-profile"
-          element={
-            <ProtectedRoute>
-              <CompleteProfile />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="/product/:id" element={<ProtectedRoute><ProductDetails /></ProtectedRoute>} />
+        <Route path="/product/:id/history" element={<ProtectedRoute><ProductHistory /></ProtectedRoute>} />
+        <Route path="/checkout/:id" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
 
-        {/* Marketplace */}
-        <Route
-          path="/marketplace"
-          element={
-            <ProtectedRoute>
-              <Marketplace />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="/orders" element={<ProtectedRoute><Orders /></ProtectedRoute>} />
+        <Route path="/sales" element={<ProtectedRoute><Sales /></ProtectedRoute>} />
+        <Route path="/favorites" element={<ProtectedRoute><Favorites /></ProtectedRoute>} />
+        <Route path="/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
+        <Route path="/disputes" element={<ProtectedRoute><Disputes /></ProtectedRoute>} />
+        <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
 
-        {/* Marketing Center */}
-        <Route
-          path="/marketing"
-          element={
-            <ProtectedRoute>
-              <MarketingCenter />
-            </ProtectedRoute>
-          }
-        />
-
-        {/* Publicar producto */}
-        <Route
-          path="/new-product"
-          element={
-            <ProtectedRoute>
-              <NewProduct />
-            </ProtectedRoute>
-          }
-        />
-
-        {/* Detalle producto */}
-        <Route
-          path="/product/:id"
-          element={
-            <ProtectedRoute>
-              <ProductDetails />
-            </ProtectedRoute>
-          }
-        />
-
-        {/* Historial del producto */}
-        <Route
-          path="/product/:id/history"
-          element={
-            <ProtectedRoute>
-              <ProductHistory />
-            </ProtectedRoute>
-          }
-        />
-
-        {/* Checkout */}
-        <Route
-          path="/checkout/:id"
-          element={
-            <ProtectedRoute>
-              <Checkout />
-            </ProtectedRoute>
-          }
-        />
-
-        {/* Órdenes */}
-        <Route
-          path="/orders"
-          element={
-            <ProtectedRoute>
-              <Orders />
-            </ProtectedRoute>
-          }
-        />
-
-        {/* Disputas */}
-        <Route
-          path="/disputes"
-          element={
-            <ProtectedRoute>
-              <Disputes />
-            </ProtectedRoute>
-          }
-        />
-
-        {/* Admin */}
         <Route
           path="/admin"
           element={
@@ -149,7 +57,6 @@ function App() {
           }
         />
 
-        {/* Ruta no encontrada */}
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </BrowserRouter>

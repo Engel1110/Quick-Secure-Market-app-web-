@@ -1,90 +1,83 @@
-
-
 import { useEffect, useMemo, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import api from "../api/axios";
 import Sidebar from "../components/Sidebar";
 import Topbar from "../components/Topbar";
 import AiAssistant from "../components/AiAssistant";
 
-function Orders() {
+function Sales() {
   const navigate = useNavigate();
-  const location = useLocation();
 
-  const savedUser = safeJson(localStorage.getItem("qsm_user")) || safeJson(localStorage.getItem("user")) || {};
+  const savedUser =
+    safeJson(localStorage.getItem("qsm_user")) ||
+    safeJson(localStorage.getItem("user")) ||
+    {};
+
   const currentUserId = savedUser._id || savedUser.id || savedUser.userId || "";
 
-  const initialTab = new URLSearchParams(location.search).get("type") || "buy";
-
   const [orders, setOrders] = useState([]);
-  const [activeTab, setActiveTab] = useState(initialTab);
+  const [products, setProducts] = useState([]);
+  const [activeView, setActiveView] = useState("orders");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState("");
-  const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    loadOrders();
+    loadSalesData();
   }, []);
 
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const type = params.get("type");
-
-    if (type === "buy" || type === "sell" || type === "all") {
-      setActiveTab(type);
-    }
-  }, [location.search]);
-
-  const loadOrders = async () => {
+  const loadSalesData = async () => {
     try {
       setLoading(true);
       setError("");
       setMessage("");
 
-      const response = await api.get("/orders/my-orders");
+      const [ordersResponse, productsResponse] = await Promise.allSettled([
+        api.get("/orders/my-orders"),
+        api.get("/products/my-products")
+      ]);
 
-      const backendOrders =
-        response.data.orders ||
-        response.data.data ||
-        response.data.myOrders ||
-        [];
+      if (ordersResponse.status === "fulfilled") {
+        const backendOrders =
+          ordersResponse.value.data.orders ||
+          ordersResponse.value.data.data ||
+          ordersResponse.value.data.myOrders ||
+          [];
+        setOrders(Array.isArray(backendOrders) ? backendOrders : []);
+      }
 
-      setOrders(Array.isArray(backendOrders) ? backendOrders : []);
-    } catch (err) {
-      const savedOrder = localStorage.getItem("qsm_last_order");
+      if (productsResponse.status === "fulfilled") {
+        const backendProducts =
+          productsResponse.value.data.products ||
+          productsResponse.value.data.data ||
+          productsResponse.value.data.myProducts ||
+          [];
+        setProducts(Array.isArray(backendProducts) ? backendProducts : []);
+      }
 
-      if (savedOrder) {
-        setOrders([JSON.parse(savedOrder)]);
-        setError("Mostrando una orden local de demostración porque no se pudo conectar con el backend.");
-      } else {
+      if (
+        ordersResponse.status === "rejected" &&
+        productsResponse.status === "rejected"
+      ) {
         setError(
-          err?.response?.data?.message ||
-            "No se pudieron cargar tus órdenes. Verifica que hayas iniciado sesión y que el backend esté funcionando."
+          "No se pudo cargar Mis ventas. Verifica que existan los endpoints /orders/my-orders y /products/my-products."
         );
       }
+    } catch (err) {
+      setError(
+        err?.response?.data?.message ||
+          "No se pudo cargar Mis ventas. Verifica el backend."
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  const updateTab = (tab) => {
-    setActiveTab(tab);
-    navigate(`/orders?type=${tab}`);
-  };
-
-  const filteredOrders = useMemo(() => {
-    let result = [...orders];
-
-    if (activeTab === "buy") {
-      result = result.filter((order) => isBuyerOrder(order, currentUserId));
-    }
-
-    if (activeTab === "sell") {
-      result = result.filter((order) => isSellerOrder(order, currentUserId));
-    }
+  const sellerOrders = useMemo(() => {
+    let result = orders.filter((order) => isSellerOrder(order, currentUserId));
 
     if (statusFilter !== "ALL") {
       result = result.filter((order) => normalizeStatus(order.status) === statusFilter);
@@ -92,70 +85,88 @@ function Orders() {
 
     if (search.trim()) {
       const term = search.toLowerCase();
-
       result = result.filter((order) => {
         const product = order.product || {};
-        const seller = order.seller || {};
         const buyer = order.buyer || {};
-
-        return `${order._id || ""} ${order.orderCode || ""} ${product.title || ""} ${seller.firstName || ""} ${seller.lastName || ""} ${buyer.firstName || ""} ${buyer.lastName || ""}`
+        return `${order._id || ""} ${order.orderCode || ""} ${product.title || ""} ${buyer.firstName || ""} ${buyer.lastName || ""} ${buyer.email || ""}`
           .toLowerCase()
           .includes(term);
       });
     }
 
     return result;
-  }, [orders, activeTab, statusFilter, search, currentUserId]);
+  }, [orders, statusFilter, search, currentUserId]);
+
+  const sellerProducts = useMemo(() => {
+    let result = products.filter((product) => {
+      if (!currentUserId) return true;
+      const seller = product.seller || {};
+      const sellerId = seller._id || seller.id || product.sellerId;
+      return String(sellerId || "") === String(currentUserId);
+    });
+
+    if (search.trim()) {
+      const term = search.toLowerCase();
+      result = result.filter((product) =>
+        `${product.title || ""} ${product.category || ""} ${product.description || ""}`
+          .toLowerCase()
+          .includes(term)
+      );
+    }
+
+    return result;
+  }, [products, search, currentUserId]);
 
   const stats = useMemo(() => {
-    return {
-      total: orders.length,
-      purchases: orders.filter((order) => isBuyerOrder(order, currentUserId)).length,
-      sales: orders.filter((order) => isSellerOrder(order, currentUserId)).length,
-      active: orders.filter((order) =>
-        ["PENDING", "HELD", "PAID", "IN_STORAGE", "SHIPPED"].includes(normalizeStatus(order.status))
-      ).length
-    };
-  }, [orders, currentUserId]);
+    const totalSalesValue = sellerOrders.reduce(
+      (total, order) => total + Number(order.price || order.product?.price || 0),
+      0
+    );
 
-  const confirmDelivery = async (orderId) => {
+    return {
+      orders: sellerOrders.length,
+      products: sellerProducts.length,
+      active: sellerOrders.filter((order) =>
+        ["PENDING", "HELD", "PAID", "IN_STORAGE", "SHIPPED"].includes(normalizeStatus(order.status))
+      ).length,
+      total: totalSalesValue
+    };
+  }, [sellerOrders, sellerProducts]);
+
+  const markAsShipped = async (orderId) => {
     if (!orderId) return;
 
     try {
       setActionLoading(orderId);
-      setMessage("");
       setError("");
-
-      await api.patch(`/orders/${orderId}/confirm-delivery`);
-
-      setMessage("Entrega confirmada correctamente. QSM podrá liberar el pago según el flujo configurado.");
-      await loadOrders();
+      setMessage("");
+      await api.patch(`/orders/${orderId}/mark-shipped`);
+      setMessage("Orden marcada como enviada correctamente.");
+      await loadSalesData();
     } catch (err) {
       setError(
         err?.response?.data?.message ||
-          "No se pudo confirmar la entrega. Falta el endpoint: PATCH /orders/:id/confirm-delivery"
+          "No se pudo marcar como enviada. Falta el endpoint: PATCH /orders/:id/mark-shipped"
       );
     } finally {
       setActionLoading("");
     }
   };
 
-  const cancelOrder = async (orderId) => {
+  const prepareOrder = async (orderId) => {
     if (!orderId) return;
 
     try {
       setActionLoading(orderId);
-      setMessage("");
       setError("");
-
-      await api.patch(`/orders/${orderId}/cancel`);
-
-      setMessage("Orden cancelada correctamente.");
-      await loadOrders();
+      setMessage("");
+      await api.patch(`/orders/${orderId}/prepare`);
+      setMessage("Orden marcada como en preparación.");
+      await loadSalesData();
     } catch (err) {
       setError(
         err?.response?.data?.message ||
-          "No se pudo cancelar la orden. Falta el endpoint: PATCH /orders/:id/cancel"
+          "No se pudo actualizar la orden. Falta el endpoint: PATCH /orders/:id/prepare"
       );
     } finally {
       setActionLoading("");
@@ -166,7 +177,6 @@ function Orders() {
     <div style={page}>
       <style>{`
         * { box-sizing: border-box; }
-
         html, body, #root {
           margin: 0;
           padding: 0;
@@ -176,58 +186,26 @@ function Orders() {
           font-family: Inter, "Plus Jakarta Sans", system-ui, sans-serif;
           overflow-x: hidden;
         }
-
-        a, button, input, select {
-          font-family: inherit;
-        }
-
-        a, button {
-          transition: all .25s ease;
-        }
-
-        a:hover, button:hover {
-          transform: translateY(-2px);
-        }
-
+        a, button, input, select { font-family: inherit; }
+        a, button { transition: all .25s ease; }
+        a:hover, button:hover { transform: translateY(-2px); }
         @keyframes fadeUp {
           from { opacity: 0; transform: translateY(18px); }
           to { opacity: 1; transform: translateY(0); }
         }
-
         @media (max-width: 1200px) {
-          .orders-page {
-            grid-template-columns: 1fr !important;
-          }
-
-          .sidebar-wrapper {
-            display: none !important;
-          }
-
-          .orders-grid,
-          .stats-grid,
-          .filter-row {
-            grid-template-columns: 1fr !important;
-          }
-
-          .hero-row {
-            flex-direction: column !important;
-            align-items: flex-start !important;
-          }
+          .sales-page { grid-template-columns: 1fr !important; }
+          .sidebar-wrapper { display: none !important; }
+          .stats-grid, .sales-grid, .filters-row { grid-template-columns: 1fr !important; }
+          .hero-row { flex-direction: column !important; align-items: flex-start !important; }
         }
-
         @media (max-width: 760px) {
-          .main-content {
-            padding: 18px !important;
-          }
-
-          .tab-row,
-          .card-actions {
-            grid-template-columns: 1fr !important;
-          }
+          .main-content { padding: 18px !important; }
+          .view-tabs, .card-actions { grid-template-columns: 1fr !important; }
         }
       `}</style>
 
-      <div className="orders-page" style={layout}>
+      <div className="sales-page" style={layout}>
         <div className="sidebar-wrapper">
           <Sidebar />
         </div>
@@ -237,82 +215,70 @@ function Orders() {
 
           <section className="hero-row" style={hero}>
             <div>
-              <p style={label}>ÓRDENES QSM</p>
-              <h1 style={title}>Mis compras y ventas</h1>
+              <p style={label}>VENTAS QSM</p>
+              <h1 style={title}>Mis ventas</h1>
               <p style={subtitle}>
-                Administra tus órdenes protegidas por QSM, revisa el seguimiento, confirma entregas,
-                abre reclamos y contacta a la otra parte.
+                Administra productos vendidos, órdenes recibidas, entregas, compradores y estado del Pago Protegido.
               </p>
             </div>
 
             <div style={heroActions}>
-              <button onClick={loadOrders} style={ghostButton}>
-                Actualizar
-              </button>
-
-              <Link to="/marketplace" style={primaryButton}>
-                Ir al Marketplace →
-              </Link>
+              <button onClick={loadSalesData} style={ghostButton}>Actualizar</button>
+              <Link to="/new-product" style={primaryButton}>Publicar producto →</Link>
             </div>
           </section>
 
           <section className="stats-grid" style={statsGrid}>
-            <StatCard icon="📦" title="Total de órdenes" value={stats.total} />
-            <StatCard icon="🛒" title="Mis compras" value={stats.purchases} />
-            <StatCard icon="💰" title="Mis ventas" value={stats.sales} />
-            <StatCard icon="🛡" title="Órdenes activas" value={stats.active} />
+            <StatCard icon="💰" title="Ventas recibidas" value={stats.orders} />
+            <StatCard icon="📦" title="Productos publicados" value={stats.products} />
+            <StatCard icon="🛡" title="Ventas activas" value={stats.active} />
+            <StatCard icon="💵" title="Monto protegido" value={formatMoney(stats.total)} />
           </section>
 
           <section style={controlPanel}>
-            <div className="tab-row" style={tabRow}>
+            <div className="view-tabs" style={viewTabs}>
               <button
-                onClick={() => updateTab("buy")}
-                style={activeTab === "buy" ? activeTabButton : tabButton}
+                onClick={() => setActiveView("orders")}
+                style={activeView === "orders" ? activeTabButton : tabButton}
               >
-                🛒 Mis compras
+                🧾 Órdenes de venta
               </button>
 
               <button
-                onClick={() => updateTab("sell")}
-                style={activeTab === "sell" ? activeTabButton : tabButton}
+                onClick={() => setActiveView("products")}
+                style={activeView === "products" ? activeTabButton : tabButton}
               >
-                💰 Mis ventas
-              </button>
-
-              <button
-                onClick={() => updateTab("all")}
-                style={activeTab === "all" ? activeTabButton : tabButton}
-              >
-                📋 Todas
+                📦 Mis productos publicados
               </button>
             </div>
 
-            <div className="filter-row" style={filterRow}>
+            <div className="filters-row" style={filtersRow}>
               <div style={searchBox}>
                 <span>⌕</span>
                 <input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Buscar por producto, código, comprador o vendedor..."
+                  placeholder="Buscar por producto, comprador, código o categoría..."
                   style={searchInput}
                 />
               </div>
 
-              <select
-                value={statusFilter}
-                onChange={(event) => setStatusFilter(event.target.value)}
-                style={selectInput}
-              >
-                <option value="ALL">Todos los estados</option>
-                <option value="PENDING">Pendiente</option>
-                <option value="HELD">Pago retenido</option>
-                <option value="IN_STORAGE">En almacén / preparación</option>
-                <option value="SHIPPED">Enviado</option>
-                <option value="DELIVERED">Entregado</option>
-                <option value="RELEASED">Pago liberado</option>
-                <option value="CANCELLED">Cancelado</option>
-                <option value="REFUNDED">Reembolsado</option>
-              </select>
+              {activeView === "orders" && (
+                <select
+                  value={statusFilter}
+                  onChange={(event) => setStatusFilter(event.target.value)}
+                  style={selectInput}
+                >
+                  <option value="ALL">Todos los estados</option>
+                  <option value="PENDING">Pendiente</option>
+                  <option value="HELD">Pago retenido</option>
+                  <option value="IN_STORAGE">En preparación</option>
+                  <option value="SHIPPED">Enviado</option>
+                  <option value="DELIVERED">Entregado</option>
+                  <option value="RELEASED">Pago liberado</option>
+                  <option value="CANCELLED">Cancelado</option>
+                </select>
+              )}
             </div>
           </section>
 
@@ -321,166 +287,147 @@ function Orders() {
 
           {loading && (
             <div style={centerCard}>
-              <h2>Cargando órdenes...</h2>
-              <p>QSM está consultando tus compras y ventas protegidas.</p>
+              <h2>Cargando ventas...</h2>
+              <p>QSM está consultando tus productos vendidos y publicados.</p>
             </div>
           )}
 
-          {!loading && filteredOrders.length === 0 && (
+          {!loading && activeView === "orders" && sellerOrders.length === 0 && (
             <div style={centerCard}>
-              <h2>No hay órdenes para mostrar</h2>
-              <p>
-                Todavía no tienes órdenes en esta sección o los filtros no encontraron resultados.
-              </p>
-
-              <Link to="/marketplace" style={primaryButton}>
-                Explorar Marketplace
-              </Link>
+              <h2>Aún no tienes ventas registradas</h2>
+              <p>Cuando un comprador realice una compra, aparecerá aquí para que puedas gestionarla.</p>
+              <Link to="/new-product" style={primaryButton}>Publicar producto</Link>
             </div>
           )}
 
-          {!loading && filteredOrders.length > 0 && (
-            <section className="orders-grid" style={ordersGrid}>
-              {filteredOrders.map((order, index) => (
-                <OrderCard
+          {!loading && activeView === "products" && sellerProducts.length === 0 && (
+            <div style={centerCard}>
+              <h2>No tienes productos publicados</h2>
+              <p>Publica tu primer producto para iniciar tu historial como vendedor QSM.</p>
+              <Link to="/new-product" style={primaryButton}>Crear publicación</Link>
+            </div>
+          )}
+
+          {!loading && activeView === "orders" && sellerOrders.length > 0 && (
+            <section className="sales-grid" style={salesGrid}>
+              {sellerOrders.map((order, index) => (
+                <SaleOrderCard
                   key={order._id || order.id || index}
                   order={order}
                   actionLoading={actionLoading}
-                  onConfirmDelivery={confirmDelivery}
-                  onCancelOrder={cancelOrder}
+                  onPrepare={prepareOrder}
+                  onMarkAsShipped={markAsShipped}
                 />
+              ))}
+            </section>
+          )}
+
+          {!loading && activeView === "products" && sellerProducts.length > 0 && (
+            <section className="sales-grid" style={salesGrid}>
+              {sellerProducts.map((product, index) => (
+                <SellerProductCard key={product._id || index} product={product} />
               ))}
             </section>
           )}
         </main>
       </div>
 
-      <AiAssistant pageContext="orders" />
+      <AiAssistant pageContext="sales" />
     </div>
   );
 }
 
-function OrderCard({ order, actionLoading, onConfirmDelivery, onCancelOrder }) {
+function SaleOrderCard({ order, actionLoading, onPrepare, onMarkAsShipped }) {
   const product = order.product || {};
-  const seller = order.seller || {};
   const buyer = order.buyer || {};
   const orderId = order._id || order.id;
-
-  const orderCode =
-    order.orderCode ||
-    order.code ||
-    `QSM-${String(orderId || Date.now()).slice(-6).toUpperCase()}`;
-
   const status = normalizeStatus(order.status);
-  const paymentStatus = order.escrowStatus || order.paymentStatus || "HELD";
   const price = order.price || product.price || 0;
-  const image = getOrderImage(product);
+  const image = getProductImage(product);
 
-  const canConfirmDelivery = ["SHIPPED", "DELIVERED"].includes(status);
-  const canCancel = ["PENDING", "HELD", "PAID"].includes(status);
+  const canPrepare = ["PENDING", "HELD", "PAID"].includes(status);
+  const canShip = ["IN_STORAGE", "HELD", "PAID"].includes(status);
 
   return (
     <article style={card}>
       <div style={cardHeader}>
         <div>
-          <p style={smallLabel}>Orden protegida</p>
-          <h2 style={orderTitle}>#{orderCode}</h2>
+          <p style={smallLabel}>Venta protegida</p>
+          <h2 style={cardTitle}>#{order.orderCode || `QSM-${String(orderId || Date.now()).slice(-6).toUpperCase()}`}</h2>
         </div>
-
         <span style={statusBadge(status)}>{formatStatus(status)}</span>
       </div>
 
       <div style={productBox}>
-        <div style={productImageBox}>
-          {image ? (
-            <img src={image} alt={product.title || "Producto"} style={productImage} />
-          ) : (
-            <span>📦</span>
-          )}
+        <div style={imageBox}>
+          {image ? <img src={image} alt={product.title || "Producto"} style={imageStyle} /> : "📦"}
         </div>
 
-        <div style={{ minWidth: 0 }}>
-          <h3 style={productTitle}>{product.title || order.productTitle || "Producto comprado"}</h3>
-          <p style={muted}>ID producto: {product._id || order.productId || "Pendiente"}</p>
+        <div>
+          <h3 style={productTitle}>{product.title || order.productTitle || "Producto vendido"}</h3>
+          <p style={muted}>Comprador: {formatUser(buyer, "Comprador QSM")}</p>
           <strong style={priceText}>{formatMoney(price)}</strong>
         </div>
       </div>
 
       <div style={infoGrid}>
-        <Info title="Comprador" value={formatUser(buyer, "Comprador")} />
-        <Info title="Vendedor" value={formatUser(seller, "Vendedor")} />
-        <Info title="Pago" value={formatPayment(paymentStatus)} />
+        <Info title="Pago" value={formatPayment(order.escrowStatus || order.paymentStatus || "HELD")} />
+        <Info title="Entrega" value={order.deliveryMethod || "Pendiente"} />
         <Info title="PIN entrega" value={order.deliveryPin || order.deliveryCode || "Pendiente"} />
+        <Info title="Fecha" value={formatDate(order.createdAt)} />
       </div>
 
-      <div style={timelineBox}>
-        <h3>Seguimiento QSM</h3>
-
-        <ProgressItem active text="Compra creada" />
-        <ProgressItem
-          active={isStepActive(status, ["PENDING", "HELD", "PAID", "IN_STORAGE", "SHIPPED", "DELIVERED", "RELEASED", "COMPLETED"])}
-          text="Dinero retenido por QSM"
-        />
-        <ProgressItem
-          active={isStepActive(status, ["IN_STORAGE", "SHIPPED", "DELIVERED", "RELEASED", "COMPLETED"])}
-          text="Producto en preparación"
-        />
-        <ProgressItem
-          active={isStepActive(status, ["SHIPPED", "DELIVERED", "RELEASED", "COMPLETED"])}
-          text="Producto enviado"
-        />
-        <ProgressItem
-          active={isStepActive(status, ["DELIVERED", "RELEASED", "COMPLETED"])}
-          text="Entrega confirmada"
-        />
-        <ProgressItem
-          active={isStepActive(status, ["RELEASED", "COMPLETED"])}
-          text="Pago liberado al vendedor"
-        />
-      </div>
-
-      <div style={escrowBox}>
-        <strong>🛡 Pago Protegido QSM</strong>
-        <p>
-          El dinero queda retenido hasta que el comprador confirme que recibió el producto correctamente.
-        </p>
+      <div style={sellerNotice}>
+        <strong>🛡 Pago Protegido</strong>
+        <p>QSM mantiene el dinero retenido hasta que el comprador confirme la recepción o se resuelva cualquier reclamo.</p>
       </div>
 
       <div className="card-actions" style={actions}>
-        <Link to={`/orders/${orderId}`} style={primaryAction}>
-          Ver detalle
+        <Link to={`/orders/${orderId}`} style={primaryAction}>Ver detalle</Link>
+        <Link to={`/messages?buyerId=${buyer._id || buyer.id || ""}&orderId=${orderId || ""}`} style={outlineAction}>
+          Contactar comprador
         </Link>
-
-        <Link
-          to={`/messages?sellerId=${seller._id || seller.id || ""}&orderId=${orderId || ""}`}
-          style={outlineAction}
-        >
-          Contactar
-        </Link>
-
-        <Link
-          to={`/disputes/new?orderId=${orderId || ""}`}
-          state={{ orderId, productId: product._id }}
-          style={warningAction}
-        >
-          Abrir reclamo
-        </Link>
-
         <button
-          onClick={() => onConfirmDelivery(orderId)}
-          disabled={!canConfirmDelivery || actionLoading === orderId}
-          style={canConfirmDelivery ? successAction : disabledAction}
+          onClick={() => onPrepare(orderId)}
+          disabled={!canPrepare || actionLoading === orderId}
+          style={canPrepare ? warningAction : disabledAction}
         >
-          {actionLoading === orderId ? "Procesando..." : "Confirmar entrega"}
+          {actionLoading === orderId ? "Procesando..." : "Preparar"}
         </button>
-
         <button
-          onClick={() => onCancelOrder(orderId)}
-          disabled={!canCancel || actionLoading === orderId}
-          style={canCancel ? dangerAction : disabledAction}
+          onClick={() => onMarkAsShipped(orderId)}
+          disabled={!canShip || actionLoading === orderId}
+          style={canShip ? successAction : disabledAction}
         >
-          Cancelar
+          Marcar enviado
         </button>
+      </div>
+    </article>
+  );
+}
+
+function SellerProductCard({ product }) {
+  const image = getProductImage(product);
+
+  return (
+    <article style={card}>
+      <div style={productImageLarge}>
+        {image ? <img src={image} alt={product.title || "Producto"} style={largeImageStyle} /> : "📦"}
+        <span style={productStatus}>{product.status || "ACTIVE"}</span>
+      </div>
+
+      <h2 style={cardTitle}>{product.title || "Producto publicado"}</h2>
+      <strong style={priceText}>{formatMoney(product.price)}</strong>
+      <p style={muted}>{product.category || "Categoría"} · {product.location || "República Dominicana"}</p>
+
+      <div style={infoGrid}>
+        <Info title="Riesgo QSM" value={product.riskLevel || "LOW"} />
+        <Info title="Confianza" value={`${product.confidenceScore || 70}/100`} />
+      </div>
+
+      <div className="card-actions" style={productActions}>
+        <Link to={`/product/${product._id}`} style={primaryAction}>Ver publicación</Link>
+        <Link to={`/products/${product._id}/edit`} style={outlineAction}>Editar</Link>
       </div>
     </article>
   );
@@ -507,15 +454,6 @@ function Info({ title, value }) {
   );
 }
 
-function ProgressItem({ active, text }) {
-  return (
-    <div style={progressItem}>
-      <span style={active ? dotActive : dotInactive}>{active ? "✓" : "•"}</span>
-      <p>{text}</p>
-    </div>
-  );
-}
-
 function safeJson(value) {
   try {
     return value ? JSON.parse(value) : null;
@@ -524,43 +462,18 @@ function safeJson(value) {
   }
 }
 
-function isBuyerOrder(order, currentUserId) {
-  if (!currentUserId) return true;
-
-  const buyer = order.buyer || {};
-  const buyerId = buyer._id || buyer.id || order.buyerId;
-
-  return String(buyerId || "") === String(currentUserId);
-}
-
 function isSellerOrder(order, currentUserId) {
-  if (!currentUserId) return false;
-
+  if (!currentUserId) return true;
   const seller = order.seller || {};
   const sellerId = seller._id || seller.id || order.sellerId;
-
   return String(sellerId || "") === String(currentUserId);
 }
 
 function normalizeStatus(status) {
   const value = String(status || "PENDING").toUpperCase();
-
   if (value === "COMPLETED") return "RELEASED";
   if (value === "PAID") return "HELD";
-
   return value;
-}
-
-function isStepActive(status, validStatuses) {
-  return validStatuses.includes(normalizeStatus(status));
-}
-
-function formatUser(user, fallback) {
-  if (!user || typeof user !== "object") return fallback;
-
-  const name = `${user.firstName || ""} ${user.lastName || ""}`.trim();
-
-  return name || user.email || fallback;
 }
 
 function formatStatus(status) {
@@ -576,7 +489,6 @@ function formatStatus(status) {
     CANCELLED: "Cancelado",
     REFUNDED: "Reembolsado"
   };
-
   return map[status] || status || "Pendiente";
 }
 
@@ -588,8 +500,22 @@ function formatPayment(status) {
     REFUNDED: "Reembolsado",
     FAILED: "Fallido"
   };
-
   return map[status] || status || "Pendiente";
+}
+
+function formatUser(user, fallback) {
+  if (!user || typeof user !== "object") return fallback;
+  const name = `${user.firstName || ""} ${user.lastName || ""}`.trim();
+  return name || user.email || fallback;
+}
+
+function formatDate(value) {
+  if (!value) return "Pendiente";
+  return new Date(value).toLocaleDateString("es-DO", {
+    year: "numeric",
+    month: "short",
+    day: "numeric"
+  });
 }
 
 function formatMoney(value) {
@@ -600,7 +526,7 @@ function formatMoney(value) {
   }).format(Number(value || 0));
 }
 
-function getOrderImage(product) {
+function getProductImage(product) {
   if (Array.isArray(product.images) && product.images.length > 0) {
     const firstImage = product.images[0];
 
@@ -617,7 +543,6 @@ function getOrderImage(product) {
       return `http://localhost:5000/uploads/products/images/${cleanImage}`;
     }
   }
-
   return "";
 }
 
@@ -739,9 +664,9 @@ const controlPanel = {
   marginBottom: "18px"
 };
 
-const tabRow = {
+const viewTabs = {
   display: "grid",
-  gridTemplateColumns: "repeat(3, 1fr)",
+  gridTemplateColumns: "repeat(2, 1fr)",
   gap: "10px",
   marginBottom: "14px"
 };
@@ -763,7 +688,7 @@ const activeTabButton = {
   color: "white"
 };
 
-const filterRow = {
+const filtersRow = {
   display: "grid",
   gridTemplateColumns: "minmax(0, 1fr) 260px",
   gap: "12px"
@@ -827,7 +752,7 @@ const centerCard = {
   color: "#cbd5e1"
 };
 
-const ordersGrid = {
+const salesGrid = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(390px, 1fr))",
   gap: "20px"
@@ -858,14 +783,13 @@ const smallLabel = {
   margin: 0
 };
 
-const orderTitle = {
+const cardTitle = {
   margin: "6px 0 0",
   fontSize: "24px"
 };
 
 const statusBadge = (status) => {
   const normalized = normalizeStatus(status);
-
   const colors = {
     RELEASED: ["rgba(34,197,94,.16)", "#86efac", "rgba(34,197,94,.34)"],
     DELIVERED: ["rgba(34,197,94,.16)", "#86efac", "rgba(34,197,94,.34)"],
@@ -875,9 +799,7 @@ const statusBadge = (status) => {
     CANCELLED: ["rgba(239,68,68,.16)", "#fca5a5", "rgba(239,68,68,.34)"],
     REFUNDED: ["rgba(168,85,247,.16)", "#d8b4fe", "rgba(168,85,247,.34)"]
   };
-
   const selected = colors[normalized] || colors.PENDING;
-
   return {
     background: selected[0],
     color: selected[1],
@@ -901,7 +823,7 @@ const productBox = {
   marginBottom: "16px"
 };
 
-const productImageBox = {
+const imageBox = {
   width: "96px",
   height: "96px",
   borderRadius: "18px",
@@ -913,7 +835,7 @@ const productImageBox = {
   overflow: "hidden"
 };
 
-const productImage = {
+const imageStyle = {
   width: "100%",
   height: "100%",
   objectFit: "cover"
@@ -950,41 +872,7 @@ const infoItem = {
   padding: "12px"
 };
 
-const timelineBox = {
-  background: "rgba(2,6,23,.35)",
-  border: "1px solid rgba(148,163,184,.10)",
-  borderRadius: "18px",
-  padding: "16px",
-  marginBottom: "16px"
-};
-
-const progressItem = {
-  display: "flex",
-  alignItems: "center",
-  gap: "10px",
-  color: "#cbd5e1",
-  marginBottom: "8px"
-};
-
-const dotActive = {
-  width: "24px",
-  height: "24px",
-  borderRadius: "50%",
-  background: "#35d0c3",
-  color: "#020617",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontWeight: "950"
-};
-
-const dotInactive = {
-  ...dotActive,
-  background: "rgba(148,163,184,.18)",
-  color: "#94a3b8"
-};
-
-const escrowBox = {
+const sellerNotice = {
   background: "rgba(53,208,195,.10)",
   border: "1px solid rgba(53,208,195,.26)",
   color: "#cbd5e1",
@@ -995,8 +883,15 @@ const escrowBox = {
 
 const actions = {
   display: "grid",
-  gridTemplateColumns: "repeat(5, minmax(0, 1fr))",
+  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
   gap: "10px"
+};
+
+const productActions = {
+  display: "grid",
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+  gap: "10px",
+  marginTop: "16px"
 };
 
 const primaryAction = {
@@ -1032,13 +927,6 @@ const successAction = {
   border: "1px solid rgba(34,197,94,.32)"
 };
 
-const dangerAction = {
-  ...primaryAction,
-  background: "rgba(239,68,68,.16)",
-  color: "#fecaca",
-  border: "1px solid rgba(239,68,68,.32)"
-};
-
 const disabledAction = {
   ...primaryAction,
   background: "rgba(148,163,184,.10)",
@@ -1048,4 +936,36 @@ const disabledAction = {
   opacity: 0.75
 };
 
-export default Orders;
+const productImageLarge = {
+  height: "240px",
+  borderRadius: "20px",
+  background: "linear-gradient(135deg, rgba(56,189,248,.16), rgba(139,92,246,.16))",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: "52px",
+  overflow: "hidden",
+  position: "relative",
+  marginBottom: "16px"
+};
+
+const largeImageStyle = {
+  width: "100%",
+  height: "100%",
+  objectFit: "cover"
+};
+
+const productStatus = {
+  position: "absolute",
+  top: "14px",
+  right: "14px",
+  background: "rgba(53,208,195,.18)",
+  border: "1px solid rgba(53,208,195,.35)",
+  color: "#67fff1",
+  borderRadius: "999px",
+  padding: "7px 10px",
+  fontSize: "12px",
+  fontWeight: "900"
+};
+
+export default Sales;
