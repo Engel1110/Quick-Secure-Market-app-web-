@@ -50,7 +50,11 @@ function Marketplace() {
       setError("");
 
       const data = await getProducts();
-      setProducts(Array.isArray(data?.products) ? data.products : []);
+      const backendProducts = Array.isArray(data?.products) ? data.products : [];
+
+      // Solo mostramos productos reales publicados por usuarios QSM.
+      // Se ocultan demos, publicaciones desactivadas, vendidas o sin vendedor real.
+      setProducts(backendProducts.filter(isRealQsmProduct));
     } catch (err) {
       setError(
         err?.response?.data?.message ||
@@ -83,7 +87,7 @@ function Marketplace() {
   };
 
   const filteredProducts = useMemo(() => {
-    let result = [...products];
+    let result = [...products].filter(isRealQsmProduct);
 
     result = result.filter((product) => {
       const category = product.category || "";
@@ -1012,5 +1016,36 @@ const loadMoreButton = {
   fontWeight: "800",
   cursor: "pointer"
 };
+
+
+function isRealQsmProduct(product) {
+  if (!product || typeof product !== "object") return false;
+
+  const status = String(product.status || "ACTIVE").toUpperCase();
+
+  /*
+    Solo ocultamos estados que realmente no deben mostrarse.
+    IMPORTANTE:
+    - No ocultamos por nombre del vendedor.
+    - No ocultamos por palabra demo/test en título.
+    - No exigimos sellerId obligatorio, porque algunos productos recién creados
+      pueden venir con seller poblado de forma diferente según el backend.
+  */
+  const blockedStatuses = [
+    "DISABLED",
+    "DELETED",
+    "REMOVED",
+    "BLOCKED",
+    "FRAUD"
+  ];
+
+  if (blockedStatuses.includes(status)) return false;
+
+  const productId = product._id || product.id;
+  if (!productId) return false;
+
+  return true;
+}
+
 
 export default Marketplace;

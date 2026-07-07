@@ -12,7 +12,8 @@ const {
   activateUser,
   disableProduct,
   getAuditLogs,
-  updateUserRole
+  updateUserRole,
+  resetUserPassword
 } = require("../controllers/admin.controller");
 
 router.get(
@@ -48,6 +49,13 @@ router.put(
   authMiddleware,
   requireRole("SENIOR_ADMIN"),
   updateUserRole
+);
+
+router.put(
+  "/users/:userId/reset-password",
+  authMiddleware,
+  requireRole("SENIOR_ADMIN"),
+  resetUserPassword
 );
 
 router.put(

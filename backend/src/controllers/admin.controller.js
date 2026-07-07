@@ -1,3 +1,5 @@
+const bcrypt = require("bcryptjs");
+
 const User = require("../models/User");
 const Product = require("../models/Product");
 const Order = require("../models/Order");
@@ -87,9 +89,7 @@ const suspendUser = async (req, res) => {
     const user = await User.findById(userId);
 
     if (!user) {
-      return res.status(404).json({
-        message: "Usuario no encontrado"
-      });
+      return res.status(404).json({ message: "Usuario no encontrado" });
     }
 
     user.status = "SUSPENDED";
@@ -126,9 +126,7 @@ const activateUser = async (req, res) => {
     const user = await User.findById(userId);
 
     if (!user) {
-      return res.status(404).json({
-        message: "Usuario no encontrado"
-      });
+      return res.status(404).json({ message: "Usuario no encontrado" });
     }
 
     user.status = "ACTIVE";
@@ -165,12 +163,12 @@ const disableProduct = async (req, res) => {
     const product = await Product.findById(productId);
 
     if (!product) {
-      return res.status(404).json({
-        message: "Producto no encontrado"
-      });
+      return res.status(404).json({ message: "Producto no encontrado" });
     }
 
     product.status = "DISABLED";
+    product.disabledAt = new Date();
+    product.disabledBy = req.user?._id || req.user?.id;
 
     await product.save();
 
@@ -228,17 +226,13 @@ const updateUserRole = async (req, res) => {
     ];
 
     if (!role || !allowedRoles.includes(role)) {
-      return res.status(400).json({
-        message: "Rol no válido"
-      });
+      return res.status(400).json({ message: "Rol no válido" });
     }
 
     const user = await User.findById(userId);
 
     if (!user) {
-      return res.status(404).json({
-        message: "Usuario no encontrado"
-      });
+      return res.status(404).json({ message: "Usuario no encontrado" });
     }
 
     user.role = role;
@@ -264,6 +258,53 @@ const updateUserRole = async (req, res) => {
   }
 };
 
+const resetUserPassword = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { newPassword } = req.body;
+
+    if (!newPassword || newPassword.length < 8) {
+      return res.status(400).json({
+        message: "La contraseña debe tener mínimo 8 caracteres"
+      });
+    }
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: "Usuario no encontrado" });
+    }
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    await user.save();
+
+    await createAuditLog({
+      req,
+      action: "RESET_USER_PASSWORD",
+      targetType: "USER",
+      targetId: user._id.toString(),
+      description: `Contraseña reseteada para el usuario ${user.email}`
+    });
+
+    res.json({
+      message: "Contraseña reseteada correctamente",
+      user: {
+        _id: user._id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        role: user.role,
+        status: user.status
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: "Error reseteando contraseña",
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getAdminDashboard,
   getAllUsers,
@@ -272,5 +313,6 @@ module.exports = {
   activateUser,
   disableProduct,
   getAuditLogs,
-  updateUserRole
+  updateUserRole,
+  resetUserPassword
 };

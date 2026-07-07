@@ -1,63 +1,211 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import api from "../api/axios";
 import Sidebar from "../components/Sidebar";
+import Topbar from "../components/Topbar";
 import AiAssistant from "../components/AiAssistant";
-import { useAuth } from "../context/AuthContext";
 
 function Dashboard() {
   const navigate = useNavigate();
-  const { user } = useAuth();
 
-  const savedUser = safeJson(localStorage.getItem("qsm_user"));
-
-  const currentUser =
-    user ||
-    savedUser || {
+  const savedUser =
+    safeJson(localStorage.getItem("qsm_user")) ||
+    safeJson(localStorage.getItem("user")) ||
+    {
       firstName: "Usuario",
       lastName: "QSM",
       email: "usuario@qsm.com",
-      phone: "",
       trustScore: 50,
-      verificationStatus: "NOT_STARTED",
-      kycStatus: "NOT_STARTED",
+      verificationStatus: "NOT_SUBMITTED",
       isVerified: false
     };
 
+  const savedSettings =
+    safeJson(localStorage.getItem("qsm_settings")) || {
+      theme: localStorage.getItem("qsm_theme") || "dark",
+      accentColor: localStorage.getItem("qsm_accent") || "cyan",
+      language: localStorage.getItem("qsm_language") || "es",
+      density: "comfortable",
+      animations: true,
+      glassEffect: true,
+      compactSidebar: false
+    };
+
+  const [user, setUser] = useState(savedUser);
+  const [settings, setSettings] = useState(savedSettings);
   const [search, setSearch] = useState("");
+  const [stats, setStats] = useState({
+    products: 0,
+    purchases: 0,
+    sales: 0,
+    favorites: 0,
+    messages: 0,
+    disputes: 0,
+    protectedAmount: 0
+  });
+  const [recentProducts, setRecentProducts] = useState([]);
+  const [recentOrders, setRecentOrders] = useState([]);
+  const [recentDisputes, setRecentDisputes] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const trustScore = Number(currentUser.trustScore || 50);
-  const verificationStatus =
-    currentUser.verificationStatus || currentUser.kycStatus || "NOT_STARTED";
+  const theme = settings.theme || "dark";
+  const isLight = theme === "light";
+  const accent = getAccentColor(settings.accentColor || "cyan");
 
-  const isVerified = currentUser.isVerified || verificationStatus === "VERIFIED";
-  const firstName = currentUser.firstName || "Usuario";
-  const lastName = currentUser.lastName || "QSM";
-  const fullName = `${firstName} ${lastName}`.trim();
+  const isVerified =
+    user.isVerified ||
+    user.verificationStatus === "APPROVED" ||
+    user.verificationStatus === "VERIFIED" ||
+    user.kycStatus === "VERIFIED";
 
-  const dashboardStats = useMemo(
-    () => [
-      { icon: "👥", title: "Usuarios demo activos", value: 1, change: "+0%", color: "#38bdf8" },
-      { icon: "📦", title: "Productos publicados", value: 0, change: "+0%", color: "#22c55e" },
-      { icon: "🛍️", title: "Órdenes demo", value: 0, change: "+0%", color: "#a855f7" },
-      { icon: "🛡", title: "Transacciones protegidas", value: 0, change: "+0%", color: "#10b981" }
-    ],
-    []
-  );
+  const trustScore = Number(user.trustScore || 50);
 
-  const progressItems = [
-    {
-      title: "Información básica",
-      status: currentUser.firstName && currentUser.email ? "Completado" : "Pendiente",
-      done: Boolean(currentUser.firstName && currentUser.email)
-    },
-    { title: "Verificación de identidad", status: isVerified ? "Completado" : "Pendiente", done: isVerified },
-    { title: "Agregar método de pago", status: "Pendiente", done: false },
-    { title: "Publicar tu primer producto", status: "Pendiente", done: false }
-  ];
+  const profileCompletion = useMemo(() => {
+    const checks = [
+      Boolean(user.firstName),
+      Boolean(user.lastName),
+      Boolean(user.email),
+      Boolean(user.phone),
+      Boolean(user.city || user.province),
+      Boolean(user.profilePhoto || user.avatar),
+      isVerified
+    ];
+
+    return Math.round((checks.filter(Boolean).length / checks.length) * 100);
+  }, [user, isVerified]);
+
+  useEffect(() => {
+    loadDashboard();
+    loadSettings();
+  }, []);
+
+  useEffect(() => {
+    applySettings(settings);
+  }, [settings]);
+
+  const loadDashboard = async () => {
+    try {
+      setLoading(true);
+      setError("");
+
+      const [userRes, statsRes, productsRes, ordersRes, disputesRes] = await Promise.allSettled([
+        api.get("/users/me"),
+        api.get("/dashboard/summary"),
+        api.get("/products/my-products"),
+        api.get("/orders/my-orders"),
+        api.get("/disputes")
+      ]);
+
+      if (userRes.status === "fulfilled") {
+        const backendUser = userRes.value.data.user || userRes.value.data.data || userRes.value.data;
+        setUser(backendUser);
+        localStorage.setItem("qsm_user", JSON.stringify(backendUser));
+      }
+
+      if (statsRes.status === "fulfilled") {
+        const data = statsRes.value.data.stats || statsRes.value.data.data || statsRes.value.data;
+        setStats((prev) => ({
+          ...prev,
+          products: data.products || data.productsCount || prev.products,
+          purchases: data.purchases || data.purchasesCount || prev.purchases,
+          sales: data.sales || data.salesCount || prev.sales,
+          favorites: data.favorites || data.favoritesCount || prev.favorites,
+          messages: data.messages || data.messagesCount || prev.messages,
+          disputes: data.disputes || data.disputesCount || prev.disputes,
+          protectedAmount: data.protectedAmount || data.escrowAmount || prev.protectedAmount
+        }));
+      }
+
+      if (productsRes.status === "fulfilled") {
+        const products =
+          productsRes.value.data.products ||
+          productsRes.value.data.myProducts ||
+          productsRes.value.data.data ||
+          [];
+        setRecentProducts(Array.isArray(products) ? products.slice(0, 4) : []);
+        setStats((prev) => ({
+          ...prev,
+          products: Array.isArray(products) ? products.length : prev.products
+        }));
+      }
+
+      if (ordersRes.status === "fulfilled") {
+        const orders =
+          ordersRes.value.data.orders ||
+          ordersRes.value.data.myOrders ||
+          ordersRes.value.data.data ||
+          [];
+        const safeOrders = Array.isArray(orders) ? orders : [];
+        setRecentOrders(safeOrders.slice(0, 4));
+
+        const currentUserId =
+          savedUser._id || savedUser.id || user._id || user.id || "";
+
+        const purchases = currentUserId
+          ? safeOrders.filter((order) => {
+              const buyer = order.buyer || {};
+              const buyerId = buyer._id || buyer.id || order.buyerId;
+              return String(buyerId || "") === String(currentUserId);
+            }).length
+          : safeOrders.length;
+
+        const sales = currentUserId
+          ? safeOrders.filter((order) => {
+              const seller = order.seller || {};
+              const sellerId = seller._id || seller.id || order.sellerId;
+              return String(sellerId || "") === String(currentUserId);
+            }).length
+          : 0;
+
+        const protectedAmount = safeOrders.reduce(
+          (total, order) => total + Number(order.total || order.price || order.product?.price || 0),
+          0
+        );
+
+        setStats((prev) => ({
+          ...prev,
+          purchases,
+          sales,
+          protectedAmount
+        }));
+      }
+
+      if (disputesRes.status === "fulfilled") {
+        const disputes = disputesRes.value.data.disputes || disputesRes.value.data.data || [];
+        setRecentDisputes(Array.isArray(disputes) ? disputes.slice(0, 4) : []);
+        setStats((prev) => ({
+          ...prev,
+          disputes: Array.isArray(disputes) ? disputes.length : prev.disputes
+        }));
+      }
+    } catch (err) {
+      setError(
+        err?.response?.data?.message ||
+          "No se pudo cargar el inicio completo. Revisa el backend."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadSettings = async () => {
+    try {
+      const response = await api.get("/settings/me");
+      const backendSettings = response.data.settings || response.data.data || response.data;
+
+      if (backendSettings) {
+        const merged = { ...savedSettings, ...backendSettings };
+        setSettings(merged);
+        localStorage.setItem("qsm_settings", JSON.stringify(merged));
+      }
+    } catch {
+      setSettings(savedSettings);
+    }
+  };
 
   const handleSearch = (event) => {
     event.preventDefault();
-
     const value = search.trim();
 
     if (!value) {
@@ -69,7 +217,7 @@ function Dashboard() {
   };
 
   return (
-    <div style={page}>
+    <div style={page(isLight)}>
       <style>{`
         * { box-sizing: border-box; }
 
@@ -79,188 +227,240 @@ function Dashboard() {
           margin: 0;
           padding: 0;
           overflow-x: hidden;
-          background: #020617;
+          background: ${isLight ? "#f8fafc" : "#020617"};
           font-family: Inter, "Plus Jakarta Sans", system-ui, sans-serif;
         }
 
-        a, button, input { font-family: inherit; }
-        a, button { transition: all .25s ease; }
-        a:hover, button:hover { transform: translateY(-2px); }
+        input::placeholder {
+          color: ${isLight ? "#94a3b8" : "#64748b"};
+        }
 
-        @media (max-width: 1180px) {
-          .sidebar-wrapper { display: none !important; }
-          .dashboard-page { grid-template-columns: 1fr !important; }
-          .stats-grid, .hero-section, .middle-grid, .cta-panel, .topbar { grid-template-columns: 1fr !important; }
+        input, select, button, a {
+          font-family: inherit;
+        }
+
+        button, a {
+          transition: ${settings.animations === false ? "none" : "all .25s ease"};
+        }
+
+        button:hover, a:hover {
+          transform: ${settings.animations === false ? "none" : "translateY(-2px)"};
+        }
+
+        @keyframes fadeUp {
+          from { opacity: 0; transform: translateY(18px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (max-width: 1240px) {
+          .dashboard-page {
+            grid-template-columns: 1fr !important;
+          }
+
+          .sidebar-wrapper {
+            display: none !important;
+          }
+
+          .hero-grid,
+          .stats-grid,
+          .dashboard-grid,
+          .quick-grid {
+            grid-template-columns: 1fr !important;
+          }
         }
 
         @media (max-width: 760px) {
-          .main-content { padding: 18px !important; }
-          .hero-title { font-size: 42px !important; }
-          .progress-layout, .security-content { grid-template-columns: 1fr !important; }
+          .main-content {
+            padding: 18px !important;
+          }
+
+          .hero-actions {
+            grid-template-columns: 1fr !important;
+          }
         }
       `}</style>
 
-      <div className="dashboard-page" style={layout}>
+      <div className="dashboard-page" style={layout(settings)}>
         <div className="sidebar-wrapper">
           <Sidebar />
         </div>
 
-        <main className="main-content" style={main}>
-          <header className="topbar" style={topbar}>
-            <form onSubmit={handleSearch} style={searchBox}>
-              <span style={searchIcon}>⌕</span>
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Buscar productos, usuarios o reclamos..."
-                style={searchInput}
-              />
-              <button type="submit" style={searchKey}>Enter</button>
-            </form>
+        <main className="main-content" style={main(settings)}>
+          <Topbar />
 
-            <div style={topActions}>
-              <IconButton icon="🔔" badge="3" to="/notifications" />
-              <IconButton icon="💬" badge="2" to="/messages" />
-              <IconButton icon="✉️" badge="1" to="/messages" />
-
-              <Link to="/profile" style={userMini}>
-                <div style={miniAvatar}>{firstName.charAt(0).toUpperCase()}</div>
-                <div>
-                  <strong>{fullName}</strong>
-                  <p>{formatVerificationStatus(verificationStatus)}</p>
-                </div>
-              </Link>
-            </div>
-          </header>
-
-          <section className="hero-section" style={hero}>
-            <div>
-              <p style={welcomeTag}>Bienvenido de nuevo</p>
-              <h1 className="hero-title" style={heroTitle}>Hola, {firstName}! 👋</h1>
-              <p style={heroText}>
-                Este es el resumen de tu actividad en Quick Secure Market.
-                Desde aquí puedes completar tu perfil, publicar productos,
-                revisar órdenes y explorar el Marketplace.
+          <section className="hero-grid" style={heroGrid}>
+            <div style={heroCard(isLight, settings, accent)}>
+              <p style={label(accent)}>INICIO QSM</p>
+              <h1 style={title(isLight)}>
+                Hola, {user.firstName || "Usuario"}.
+              </h1>
+              <p style={subtitle(isLight)}>
+                Este es tu centro principal para comprar, vender, publicar productos, revisar mensajes, favoritos, reclamos y seguridad.
               </p>
-            </div>
 
-            <div style={trustCard}>
-              <div style={trustIcon}>🛡</div>
-              <div style={{ flex: 1 }}>
-                <p style={smallLabel}>Nivel de confianza</p>
-                <h2 style={trustValue}>{trustScore}/100</h2>
-                <div style={miniProgress}>
-                  <div style={{ ...miniProgressFill, width: `${trustScore}%` }} />
-                </div>
+              <form onSubmit={handleSearch} style={searchBox(isLight)}>
+                <span>⌕</span>
+                <input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Buscar productos en Marketplace..."
+                  style={searchInput(isLight)}
+                />
+                <button type="submit" style={searchButton(accent)}>
+                  Buscar
+                </button>
+              </form>
+
+              <div className="hero-actions" style={heroActions}>
+                <Link to="/marketplace" style={primaryButton(accent)}>Ir al Marketplace</Link>
+                <Link to="/new-product" style={outlineButton(isLight)}>Publicar producto</Link>
+                <Link to="/complete-profile" style={outlineButton(isLight)}>Verificación QSM</Link>
               </div>
             </div>
-          </section>
 
-          <section className="stats-grid" style={statsGrid}>
-            {dashboardStats.map((item) => <StatCard key={item.title} {...item} />)}
-          </section>
-
-          <section className="middle-grid" style={middleGrid}>
-            <div style={panel}>
-              <h2 style={panelTitle}>Tu progreso en QSM</h2>
-
-              <div className="progress-layout" style={progressLayout}>
-                <div style={circleProgress}>
-                  <svg width="190" height="190" viewBox="0 0 190 190">
-                    <circle cx="95" cy="95" r="76" stroke="rgba(148,163,184,.18)" strokeWidth="16" fill="none" />
-                    <circle
-                      cx="95"
-                      cy="95"
-                      r="76"
-                      stroke="url(#progressGradient)"
-                      strokeWidth="16"
-                      fill="none"
-                      strokeDasharray={`${2 * Math.PI * 76}`}
-                      strokeDashoffset={`${2 * Math.PI * 76 * (1 - trustScore / 100)}`}
-                      strokeLinecap="round"
-                      transform="rotate(-90 95 95)"
-                    />
-                    <defs>
-                      <linearGradient id="progressGradient" x1="0" y1="0" x2="1" y2="1">
-                        <stop offset="0%" stopColor="#38bdf8" />
-                        <stop offset="55%" stopColor="#35d0c3" />
-                        <stop offset="100%" stopColor="#a855f7" />
-                      </linearGradient>
-                    </defs>
-                  </svg>
-                  <strong>{trustScore}%</strong>
-                  <span>Perfil completado</span>
-                </div>
-
-                <div style={progressList}>
-                  {progressItems.map((item) => (
-                    <div key={item.title} style={progressItem}>
-                      <div>
-                        <strong>{item.title}</strong>
-                        <p>{item.status}</p>
-                      </div>
-                      <span style={item.done ? doneDot : pendingDot}>{item.done ? "✓" : "!"}</span>
-                    </div>
-                  ))}
-                </div>
+            <aside style={profileCard(isLight, settings)}>
+              <div style={avatar(accent)}>
+                {(user.firstName || user.email || "U").charAt(0).toUpperCase()}
               </div>
 
-              <Link to="/complete-profile" style={primaryButton}>Completar perfil →</Link>
+              <h2 style={panelTitle(isLight)}>
+                {user.firstName || "Usuario"} {user.lastName || "QSM"}
+              </h2>
+              <p style={muted(isLight)}>{user.email || "usuario@qsm.com"}</p>
+
+              <div style={badgeRow}>
+                <span style={verifiedBadge(isVerified)}>
+                  {isVerified ? "✅ Verificado" : "🟡 Pendiente"}
+                </span>
+                <span style={trustBadge(accent)}>Confianza {trustScore}/100</span>
+              </div>
+
+              <div style={scoreBar(isLight)}>
+                <div style={{ ...scoreFill(accent), width: `${trustScore}%` }}></div>
+              </div>
+
+              <p style={muted(isLight)}>Perfil completado: {profileCompletion}%</p>
+
+              <Link to="/profile" style={primaryButton(accent)}>
+                Editar perfil
+              </Link>
+            </aside>
+          </section>
+
+          {error && <div style={errorBox}>{error}</div>}
+
+          {loading ? (
+            <div style={centerCard(isLight)}>
+              <h2>Cargando inicio...</h2>
+              <p>QSM está consultando tus datos.</p>
             </div>
+          ) : (
+            <>
+              <section className="stats-grid" style={statsGrid}>
+                <StatCard icon="📦" title="Productos" value={stats.products} isLight={isLight} accent={accent} />
+                <StatCard icon="🛒" title="Compras" value={stats.purchases} isLight={isLight} accent={accent} />
+                <StatCard icon="💰" title="Ventas" value={stats.sales} isLight={isLight} accent={accent} />
+                <StatCard icon="🛡️" title="Protegido" value={formatMoney(stats.protectedAmount)} isLight={isLight} accent={accent} />
+              </section>
 
-            <div style={securityPanel}>
-              <div>
-                <h2 style={panelTitle}>Seguridad y protección</h2>
-                <div className="security-content" style={securityContent}>
-                  <div style={shieldVisual}>✅</div>
+              <section className="quick-grid" style={quickGrid}>
+                <QuickAction icon="🛒" title="Marketplace" text="Explorar productos seguros." to="/marketplace" isLight={isLight} accent={accent} />
+                <QuickAction icon="➕" title="Publicar" text="Vender con verificación QSM." to="/new-product" isLight={isLight} accent={accent} />
+                <QuickAction icon="❤️" title="Favoritos" text="Productos guardados." to="/favorites" isLight={isLight} accent={accent} />
+                <QuickAction icon="💬" title="Mensajes" text="Hablar con compradores o vendedores." to="/messages" isLight={isLight} accent={accent} />
+                <QuickAction icon="⚖️" title="Reclamos" text="Resolver disputas protegidas." to="/disputes" isLight={isLight} accent={accent} />
+                <QuickAction icon="⚙️" title="Configuración" text="Tema, idioma y seguridad." to="/settings" isLight={isLight} accent={accent} />
+              </section>
 
-                  <div style={securityList}>
-                    <h3>QSM te protege en cada paso</h3>
-                    <p>✓ Verificación de identidad</p>
-                    <p>✓ Pago Protegido</p>
-                    <p>✓ Detección de fraudes</p>
-                    <p>✓ Soporte y disputas</p>
-                    <p>✓ Centro de reclamos</p>
+              <section className="dashboard-grid" style={dashboardGrid}>
+                <div style={panel(isLight, settings)}>
+                  <div style={sectionHeader}>
+                    <p style={label(accent)}>ACTIVIDAD</p>
+                    <h2 style={panelTitle(isLight)}>Órdenes recientes</h2>
                   </div>
+
+                  {recentOrders.length === 0 ? (
+                    <EmptyState text="Todavía no tienes órdenes recientes." isLight={isLight} />
+                  ) : (
+                    recentOrders.map((order, index) => (
+                      <ActivityRow
+                        key={order._id || index}
+                        icon="🛒"
+                        title={order.product?.title || order.productTitle || "Orden QSM"}
+                        subtitle={order.orderCode || formatStatus(order.status)}
+                        value={formatMoney(order.total || order.price || order.product?.price || 0)}
+                        isLight={isLight}
+                      />
+                    ))
+                  )}
+
+                  <Link to="/orders" style={miniLink(accent)}>Ver mis compras →</Link>
                 </div>
-              </div>
 
-              <Link to="/complete-profile" style={primaryButton}>Conoce más sobre seguridad →</Link>
-            </div>
+                <div style={panel(isLight, settings)}>
+                  <div style={sectionHeader}>
+                    <p style={label(accent)}>VENTAS</p>
+                    <h2 style={panelTitle(isLight)}>Productos publicados</h2>
+                  </div>
 
-            <div style={activityPanel}>
-              <h2 style={panelTitle}>Actividad reciente</h2>
-              <div style={emptyActivity}>
-                <div style={emptyIcon}>📭</div>
-                <h3>Aún no tienes actividad</h3>
-                <p>Cuando realices compras, ventas o publicaciones, aparecerán aquí.</p>
-                <Link to="/marketplace" style={primaryButton}>Ir al Marketplace →</Link>
-              </div>
-            </div>
-          </section>
+                  {recentProducts.length === 0 ? (
+                    <EmptyState text="Publica tu primer producto para verlo aquí." isLight={isLight} />
+                  ) : (
+                    recentProducts.map((product, index) => (
+                      <ActivityRow
+                        key={product._id || index}
+                        icon="📦"
+                        title={product.title || "Producto QSM"}
+                        subtitle={product.category || "Marketplace"}
+                        value={formatMoney(product.price)}
+                        isLight={isLight}
+                      />
+                    ))
+                  )}
 
-          <section className="cta-panel" style={ctaPanel}>
-            <div style={ctaIcon}>⭐</div>
+                  <Link to="/sales" style={miniLink(accent)}>Ver mis ventas →</Link>
+                </div>
 
-            <div>
-              <h2>¡Comienza tu camino en QSM!</h2>
-              <p>Publica tu primer producto o explora el Marketplace para encontrar lo que necesitas.</p>
-            </div>
+                <div style={panel(isLight, settings)}>
+                  <div style={sectionHeader}>
+                    <p style={label(accent)}>SEGURIDAD</p>
+                    <h2 style={panelTitle(isLight)}>Progreso QSM</h2>
+                  </div>
 
-            <div style={ctaActions}>
-              <Link to="/new-product" style={ghostButton}>➕ Publicar producto</Link>
-              <Link to="/marketplace" style={primaryButton}>Explorar Marketplace →</Link>
-            </div>
-          </section>
+                  <ProgressLine done={Boolean(user.firstName && user.email)} text="Información básica" isLight={isLight} />
+                  <ProgressLine done={isVerified} text="Verificación de identidad" isLight={isLight} />
+                  <ProgressLine done={stats.products > 0} text="Primer producto publicado" isLight={isLight} />
+                  <ProgressLine done={stats.purchases > 0 || stats.sales > 0} text="Primera operación protegida" isLight={isLight} />
 
-          <footer style={footer}>
-            <span>© 2026 Quick Secure Market (QSM). Todos los derechos reservados.</span>
-            <div style={footerLinks}>
-              <Link to="/settings">Configuración</Link>
-              <Link to="/privacy">Privacidad</Link>
-              <Link to="/help">Ayuda</Link>
-            </div>
-          </footer>
+                  <Link to="/complete-profile" style={miniLink(accent)}>Completar verificación →</Link>
+                </div>
+
+                <div style={panel(isLight, settings)}>
+                  <div style={sectionHeader}>
+                    <p style={label(accent)}>RECLAMOS</p>
+                    <h2 style={panelTitle(isLight)}>Centro de reclamos</h2>
+                  </div>
+
+                  {recentDisputes.length === 0 ? (
+                    <EmptyState text="No tienes reclamos activos." isLight={isLight} />
+                  ) : (
+                    recentDisputes.map((dispute, index) => (
+                      <ActivityRow
+                        key={dispute._id || index}
+                        icon="⚖️"
+                        title={dispute.disputeCode || "Reclamo QSM"}
+                        subtitle={formatStatus(dispute.status)}
+                        value={dispute.reason || "Disputa"}
+                        isLight={isLight}
+                      />
+                    ))
+                  )}
+
+                  <Link to="/disputes" style={miniLink(accent)}>Ver reclamos →</Link>
+                </div>
+              </section>
+            </>
+          )}
         </main>
       </div>
 
@@ -269,36 +469,56 @@ function Dashboard() {
   );
 }
 
-function IconButton({ icon, badge, to }) {
+function StatCard({ icon, title, value, isLight, accent }) {
   return (
-    <Link to={to} style={iconButton}>
+    <div style={statCard(isLight)}>
+      <div style={statIcon(accent)}>{icon}</div>
+      <div>
+        <span>{title}</span>
+        <strong>{value}</strong>
+      </div>
+    </div>
+  );
+}
+
+function QuickAction({ icon, title, text, to, isLight, accent }) {
+  return (
+    <Link to={to} style={quickAction(isLight, accent)}>
       <span>{icon}</span>
-      {badge && <small style={badgeStyle}>{badge}</small>}
+      <div>
+        <strong>{title}</strong>
+        <p>{text}</p>
+      </div>
     </Link>
   );
 }
 
-function StatCard({ icon, title, value, change, color }) {
+function ActivityRow({ icon, title, subtitle, value, isLight }) {
   return (
-    <div style={statCard}>
-      <div style={{ ...statIcon, background: `${color}22`, color }}>{icon}</div>
-
-      <div style={{ flex: 1 }}>
-        <p style={statTitle}>{title}</p>
-        <h2 style={statValue}>{value}</h2>
-        <span style={statChange}>{change} vs última semana</span>
+    <div style={activityRow(isLight)}>
+      <div style={activityIcon}>{icon}</div>
+      <div style={{ minWidth: 0 }}>
+        <strong>{title}</strong>
+        <p>{subtitle}</p>
       </div>
+      <span>{value}</span>
+    </div>
+  );
+}
 
-      <svg width="72" height="38" viewBox="0 0 72 38" style={{ overflow: "visible" }}>
-        <polyline
-          points="2,32 12,26 21,30 30,16 39,22 48,9 57,14 70,4"
-          fill="none"
-          stroke={color}
-          strokeWidth="3"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
+function ProgressLine({ done, text, isLight }) {
+  return (
+    <div style={progressLine(isLight)}>
+      <span style={done ? checkDone : checkPending}>{done ? "✓" : "•"}</span>
+      <p>{text}</p>
+    </div>
+  );
+}
+
+function EmptyState({ text, isLight }) {
+  return (
+    <div style={emptyState(isLight)}>
+      <p>{text}</p>
     </div>
   );
 }
@@ -311,390 +531,410 @@ function safeJson(value) {
   }
 }
 
-function formatVerificationStatus(status) {
+function getAccentColor(color) {
   const map = {
-    NOT_STARTED: "Pendiente",
-    PENDING: "Pendiente",
-    PENDING_REVIEW: "En revisión",
-    VERIFIED: "Verificado",
-    REJECTED: "Rechazado"
+    cyan: "#35d0c3",
+    purple: "#8b5cf6",
+    pink: "#ec4899",
+    blue: "#38bdf8",
+    green: "#22c55e",
+    orange: "#f59e0b"
   };
-
-  return map[status] || "Pendiente";
+  return map[color] || "#35d0c3";
 }
 
-const page = {
+function applySettings(settings) {
+  const accent = getAccentColor(settings.accentColor || "cyan");
+  document.documentElement.style.setProperty("--qsm-accent", accent);
+  document.body.dataset.qsmTheme = settings.theme || "dark";
+  localStorage.setItem("qsm_theme", settings.theme || "dark");
+  localStorage.setItem("qsm_accent", settings.accentColor || "cyan");
+  localStorage.setItem("qsm_language", settings.language || "es");
+  localStorage.setItem("qsm_settings", JSON.stringify(settings));
+}
+
+function formatMoney(value) {
+  return new Intl.NumberFormat("es-DO", {
+    style: "currency",
+    currency: "DOP",
+    maximumFractionDigits: 0
+  }).format(Number(value || 0));
+}
+
+function formatStatus(status) {
+  const map = {
+    PENDING: "Pendiente",
+    HELD: "Pago retenido",
+    PAID: "Pago retenido",
+    SHIPPED: "Enviado",
+    DELIVERED: "Entregado",
+    RELEASED: "Pago liberado",
+    OPEN: "Abierto",
+    IN_REVIEW: "En revisión",
+    WAITING_EVIDENCE: "Esperando evidencia",
+    CLOSED: "Cerrado"
+  };
+  return map[String(status || "").toUpperCase()] || "Activo";
+}
+
+const page = (isLight) => ({
   minHeight: "100vh",
   width: "100%",
-  background:
-    "radial-gradient(circle at top right, rgba(139,92,246,.18), transparent 34%), radial-gradient(circle at 15% 20%, rgba(56,189,248,.10), transparent 28%), #020617",
-  color: "white"
-};
+  background: isLight
+    ? "radial-gradient(circle at top right, rgba(53,208,195,.16), transparent 34%), #f8fafc"
+    : "radial-gradient(circle at top right, rgba(139,92,246,.14), transparent 34%), radial-gradient(circle at 18% 15%, rgba(53,208,195,.10), transparent 28%), #020617",
+  color: isLight ? "#0f172a" : "white"
+});
 
-const layout = {
+const layout = (settings) => ({
   width: "100%",
   minHeight: "100vh",
   display: "grid",
-  gridTemplateColumns: "280px minmax(0, 1fr)"
-};
-
-const main = {
-  minWidth: 0,
-  padding: "26px 34px 28px",
+  gridTemplateColumns: settings.compactSidebar ? "230px minmax(0, 1fr)" : "280px minmax(0, 1fr)",
   overflowX: "hidden"
-};
+});
 
-const topbar = {
+const main = (settings) => ({
+  width: "100%",
+  minWidth: 0,
+  padding:
+    settings.density === "compact"
+      ? "18px 24px 42px"
+      : settings.density === "spacious"
+      ? "34px 44px 70px"
+      : "26px 34px 56px",
+  overflowX: "hidden"
+});
+
+const heroGrid = {
   display: "grid",
-  gridTemplateColumns: "minmax(320px, 640px) auto",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: "22px",
-  marginBottom: "30px"
+  gridTemplateColumns: "minmax(0, 1fr) 360px",
+  gap: "20px",
+  margin: "22px 0"
 };
 
-const searchBox = {
-  height: "58px",
-  display: "flex",
+const heroCard = (isLight, settings, accent) => ({
+  background: isLight ? "rgba(255,255,255,.88)" : "rgba(15,23,42,.72)",
+  border: isLight ? "1px solid rgba(15,23,42,.08)" : "1px solid rgba(56,189,248,.16)",
+  borderRadius: "30px",
+  padding: "30px",
+  boxShadow: isLight ? "0 24px 70px rgba(15,23,42,.08)" : "0 24px 90px rgba(0,0,0,.25)",
+  backdropFilter: settings.glassEffect === false ? "none" : "blur(16px)",
+  animation: settings.animations === false ? "none" : "fadeUp .35s ease",
+  position: "relative",
+  overflow: "hidden"
+});
+
+const label = (accent) => ({
+  color: accent,
+  letterSpacing: "4px",
+  fontSize: "12px",
+  fontWeight: "950",
+  textTransform: "uppercase",
+  margin: 0
+});
+
+const title = (isLight) => ({
+  fontSize: "clamp(42px, 4vw, 70px)",
+  lineHeight: "1",
+  margin: "10px 0",
+  letterSpacing: "-2px",
+  color: isLight ? "#0f172a" : "white"
+});
+
+const subtitle = (isLight) => ({
+  color: isLight ? "#475569" : "#cbd5e1",
+  lineHeight: "29px",
+  maxWidth: "820px"
+});
+
+const searchBox = (isLight) => ({
+  height: "62px",
+  display: "grid",
+  gridTemplateColumns: "30px minmax(0, 1fr) 120px",
   alignItems: "center",
-  gap: "12px",
-  background: "rgba(15,23,42,.72)",
-  border: "1px solid rgba(148,163,184,.18)",
-  borderRadius: "17px",
-  padding: "0 15px",
-  boxShadow: "0 18px 60px rgba(0,0,0,.18)"
-};
+  gap: "10px",
+  background: isLight ? "rgba(248,250,252,.95)" : "rgba(2,6,23,.55)",
+  border: isLight ? "1px solid rgba(15,23,42,.10)" : "1px solid rgba(148,163,184,.16)",
+  borderRadius: "18px",
+  padding: "0 12px",
+  margin: "24px 0"
+});
 
-const searchIcon = { color: "#94a3b8", fontSize: "22px" };
-
-const searchInput = {
-  flex: 1,
+const searchInput = (isLight) => ({
+  width: "100%",
   height: "100%",
   background: "transparent",
   border: "none",
   outline: "none",
+  color: isLight ? "#0f172a" : "white"
+});
+
+const searchButton = (accent) => ({
+  height: "44px",
+  border: "none",
+  borderRadius: "14px",
+  background: `linear-gradient(135deg, ${accent}, #8b5cf6)`,
   color: "white",
-  fontSize: "15px"
+  fontWeight: "950",
+  cursor: "pointer"
+});
+
+const heroActions = {
+  display: "grid",
+  gridTemplateColumns: "1.2fr 1fr 1fr",
+  gap: "12px"
 };
 
-const searchKey = {
-  border: "1px solid rgba(148,163,184,.18)",
-  background: "rgba(2,6,23,.55)",
-  color: "#cbd5e1",
-  padding: "8px 12px",
-  borderRadius: "10px",
+const primaryButton = (accent) => ({
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: `linear-gradient(135deg, ${accent}, #38bdf8, #8b5cf6)`,
+  color: "white",
+  textDecoration: "none",
+  border: "none",
+  padding: "14px 18px",
+  borderRadius: "14px",
+  fontWeight: "950",
   cursor: "pointer",
+  boxShadow: `0 18px 54px ${accent}2e`
+});
+
+const outlineButton = (isLight) => ({
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: isLight ? "rgba(255,255,255,.82)" : "rgba(15,23,42,.64)",
+  border: isLight ? "1px solid rgba(15,23,42,.10)" : "1px solid rgba(148,163,184,.16)",
+  color: isLight ? "#0f172a" : "white",
+  textDecoration: "none",
+  borderRadius: "14px",
+  padding: "14px 18px",
+  fontWeight: "950"
+});
+
+const profileCard = (isLight, settings) => ({
+  background: isLight ? "rgba(255,255,255,.88)" : "rgba(15,23,42,.72)",
+  border: isLight ? "1px solid rgba(15,23,42,.08)" : "1px solid rgba(56,189,248,.16)",
+  borderRadius: "30px",
+  padding: "26px",
+  boxShadow: isLight ? "0 24px 70px rgba(15,23,42,.08)" : "0 24px 90px rgba(0,0,0,.25)",
+  backdropFilter: settings.glassEffect === false ? "none" : "blur(16px)",
+  display: "grid",
+  gap: "12px",
+  alignContent: "start"
+});
+
+const avatar = (accent) => ({
+  width: "86px",
+  height: "86px",
+  borderRadius: "26px",
+  background: `linear-gradient(135deg, ${accent}, #8b5cf6)`,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: "34px",
+  fontWeight: "950",
+  color: "white"
+});
+
+const panelTitle = (isLight) => ({
+  color: isLight ? "#0f172a" : "white",
+  margin: "8px 0"
+});
+
+const muted = (isLight) => ({
+  color: isLight ? "#475569" : "#cbd5e1",
+  lineHeight: "25px"
+});
+
+const badgeRow = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "10px"
+};
+
+const verifiedBadge = (verified) => ({
+  background: verified ? "rgba(34,197,94,.14)" : "rgba(245,158,11,.16)",
+  color: verified ? "#86efac" : "#fde68a",
+  border: verified ? "1px solid rgba(34,197,94,.34)" : "1px solid rgba(245,158,11,.34)",
+  padding: "8px 12px",
+  borderRadius: "999px",
+  fontWeight: "900"
+});
+
+const trustBadge = (accent) => ({
+  background: `${accent}22`,
+  color: accent,
+  border: `1px solid ${accent}66`,
+  padding: "8px 12px",
+  borderRadius: "999px",
+  fontWeight: "900"
+});
+
+const scoreBar = (isLight) => ({
+  height: "10px",
+  background: isLight ? "rgba(15,23,42,.10)" : "rgba(148,163,184,.16)",
+  borderRadius: "999px",
+  overflow: "hidden"
+});
+
+const scoreFill = (accent) => ({
+  height: "100%",
+  background: `linear-gradient(90deg, ${accent}, #38bdf8, #8b5cf6)`,
+  borderRadius: "999px"
+});
+
+const errorBox = {
+  background: "rgba(127,29,29,.24)",
+  border: "1px solid rgba(248,113,113,.30)",
+  color: "#fecaca",
+  padding: "14px 18px",
+  borderRadius: "16px",
+  marginBottom: "16px",
   fontWeight: "800"
 };
 
-const topActions = {
-  display: "flex",
-  alignItems: "center",
-  gap: "13px",
-  justifyContent: "flex-end"
-};
-
-const iconButton = {
-  width: "56px",
-  height: "56px",
-  borderRadius: "16px",
-  background: "rgba(15,23,42,.72)",
-  border: "1px solid rgba(148,163,184,.16)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  color: "white",
-  textDecoration: "none",
-  position: "relative",
-  fontSize: "20px"
-};
-
-const badgeStyle = {
-  position: "absolute",
-  top: "-7px",
-  right: "-5px",
-  width: "22px",
-  height: "22px",
-  borderRadius: "999px",
-  background: "#ef4444",
-  color: "white",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: "12px",
-  fontWeight: "950"
-};
-
-const userMini = {
-  minWidth: "190px",
-  minHeight: "58px",
-  display: "flex",
-  alignItems: "center",
-  gap: "12px",
-  background: "rgba(15,23,42,.72)",
-  border: "1px solid rgba(148,163,184,.16)",
-  borderRadius: "17px",
-  padding: "8px 14px",
-  color: "white",
-  textDecoration: "none"
-};
-
-const miniAvatar = {
-  width: "40px",
-  height: "40px",
-  borderRadius: "50%",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  background: "linear-gradient(135deg, #38bdf8, #8b5cf6)",
-  fontWeight: "950"
-};
-
-const hero = {
-  display: "grid",
-  gridTemplateColumns: "minmax(0, 1fr) 330px",
-  gap: "24px",
-  alignItems: "end",
-  marginBottom: "24px"
-};
-
-const welcomeTag = { margin: 0, color: "#c084fc", fontWeight: "950", letterSpacing: ".5px" };
-
-const heroTitle = {
-  margin: "12px 0",
-  fontSize: "clamp(48px, 4vw, 72px)",
-  lineHeight: "1.02",
-  letterSpacing: "-2.6px"
-};
-
-const heroText = { color: "#cbd5e1", fontSize: "18px", lineHeight: "30px", maxWidth: "760px" };
-
-const trustCard = {
-  background: "rgba(15,23,42,.72)",
-  border: "1px solid rgba(148,163,184,.16)",
+const centerCard = (isLight) => ({
+  background: isLight ? "rgba(255,255,255,.86)" : "rgba(15,23,42,.72)",
+  border: isLight ? "1px solid rgba(15,23,42,.08)" : "1px solid rgba(56,189,248,.14)",
   borderRadius: "24px",
-  padding: "22px",
-  display: "flex",
-  gap: "16px",
-  alignItems: "center"
-};
-
-const trustIcon = {
-  width: "58px",
-  height: "58px",
-  borderRadius: "18px",
-  background: "rgba(16,185,129,.18)",
-  color: "#34d399",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: "28px"
-};
-
-const smallLabel = { margin: 0, color: "#cbd5e1" };
-const trustValue = { margin: "5px 0 10px", fontSize: "32px" };
-
-const miniProgress = {
-  height: "10px",
-  borderRadius: "999px",
-  background: "rgba(148,163,184,.18)",
-  overflow: "hidden"
-};
-
-const miniProgressFill = {
-  height: "100%",
-  borderRadius: "999px",
-  background: "linear-gradient(90deg, #38bdf8, #8b5cf6, #ec4899)"
-};
+  padding: "44px",
+  textAlign: "center",
+  color: isLight ? "#0f172a" : "#cbd5e1"
+});
 
 const statsGrid = {
   display: "grid",
   gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-  gap: "18px",
-  marginBottom: "24px"
+  gap: "16px",
+  marginBottom: "20px"
 };
 
-const statCard = {
+const statCard = (isLight) => ({
   display: "flex",
   alignItems: "center",
-  gap: "18px",
-  background: "rgba(15,23,42,.72)",
-  border: "1px solid rgba(148,163,184,.14)",
-  borderRadius: "24px",
-  padding: "24px",
-  minHeight: "125px"
-};
+  gap: "14px",
+  background: isLight ? "rgba(255,255,255,.86)" : "rgba(15,23,42,.72)",
+  border: isLight ? "1px solid rgba(15,23,42,.08)" : "1px solid rgba(56,189,248,.15)",
+  borderRadius: "22px",
+  padding: "20px",
+  boxShadow: isLight ? "0 18px 50px rgba(15,23,42,.06)" : "none"
+});
 
-const statIcon = {
-  width: "62px",
-  height: "62px",
-  borderRadius: "18px",
+const statIcon = (accent) => ({
+  width: "52px",
+  height: "52px",
+  borderRadius: "17px",
+  background: `${accent}22`,
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  fontSize: "30px",
-  flexShrink: 0
-};
+  fontSize: "24px"
+});
 
-const statTitle = { margin: 0, color: "#cbd5e1", fontWeight: "800" };
-const statValue = { margin: "6px 0 2px", fontSize: "32px" };
-const statChange = { color: "#22c55e", fontSize: "13px", fontWeight: "800" };
-
-const middleGrid = {
+const quickGrid = {
   display: "grid",
-  gridTemplateColumns: "1.25fr 1.45fr .95fr",
-  gap: "20px",
-  marginBottom: "24px"
+  gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
+  gap: "14px",
+  marginBottom: "20px"
 };
 
-const panel = {
-  minHeight: "330px",
-  background: "rgba(15,23,42,.72)",
-  border: "1px solid rgba(148,163,184,.14)",
+const quickAction = (isLight, accent) => ({
+  background: isLight ? "rgba(255,255,255,.86)" : "rgba(15,23,42,.72)",
+  border: isLight ? "1px solid rgba(15,23,42,.08)" : "1px solid rgba(56,189,248,.15)",
+  color: isLight ? "#0f172a" : "white",
+  borderRadius: "22px",
+  padding: "18px",
+  textDecoration: "none",
+  display: "grid",
+  gap: "8px",
+  boxShadow: isLight ? "0 18px 50px rgba(15,23,42,.06)" : "none",
+  borderTop: `3px solid ${accent}`
+});
+
+const dashboardGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+  gap: "20px"
+};
+
+const panel = (isLight, settings) => ({
+  background: isLight ? "rgba(255,255,255,.86)" : "rgba(15,23,42,.72)",
+  border: isLight ? "1px solid rgba(15,23,42,.08)" : "1px solid rgba(56,189,248,.16)",
   borderRadius: "26px",
   padding: "24px",
-  boxShadow: "0 24px 90px rgba(0,0,0,.14)"
+  boxShadow: isLight ? "0 18px 60px rgba(15,23,42,.07)" : "0 24px 80px rgba(0,0,0,.18)",
+  backdropFilter: settings.glassEffect === false ? "none" : "blur(16px)"
+});
+
+const sectionHeader = {
+  marginBottom: "18px"
 };
 
-const securityPanel = { ...panel, display: "flex", flexDirection: "column", justifyContent: "space-between" };
-const activityPanel = { ...panel };
-const panelTitle = { margin: "0 0 18px", fontSize: "22px" };
-
-const progressLayout = {
+const activityRow = (isLight) => ({
   display: "grid",
-  gridTemplateColumns: "210px 1fr",
-  gap: "24px",
-  alignItems: "center"
-};
+  gridTemplateColumns: "48px minmax(0, 1fr) auto",
+  gap: "12px",
+  alignItems: "center",
+  padding: "13px 0",
+  borderBottom: isLight ? "1px solid rgba(15,23,42,.08)" : "1px solid rgba(148,163,184,.10)",
+  color: isLight ? "#0f172a" : "#cbd5e1"
+});
 
-const circleProgress = {
-  width: "210px",
-  height: "238px",
+const activityIcon = {
+  width: "48px",
+  height: "48px",
+  borderRadius: "16px",
+  background: "rgba(53,208,195,.14)",
   display: "flex",
   alignItems: "center",
-  justifyContent: "center",
-  flexDirection: "column",
-  position: "relative"
+  justifyContent: "center"
 };
 
-const progressList = { display: "grid", gap: "12px" };
-
-const progressItem = {
+const progressLine = (isLight) => ({
   display: "flex",
-  justifyContent: "space-between",
+  gap: "10px",
   alignItems: "center",
-  gap: "15px",
-  background: "rgba(30,41,59,.62)",
-  borderRadius: "14px",
-  padding: "13px 14px"
-};
+  padding: "10px 0",
+  borderBottom: isLight ? "1px solid rgba(15,23,42,.08)" : "1px solid rgba(148,163,184,.10)",
+  color: isLight ? "#0f172a" : "#cbd5e1"
+});
 
-const doneDot = {
+const checkDone = {
   width: "26px",
   height: "26px",
   borderRadius: "50%",
-  background: "#22c55e",
-  color: "#052e16",
+  background: "#35d0c3",
+  color: "#020617",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   fontWeight: "950"
 };
 
-const pendingDot = { ...doneDot, background: "#f59e0b", color: "#451a03" };
-
-const securityContent = {
-  display: "grid",
-  gridTemplateColumns: "260px 1fr",
-  gap: "20px",
-  alignItems: "center"
+const checkPending = {
+  ...checkDone,
+  background: "rgba(148,163,184,.16)",
+  color: "#94a3b8"
 };
 
-const shieldVisual = {
-  height: "210px",
-  borderRadius: "32px",
-  background:
-    "radial-gradient(circle, rgba(56,189,248,.32), transparent 62%), linear-gradient(135deg, rgba(56,189,248,.20), rgba(139,92,246,.20))",
-  border: "1px solid rgba(56,189,248,.16)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: "82px",
-  boxShadow: "0 0 70px rgba(56,189,248,.16)"
-};
+const emptyState = (isLight) => ({
+  background: isLight ? "rgba(248,250,252,.85)" : "rgba(2,6,23,.35)",
+  border: isLight ? "1px solid rgba(15,23,42,.08)" : "1px solid rgba(148,163,184,.10)",
+  color: isLight ? "#475569" : "#cbd5e1",
+  borderRadius: "18px",
+  padding: "20px",
+  textAlign: "center"
+});
 
-const securityList = { color: "#cbd5e1", lineHeight: "30px" };
-
-const emptyActivity = {
-  height: "calc(100% - 40px)",
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  justifyContent: "center",
-  textAlign: "center",
-  color: "#cbd5e1"
-};
-
-const emptyIcon = { fontSize: "70px", marginBottom: "20px" };
-
-const primaryButton = {
+const miniLink = (accent) => ({
   display: "inline-flex",
-  alignItems: "center",
-  justifyContent: "center",
-  gap: "8px",
-  background: "linear-gradient(135deg, #38bdf8, #8b5cf6, #ec4899)",
-  color: "white",
+  marginTop: "14px",
+  color: accent,
   textDecoration: "none",
-  border: "none",
-  padding: "15px 24px",
-  borderRadius: "14px",
-  fontWeight: "950",
-  cursor: "pointer",
-  boxShadow: "0 18px 54px rgba(139,92,246,.25)"
-};
-
-const ghostButton = {
-  ...primaryButton,
-  background: "rgba(15,23,42,.64)",
-  border: "1px solid rgba(148,163,184,.18)",
-  boxShadow: "none"
-};
-
-const ctaPanel = {
-  minHeight: "140px",
-  background:
-    "linear-gradient(135deg, rgba(139,92,246,.20), rgba(15,23,42,.82), rgba(56,189,248,.12))",
-  border: "1px solid rgba(139,92,246,.18)",
-  borderRadius: "26px",
-  padding: "24px",
-  display: "grid",
-  gridTemplateColumns: "74px 1fr auto",
-  gap: "22px",
-  alignItems: "center",
-  marginBottom: "20px"
-};
-
-const ctaIcon = {
-  width: "74px",
-  height: "74px",
-  borderRadius: "22px",
-  background: "linear-gradient(135deg, #38bdf8, #8b5cf6, #ec4899)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: "36px"
-};
-
-const ctaActions = { display: "flex", gap: "14px", flexWrap: "wrap" };
-
-const footer = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: "16px",
-  color: "#94a3b8",
-  padding: "4px 0"
-};
-
-const footerLinks = { display: "flex", gap: "18px" };
+  fontWeight: "950"
+});
 
 export default Dashboard;

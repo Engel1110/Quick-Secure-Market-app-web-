@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import api from "../api/axios";
+import Sidebar from "../components/Sidebar";
 import Topbar from "../components/Topbar";
 import AiAssistant from "../components/AiAssistant";
 
@@ -8,90 +9,183 @@ function ProductDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
 
-  const [product, setProduct] = useState(null);
-  const [activeTab, setActiveTab] = useState("description");
-  const [activeImage, setActiveImage] = useState("");
-  const [chatMessage, setChatMessage] = useState("");
-  const [messages, setMessages] = useState([
-    {
-      from: "seller",
-      text: "¡Hola! 👋 ¿En qué puedo ayudarte?",
-      time: "10:30 AM"
-    },
-    {
-      from: "buyer",
-      text: "Hola, ¿el producto está disponible?",
-      time: "10:31 AM"
-    },
-    {
-      from: "seller",
-      text: "Sí, todavía está disponible.",
-      time: "10:32 AM"
-    }
-  ]);
+  const savedUser =
+    safeJson(localStorage.getItem("qsm_user")) ||
+    safeJson(localStorage.getItem("user")) ||
+    {};
 
+  const savedSettings =
+    safeJson(localStorage.getItem("qsm_settings")) || {
+      theme: localStorage.getItem("qsm_theme") || "dark",
+      accentColor: localStorage.getItem("qsm_accent") || "cyan",
+      language: localStorage.getItem("qsm_language") || "es",
+      density: "comfortable",
+      animations: true,
+      glassEffect: true,
+      compactSidebar: false
+    };
+
+  const [product, setProduct] = useState(null);
+  const [settings, setSettings] = useState(savedSettings);
+  const [activeImage, setActiveImage] = useState("");
+  const [activeTab, setActiveTab] = useState("description");
+  const [favorite, setFavorite] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState("");
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
+
+  const theme = settings.theme || "dark";
+  const isLight = theme === "light";
+  const accent = getAccentColor(settings.accentColor || "cyan");
+
+  const currentUserId = savedUser._id || savedUser.id || savedUser.userId || "";
+  const seller = product?.seller || {};
+  const sellerId = seller._id || seller.id || product?.sellerId || "";
+  const isOwner = currentUserId && sellerId && String(currentUserId) === String(sellerId);
+  const isAdmin = savedUser.role === "ADMIN" || savedUser.isAdmin === true;
+
+  const gallery = useMemo(() => {
+    if (!product) return [];
+    const images = Array.isArray(product.images)
+      ? product.images.map((img) => getImageUrl(img)).filter(Boolean)
+      : [];
+
+    const fallback = getProductImage(product);
+    return [...images, fallback].filter(Boolean).filter((item, index, arr) => arr.indexOf(item) === index);
+  }, [product]);
+
+  const risk = useMemo(() => getRiskLevel(product), [product]);
+
+  useEffect(() => {
+    loadProduct();
+    loadSettings();
+  }, [id]);
+
+  useEffect(() => {
+    applySettings(settings);
+  }, [settings]);
 
   const loadProduct = async () => {
     try {
       setLoading(true);
       setError("");
+      setMessage("");
 
       const response = await api.get(`/products/${id}`);
-      const loadedProduct = response.data.product;
+      const loaded = response.data.product || response.data.data || response.data;
 
-      setProduct(loadedProduct);
-      setActiveImage(getProductImage(loadedProduct));
-    } catch (error) {
-      console.error("Error cargando producto:", error);
-      setError("Producto no encontrado");
+      setProduct(loaded);
+      setActiveImage(getProductImage(loaded));
+
+      try {
+        const favResponse = await api.get(`/favorites/${id}/check`);
+        setFavorite(Boolean(favResponse.data.isFavorite));
+      } catch {
+        setFavorite(false);
+      }
+    } catch (err) {
+      setError(err?.response?.data?.message || "Producto no encontrado.");
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    loadProduct();
-  }, [id]);
-
-  const seller = product?.seller || {};
-  const riskLevel = useMemo(() => getRiskLevel(product), [product]);
-  const isVerified = isProductVerified(product);
-
-  const gallery = useMemo(() => {
-    if (!product) return [];
-
-    const imagesFromArray = Array.isArray(product.images)
-      ? product.images.map((img) => getImageUrl(img)).filter(Boolean)
-      : [];
-
-    const fallback = getProductImage(product);
-
-    return [...imagesFromArray, fallback]
-      .filter(Boolean)
-      .filter((img, index, arr) => arr.indexOf(img) === index);
-  }, [product]);
-
-  const sendMessage = () => {
-    if (!chatMessage.trim()) return;
-
-    setMessages([
-      ...messages,
-      {
-        from: "buyer",
-        text: chatMessage,
-        time: "Ahora"
+  const loadSettings = async () => {
+    try {
+      const response = await api.get("/settings/me");
+      const backendSettings = response.data.settings || response.data.data || response.data;
+      if (backendSettings) {
+        const merged = { ...savedSettings, ...backendSettings };
+        setSettings(merged);
+        localStorage.setItem("qsm_settings", JSON.stringify(merged));
       }
-    ]);
+    } catch {
+      setSettings(savedSettings);
+    }
+  };
 
-    setChatMessage("");
+  const toggleFavorite = async () => {
+    try {
+      setActionLoading("favorite");
+      setError("");
+      setMessage("");
+
+      if (favorite) {
+        await api.delete(`/favorites/${id}`);
+        setFavorite(false);
+        setMessage("Producto eliminado de favoritos.");
+      } else {
+        await api.post(`/favorites/${id}`);
+        setFavorite(true);
+        setMessage("Producto agregado a favoritos.");
+      }
+    } catch (err) {
+      setError(err?.response?.data?.message || "No se pudo actualizar favoritos.");
+    } finally {
+      setActionLoading("");
+    }
+  };
+
+  const contactSeller = async () => {
+    if (!sellerId) {
+      setError("Este producto no tiene vendedor asignado.");
+      return;
+    }
+
+    try {
+      setActionLoading("message");
+      setError("");
+
+      await api.post("/messages/conversations", {
+        receiverId: sellerId,
+        productId: id
+      });
+
+      navigate(`/messages?sellerId=${sellerId}&productId=${id}`);
+    } catch {
+      navigate(`/messages?sellerId=${sellerId}&productId=${id}`);
+    } finally {
+      setActionLoading("");
+    }
+  };
+
+  const buyProduct = () => {
+    navigate(`/checkout/${id}`);
+  };
+
+  const deleteProduct = async () => {
+    const confirmDelete = window.confirm(
+      "¿Seguro que deseas eliminar esta publicación? Esta acción no se puede deshacer."
+    );
+
+    if (!confirmDelete) return;
+
+    try {
+      setActionLoading("delete");
+      setError("");
+      setMessage("");
+
+      await api.delete(`/products/${id}`);
+
+      setMessage("Publicación eliminada correctamente.");
+      setTimeout(() => {
+        navigate("/sales");
+      }, 600);
+    } catch (err) {
+      setError(
+        err?.response?.data?.message ||
+          "No se pudo eliminar la publicación. Verifica DELETE /products/:id en el backend."
+      );
+    } finally {
+      setActionLoading("");
+    }
   };
 
   if (loading) {
     return (
-      <div style={page}>
-        <div style={centerBox}>
+      <div style={page(isLight)}>
+        <div style={centerCard(isLight)}>
           <h2>Cargando producto...</h2>
           <p>QSM está preparando la información segura del producto.</p>
         </div>
@@ -99,12 +193,12 @@ function ProductDetails() {
     );
   }
 
-  if (error || !product) {
+  if (error && !product) {
     return (
-      <div style={page}>
-        <div style={centerBox}>
+      <div style={page(isLight)}>
+        <div style={centerCard(isLight)}>
           <h2>{error}</h2>
-          <button onClick={() => navigate("/marketplace")} style={primaryButton}>
+          <button onClick={() => navigate("/marketplace")} style={primaryButton(accent)}>
             Volver al Marketplace
           </button>
         </div>
@@ -113,18 +207,26 @@ function ProductDetails() {
   }
 
   return (
-    <div style={page}>
+    <div style={page(isLight)}>
       <style>{`
         * { box-sizing: border-box; }
 
         html, body, #root {
-          width: 100%;
-          min-height: 100%;
           margin: 0;
           padding: 0;
+          width: 100%;
+          min-height: 100%;
+          background: ${isLight ? "#f8fafc" : "#020617"};
+          font-family: Inter, "Plus Jakarta Sans", system-ui, sans-serif;
           overflow-x: hidden;
-          background: #020617;
-          font-family: 'Inter', system-ui, sans-serif;
+        }
+
+        button, a {
+          transition: ${settings.animations === false ? "none" : "all .25s ease"};
+        }
+
+        button:hover, a:hover {
+          transform: ${settings.animations === false ? "none" : "translateY(-2px)"};
         }
 
         @keyframes fadeUp {
@@ -132,395 +234,234 @@ function ProductDetails() {
           to { opacity: 1; transform: translateY(0); }
         }
 
-        @keyframes pulseGlow {
-          0% { opacity: .55; transform: scale(1); }
-          50% { opacity: 1; transform: scale(1.05); }
-          100% { opacity: .55; transform: scale(1); }
+        @media (max-width: 1240px) {
+          .product-page {
+            grid-template-columns: 1fr !important;
+          }
+
+          .sidebar-wrapper {
+            display: none !important;
+          }
+
+          .product-layout,
+          .meta-grid,
+          .benefits-grid {
+            grid-template-columns: 1fr !important;
+          }
         }
 
-        .product-main-image {
-          transition: transform .4s ease;
-        }
+        @media (max-width: 760px) {
+          .main-content {
+            padding: 18px !important;
+          }
 
-        .product-main-image:hover {
-          transform: scale(1.04);
-        }
-
-        input::placeholder {
-          color: #64748b;
+          .actions-row,
+          .tab-row {
+            grid-template-columns: 1fr !important;
+          }
         }
       `}</style>
 
-      <aside style={sidebar}>
-        <Link to="/" style={brand}>
-          <div style={brandIcon}>🛡</div>
-          <div>
-            <strong style={brandTitle}>QSM</strong>
-            <span style={brandSub}>Quick Secure Market</span>
-          </div>
-        </Link>
-
-        <nav style={menu}>
-          <Link style={menuItem} to="/dashboard">🏠 Inicio</Link>
-          <Link style={activeMenuItem} to="/marketplace">🛒 Marketplace</Link>
-          <Link style={menuItem} to="/orders">📦 Mis compras</Link>
-          <Link style={menuItem} to="/disputes">⚖ Mis reclamos</Link>
-          <Link style={menuItem} to="/new-product">➕ Publicar producto</Link>
-          <Link style={menuItem} to="/complete-profile">🧾 Verificar identidad</Link>
-          <Link style={menuItem} to="/profile">👤 Mi perfil</Link>
-        </nav>
-
-        <div style={aiSideCard}>
-          <h3>🤖 QSM AI</h3>
-          <p>
-            Analizamos señales del producto, vendedor, precio y riesgo para ayudarte a comprar seguro.
-          </p>
-        </div>
-      </aside>
-
-      <main style={main}>
-        <Topbar />
-
-        <div style={breadcrumb}>
-          <button onClick={() => navigate("/marketplace")} style={backButton}>
-            ← Volver al Marketplace
-          </button>
-
-          <span>
-            Marketplace › {product.category || "Categoría"} › {product.title}
-          </span>
+      <div className="product-page" style={layout(settings)}>
+        <div className="sidebar-wrapper">
+          <Sidebar />
         </div>
 
-        <section style={productHero}>
-          <div style={galleryCard}>
-            <div style={imageStage}>
-              <div style={imageGlow}></div>
+        <main className="main-content" style={main(settings)}>
+          <Topbar />
 
-              {activeImage ? (
-                <img
-                  className="product-main-image"
-                  src={activeImage}
-                  alt={product.title}
-                  style={mainImage}
-                />
-              ) : (
-                <div style={noImage}>📦 Sin imagen</div>
-              )}
-
-              <span style={verifiedBadge(isVerified)}>
-                {isVerified ? "Vendedor verificado" : "Verificación pendiente"}
-              </span>
-
-              <button style={favoriteButton}>♡</button>
+          <section style={header}>
+            <div>
+              <p style={label(accent)}>DETALLE DEL PRODUCTO</p>
+              <h1 style={title(isLight)}>{product.title || "Producto QSM"}</h1>
+              <p style={muted(isLight)}>
+                Revisa la información, vendedor, riesgo y opciones de compra segura.
+              </p>
             </div>
 
-            <div style={thumbRow}>
-              {gallery.length > 0 ? (
-                gallery.map((img) => (
-                  <button
-                    key={img}
-                    onClick={() => setActiveImage(img)}
-                    style={activeImage === img ? thumbActive : thumb}
-                  >
-                    <img src={img} alt="Miniatura" style={thumbImage} />
+            <div style={headerActions}>
+              <button onClick={() => navigate("/marketplace")} style={outlineButton(isLight)}>
+                ← Marketplace
+              </button>
+
+              {(isOwner || isAdmin) && (
+                <button onClick={deleteProduct} disabled={actionLoading === "delete"} style={dangerButton}>
+                  {actionLoading === "delete" ? "Eliminando..." : "Eliminar publicación"}
+                </button>
+              )}
+            </div>
+          </section>
+
+          {message && <div style={successBox}>{message}</div>}
+          {error && <div style={errorBox}>{error}</div>}
+
+          <section className="product-layout" style={productLayout}>
+            <div style={galleryPanel(isLight, settings)}>
+              <div style={imageBox(isLight)}>
+                {activeImage ? (
+                  <img src={activeImage} alt={product.title || "Producto"} style={mainImage} />
+                ) : (
+                  <span style={imagePlaceholder}>📦</span>
+                )}
+
+                <span style={statusBadge(product.status)}>{product.status || "ACTIVE"}</span>
+              </div>
+
+              {gallery.length > 1 && (
+                <div style={thumbRow}>
+                  {gallery.map((img) => (
+                    <button
+                      key={img}
+                      onClick={() => setActiveImage(img)}
+                      style={activeImage === img ? activeThumb(accent) : thumb(isLight)}
+                    >
+                      <img src={img} alt="Miniatura" style={thumbImage} />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <aside style={summaryPanel(isLight, settings)}>
+              <div style={priceRow}>
+                <div>
+                  <p style={label(accent)}>PRECIO</p>
+                  <h2 style={priceText(accent)}>{formatMoney(product.price)}</h2>
+                </div>
+
+                <button onClick={toggleFavorite} disabled={actionLoading === "favorite"} style={favoriteButton(favorite)}>
+                  {favorite ? "❤️" : "🤍"}
+                </button>
+              </div>
+
+              <div className="meta-grid" style={metaGrid}>
+                <Info title="Categoría" value={product.category || "Producto"} isLight={isLight} />
+                <Info title="Ubicación" value={product.location || "República Dominicana"} isLight={isLight} />
+                <Info title="Condición" value={product.condition || "No especificada"} isLight={isLight} />
+                <Info title="Riesgo QSM" value={risk.label} isLight={isLight} />
+              </div>
+
+              <div style={sellerBox(isLight)}>
+                <div style={sellerAvatar(accent)}>
+                  {(seller.firstName || seller.email || "V").charAt(0).toUpperCase()}
+                </div>
+
+                <div>
+                  <strong>{formatUser(seller, "Vendedor QSM")}</strong>
+                  <p style={muted(isLight)}>{seller.email || "Vendedor protegido"}</p>
+                  <span style={trustBadge(accent)}>Confianza {seller.trustScore || 50}/100</span>
+                </div>
+              </div>
+
+              <div style={riskBox(risk)}>
+                <strong>{risk.icon} Riesgo {risk.label}</strong>
+                <p>{risk.text}</p>
+              </div>
+
+              <div className="actions-row" style={actionsRow}>
+                {!isOwner && (
+                  <button onClick={buyProduct} style={primaryButton(accent)}>
+                    Comprar ahora
                   </button>
-                ))
-              ) : (
-                <div style={emptyThumb}>Sin galería disponible</div>
-              )}
-            </div>
-          </div>
+                )}
 
-          <div style={productCard}>
-            <div style={productTitleRow}>
-              <div>
-                <h1 style={productTitle}>{product.title}</h1>
-                <p style={productSubtitle}>
-                  {formatCondition(product.condition)} · {product.category || "Sin categoría"}
+                {!isOwner && (
+                  <button onClick={contactSeller} disabled={actionLoading === "message"} style={outlineButton(isLight)}>
+                    {actionLoading === "message" ? "Abriendo..." : "Contactar vendedor"}
+                  </button>
+                )}
+
+                {isOwner && (
+                  <Link to={`/products/${id}/edit`} style={primaryButton(accent)}>
+                    Editar publicación
+                  </Link>
+                )}
+
+                <Link to={`/product/${id}/history`} style={outlineButton(isLight)}>
+                  Ver historial
+                </Link>
+              </div>
+
+              <div style={escrowBox(isLight, accent)}>
+                <strong>🛡 Pago Protegido QSM</strong>
+                <p>
+                  Puedes pagar por transferencia, tarjeta, PayPal o contra entrega cuando conectemos el Checkout.
+                  QSM retiene el pago hasta confirmar la entrega.
                 </p>
-                <p style={published}>
-                  Publicado el {product.createdAt ? formatDate(product.createdAt) : "fecha pendiente"}
+              </div>
+            </aside>
+          </section>
+
+          <section style={tabsPanel(isLight, settings)}>
+            <div className="tab-row" style={tabRow}>
+              <button onClick={() => setActiveTab("description")} style={activeTab === "description" ? activeTabButton(accent) : tabButton(isLight)}>
+                Descripción
+              </button>
+              <button onClick={() => setActiveTab("security")} style={activeTab === "security" ? activeTabButton(accent) : tabButton(isLight)}>
+                Seguridad QSM
+              </button>
+              <button onClick={() => setActiveTab("seller")} style={activeTab === "seller" ? activeTabButton(accent) : tabButton(isLight)}>
+                Vendedor
+              </button>
+            </div>
+
+            {activeTab === "description" && (
+              <div>
+                <h2 style={panelTitle(isLight)}>Descripción</h2>
+                <p style={descriptionText(isLight)}>
+                  {product.description || "Este producto no tiene descripción detallada."}
                 </p>
               </div>
+            )}
 
-              <span style={productVerifiedTag(isVerified)}>
-                {isVerified ? "Producto confiable" : "En revisión"}
-              </span>
-            </div>
-
-            <h2 style={price}>{formatMoney(product.price)}</h2>
-
-            <p style={aiPriceText}>
-              Precio evaluado por QSM según señales del producto, vendedor e historial.
-            </p>
-
-            <div style={specGrid}>
-              <Spec title="Estado" value={formatCondition(product.condition)} />
-              <Spec title="Calidad" value={formatQuality(product.quality)} />
-              <Spec title="Ubicación" value={product.location || "República Dominicana"} />
-            </div>
-
-            <button
-              onClick={() => navigate(`/checkout/${product._id}`)}
-              style={buyButton}
-            >
-              🔒 Comprar con Pago Protegido
-            </button>
-
-            <button style={cartButton}>
-              🛒 Agregar al carrito
-            </button>
-
-            <button style={reportButton}>
-              🚩 Reportar producto
-            </button>
-          </div>
-
-          <aside style={sellerCard}>
-            <p style={sectionLabel}>Vendido por</p>
-
-            <div style={sellerProfile}>
-              <div style={sellerPhoto}>
-                {seller.firstName?.charAt(0)?.toUpperCase() || "V"}
+            {activeTab === "security" && (
+              <div className="benefits-grid" style={benefitsGrid}>
+                <Benefit icon="🧾" title="Producto trazable" text="El producto queda asociado a una publicación y usuario." isLight={isLight} />
+                <Benefit icon="🛡" title="Pago protegido" text="El dinero puede retenerse hasta confirmar entrega." isLight={isLight} />
+                <Benefit icon="⚖️" title="Reclamos" text="Puedes abrir un reclamo si hay problema." isLight={isLight} />
+                <Benefit icon="🤖" title="QSM AI" text="El asistente puede ayudar a detectar señales de riesgo." isLight={isLight} />
               </div>
+            )}
 
+            {activeTab === "seller" && (
               <div>
-                <strong>
-                  {seller.firstName || "Vendedor"} {seller.lastName || ""}
-                </strong>
-                <p>@{generateUsername(seller.firstName, seller.lastName)}</p>
-                <span style={sellerBadge(seller.isVerified)}>
-                  {seller.isVerified ? "Identidad verificada" : "Identidad pendiente"}
-                </span>
-              </div>
-            </div>
-
-            <div style={trustBox}>
-              <h3>Nivel de confianza</h3>
-              <h2>{seller.trustScore || 50}/100</h2>
-              <p>{getTrustLevel(seller.trustScore || 50)}</p>
-
-              <div style={track}>
-                <div style={{ ...fill, width: `${seller.trustScore || 50}%` }}></div>
-              </div>
-            </div>
-
-            <InfoLine title="Miembro desde" value={seller.createdAt ? formatDate(seller.createdAt) : "Pendiente"} />
-            <InfoLine title="Correo" value={seller.email || "No disponible"} />
-            <InfoLine title="Estado" value={seller.isVerified ? "Verificado" : "Pendiente"} />
-            <InfoLine title="Nivel" value={getTrustLevel(seller.trustScore || 50)} />
-
-            <button
-              style={sellerButton}
-              onClick={() => navigate(`/seller/${seller._id || seller.id || ""}`)}
-            >
-              Ver perfil del vendedor
-            </button>
-          </aside>
-        </section>
-
-        <section style={tabs}>
-          <button onClick={() => setActiveTab("description")} style={activeTab === "description" ? tabActive : tab}>
-            Descripción
-          </button>
-
-          <button onClick={() => setActiveTab("details")} style={activeTab === "details" ? tabActive : tab}>
-            Detalles
-          </button>
-
-          <button onClick={() => setActiveTab("ai")} style={activeTab === "ai" ? tabActive : tab}>
-            Análisis QSM
-          </button>
-
-          <button onClick={() => setActiveTab("history")} style={activeTab === "history" ? tabActive : tab}>
-            Historial
-          </button>
-
-          <button onClick={() => setActiveTab("shipping")} style={activeTab === "shipping" ? tabActive : tab}>
-            Entrega
-          </button>
-        </section>
-
-        <section style={belowGrid}>
-          <div style={leftContent}>
-            <div style={panel}>
-              {activeTab === "description" && (
-                <>
-                  <h2>Descripción del vendedor</h2>
-                  <p style={paragraph}>
-                    {product.description || "El vendedor no ha agregado una descripción detallada todavía."}
-                  </p>
-                </>
-              )}
-
-              {activeTab === "details" && (
-                <>
-                  <h2>Detalles del producto</h2>
-                  <InfoLine title="ID del producto" value={product._id || "Pendiente"} />
-                  <InfoLine title="Categoría" value={product.category || "No disponible"} />
-                  <InfoLine title="Estado" value={formatCondition(product.condition)} />
-                  <InfoLine title="Calidad" value={formatQuality(product.quality)} />
-                  <InfoLine title="Estatus" value={formatStatus(product.status)} />
-                  <InfoLine title="Puntaje de evidencia" value={`${product.confidenceScore || 70}/100`} />
-                </>
-              )}
-
-              {activeTab === "ai" && (
-                <>
-                  <h2>Análisis QSM</h2>
-
-                  <p style={paragraph}>
-                    QSM evalúa el producto usando señales de precio, vendedor, descripción,
-                    evidencia, historial y nivel de confianza.
-                  </p>
-
-                  <div style={checkList}>
-                    <Check text="Vendedor registrado en la plataforma" />
-                    <Check text={`Nivel de riesgo actual: ${riskLevel}`} />
-                    <Check text={`Puntaje de evidencia: ${product.confidenceScore || 70}/100`} />
-                    <Check text={product.riskLevel ? `Código interno de riesgo: ${formatRisk(product.riskLevel)}` : "Sin riesgo crítico activo"} />
+                <h2 style={panelTitle(isLight)}>Información del vendedor</h2>
+                <div style={sellerBox(isLight)}>
+                  <div style={sellerAvatar(accent)}>
+                    {(seller.firstName || seller.email || "V").charAt(0).toUpperCase()}
                   </div>
-                </>
-              )}
-
-              {activeTab === "history" && (
-                <>
-                  <h2>Historial del producto</h2>
-
-                  <Timeline title="Producto publicado" text="El producto fue creado en QSM." />
-                  <Timeline title="Revisión inicial" text="QSM revisó la información básica del producto." />
-                  <Timeline title="Análisis de riesgo" text={`Resultado actual: ${riskLevel}.`} />
-                  <Timeline title="Pago Protegido" text="Disponible para compras seguras dentro de la plataforma." />
-                </>
-              )}
-
-              {activeTab === "shipping" && (
-                <>
-                  <h2>Entrega y protección</h2>
-                  <p style={paragraph}>
-                    La entrega debe ser acordada entre comprador y vendedor. QSM recomienda
-                    lugares seguros, evidencia de entrega y uso de Pago Protegido para cuidar el dinero.
-                  </p>
-                </>
-              )}
-            </div>
-
-            <div style={insightGrid}>
-              <div style={panel}>
-                <div style={panelHeader}>
-                  <h2>Seguridad QSM</h2>
-                  <span style={riskBadge(riskLevel)}>Riesgo {riskLevel}</span>
-                </div>
-
-                <p style={paragraph}>
-                  El sistema clasifica este producto según la información disponible.
-                </p>
-
-                <div style={checkList}>
-                  <Check text="Producto registrado en MongoDB" />
-                  <Check text="Vendedor enlazado correctamente" />
-                  <Check text="Pago Protegido disponible" />
-                  <Check text="Mensajería protegida por IA preparada" />
-                </div>
-              </div>
-
-              <div style={panel}>
-                <h2>Protección del comprador</h2>
-
-                <div style={certBox}>
-                  <div style={certIcon}>🛡</div>
                   <div>
-                    <strong>Pago Protegido QSM</strong>
-                    <p>
-                      El dinero se retiene hasta que el comprador confirme la entrega correcta.
+                    <strong>{formatUser(seller, "Vendedor QSM")}</strong>
+                    <p style={muted(isLight)}>{seller.email || "Correo no visible"}</p>
+                    <p style={muted(isLight)}>
+                      Estado: {seller.isVerified ? "Verificado" : "Pendiente de verificación"}
                     </p>
                   </div>
                 </div>
-
-                <div style={checkList}>
-                  <Check text="Dinero retenido durante la compra" />
-                  <Check text="Chat protegido por IA antifraude" />
-                  <Check text="Reclamos disponibles si ocurre un problema" />
-                  <Check text="Historial del producto visible" />
-                </div>
               </div>
-            </div>
-          </div>
+            )}
+          </section>
+        </main>
+      </div>
 
-          <aside style={chatCard}>
-            <div style={chatHeader}>
-              <strong>Chat con el vendedor</strong>
-              <span>● Demo visual</span>
-            </div>
-
-            <div style={chatBody}>
-              {messages.map((message, index) => (
-                <div
-                  key={index}
-                  style={message.from === "buyer" ? buyerMessage : sellerMessage}
-                >
-                  <p>{message.text}</p>
-                  <small>{message.time}</small>
-                </div>
-              ))}
-            </div>
-
-            <div style={chatInputRow}>
-              <input
-                value={chatMessage}
-                onChange={(e) => setChatMessage(e.target.value)}
-                placeholder="Escribe tu mensaje..."
-                style={chatInput}
-              />
-              <button onClick={sendMessage} style={sendButton}>➤</button>
-            </div>
-          </aside>
-        </section>
-
-        <section style={benefitRow}>
-          <Benefit icon="💰" title="Pago Protegido" text="Tu dinero se mantiene seguro hasta confirmar la entrega." />
-          <Benefit icon="🧾" title="Identidad verificada" text="Los vendedores pueden validar su identidad para generar confianza." />
-          <Benefit icon="🤖" title="IA antifraude" text="QSM analiza mensajes y señales sospechosas." />
-          <Benefit icon="⚖️" title="Reclamos protegidos" text="Si hay problemas, puedes abrir un reclamo con evidencia." />
-        </section>
-      </main>
-
-      <AiAssistant pageContext="product" />
+      <AiAssistant pageContext="product-details" />
     </div>
   );
 }
 
-function Spec({ title, value }) {
+function Info({ title, value, isLight }) {
   return (
-    <div style={spec}>
-      <p>{title}</p>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
-function InfoLine({ title, value }) {
-  return (
-    <div style={infoLine}>
+    <div style={infoBox(isLight)}>
       <span>{title}</span>
       <strong>{value}</strong>
     </div>
   );
 }
 
-function Check({ text }) {
+function Benefit({ icon, title, text, isLight }) {
   return (
-    <div style={check}>
-      <span>✅</span>
-      <p>{text}</p>
-    </div>
-  );
-}
-
-function Timeline({ title, text }) {
-  return (
-    <div style={timeline}>
-      <div style={timelineDot}></div>
+    <div style={benefit(isLight)}>
+      <span>{icon}</span>
       <div>
         <strong>{title}</strong>
         <p>{text}</p>
@@ -529,362 +470,221 @@ function Timeline({ title, text }) {
   );
 }
 
-function Benefit({ icon, title, text }) {
-  return (
-    <div style={benefit}>
-      <div style={benefitIcon}>{icon}</div>
-      <div>
-        <strong>{title}</strong>
-        <p>{text}</p>
-      </div>
-    </div>
-  );
-}
-
-const API_URL = "http://localhost:5000";
-
-function getImageUrl(image) {
-  if (!image) return "";
-
-  const cleanImage = String(image)
-    .trim()
-    .replaceAll("&#x2F;", "/")
-    .replaceAll("&amp;", "&");
-
-  if (!cleanImage) return "";
-
-  if (cleanImage.startsWith("http://") || cleanImage.startsWith("https://")) {
-    return cleanImage;
+function safeJson(value) {
+  try {
+    return value ? JSON.parse(value) : null;
+  } catch {
+    return null;
   }
-
-  if (cleanImage.startsWith("/uploads")) {
-    return `${API_URL}${cleanImage}`;
-  }
-
-  if (cleanImage.startsWith("uploads")) {
-    return `${API_URL}/${cleanImage}`;
-  }
-
-  return `${API_URL}/uploads/products/images/${cleanImage}`;
 }
 
-function getProductImage(product) {
-  if (product?.images && product.images.length > 0) {
-    const firstImage = getImageUrl(product.images[0]);
-
-    if (firstImage) {
-      return firstImage;
-    }
-  }
-
-  const category = (product?.category || "").toLowerCase();
-  const title = (product?.title || "").toLowerCase();
-
-  if (title.includes("ps5") || title.includes("playstation") || category.includes("gaming")) {
-    return "https://images.unsplash.com/photo-1606813907291-d86efa9b94db?auto=format&fit=crop&w=1200&q=90";
-  }
-
-  if (title.includes("iphone") || title.includes("celular")) {
-    return "https://images.unsplash.com/photo-1695048133142-1a20484d2569?auto=format&fit=crop&w=1200&q=90";
-  }
-
-  if (title.includes("laptop") || title.includes("macbook")) {
-    return "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=1200&q=90";
-  }
-
-  if (title.includes("watch") || title.includes("reloj")) {
-    return "https://images.unsplash.com/photo-1434493789847-2f02dc6ca35d?auto=format&fit=crop&w=1200&q=90";
-  }
-
-  return "https://images.unsplash.com/photo-1560472355-536de3962603?auto=format&fit=crop&w=1200&q=90";
-}
-
-function isProductVerified(product) {
-  return product?.seller?.isVerified || product?.isQsmVerified || false;
-}
-
-function getRiskLevel(product) {
-  if (!product?.riskLevel) return "Bajo";
-
-  const map = {
-    LOW: "Bajo",
-    MEDIUM: "Medio",
-    HIGH: "Alto",
-    CRITICAL: "Crítico"
-  };
-
-  return map[product.riskLevel] || "Bajo";
-}
-
-function formatRisk(value) {
-  const map = {
-    LOW: "Bajo",
-    MEDIUM: "Medio",
-    HIGH: "Alto",
-    CRITICAL: "Crítico"
-  };
-
-  return map[value] || value || "Bajo";
-}
-
-function formatCondition(condition) {
-  const map = {
-    NEW: "Nuevo",
-    LIKE_NEW: "Como nuevo",
-    USED_GOOD: "Buen estado",
-    USED_DETAILS: "Usado con detalles",
-    FOR_PARTS: "Para piezas"
-  };
-
-  return map[condition] || "No disponible";
-}
-
-function formatQuality(quality) {
-  const map = {
-    EXCELLENT: "Excelente",
-    GOOD: "Buena",
-    FAIR: "Aceptable",
-    DAMAGED: "Dañado",
-    UNKNOWN: "No especificada"
-  };
-
-  return map[quality] || "No especificada";
-}
-
-function formatStatus(status) {
-  const map = {
-    ACTIVE: "Activo",
-    PENDING: "Pendiente",
-    SOLD: "Vendido",
-    DISABLED: "Deshabilitado",
-    COMPLETED: "Completado"
-  };
-
-  return map[status] || status || "No disponible";
-}
-
-function generateUsername(firstName, lastName) {
-  const first = firstName ? firstName.toLowerCase().replaceAll(" ", "") : "vendedor";
-  const last = lastName ? lastName.toLowerCase().replaceAll(" ", "") : "qsm";
-
-  return `${first}${last}`;
-}
-
-function getTrustLevel(score) {
-  if (score >= 90) return "Nivel alto";
-  if (score >= 70) return "Nivel medio";
-  return "Nivel inicial";
+function formatUser(user, fallback) {
+  if (!user || typeof user !== "object") return fallback;
+  const name = `${user.firstName || ""} ${user.lastName || ""}`.trim();
+  return name || user.name || user.email || fallback;
 }
 
 function formatMoney(value) {
-  if (!value && value !== 0) return "RD$ 0";
-
   return new Intl.NumberFormat("es-DO", {
     style: "currency",
     currency: "DOP",
     maximumFractionDigits: 0
-  }).format(value);
+  }).format(Number(value || 0));
 }
 
-function formatDate(date) {
-  try {
-    return new Date(date).toLocaleDateString("es-DO", {
-      year: "numeric",
-      month: "long",
-      day: "numeric"
-    });
-  } catch {
-    return "fecha pendiente";
+function getImageUrl(image) {
+  if (!image) return "";
+  if (typeof image !== "string") return "";
+
+  const clean = image.trim().replaceAll("&#x2F;", "/").replaceAll("&amp;", "&");
+
+  if (clean.startsWith("http")) return clean;
+  if (clean.startsWith("/uploads")) return `http://localhost:5000${clean}`;
+  if (clean.startsWith("uploads")) return `http://localhost:5000/${clean}`;
+
+  return `http://localhost:5000/uploads/products/images/${clean}`;
+}
+
+function getProductImage(product) {
+  if (!product) return "";
+
+  if (Array.isArray(product.images) && product.images.length > 0) {
+    return getImageUrl(product.images[0]);
   }
+
+  if (product.image) return getImageUrl(product.image);
+  if (product.imageUrl) return getImageUrl(product.imageUrl);
+
+  return "";
 }
 
-const page = {
+function getRiskLevel(product) {
+  if (!product) {
+    return { label: "Medio", icon: "🟡", text: "No hay datos suficientes para evaluar el producto." };
+  }
+
+  const score = Number(product.riskScore || product.fraudScore || 25);
+  const price = Number(product.price || 0);
+  const seller = product.seller || {};
+
+  if (score >= 75 || product.riskLevel === "HIGH") {
+    return {
+      label: "Alto",
+      icon: "🔴",
+      text: "QSM detectó señales de riesgo. Compra solo usando Pago Protegido."
+    };
+  }
+
+  if (score >= 45 || price <= 0 || !seller._id) {
+    return {
+      label: "Medio",
+      icon: "🟡",
+      text: "Recomendamos validar la publicación y contactar al vendedor antes de comprar."
+    };
+  }
+
+  return {
+    label: "Bajo",
+    icon: "🟢",
+    text: "No se detectaron señales críticas. Aun así, mantén la operación dentro de QSM."
+  };
+}
+
+function getAccentColor(color) {
+  const map = {
+    cyan: "#35d0c3",
+    purple: "#8b5cf6",
+    pink: "#ec4899",
+    blue: "#38bdf8",
+    green: "#22c55e",
+    orange: "#f59e0b"
+  };
+  return map[color] || "#35d0c3";
+}
+
+function applySettings(settings) {
+  const accent = getAccentColor(settings.accentColor || "cyan");
+  document.documentElement.style.setProperty("--qsm-accent", accent);
+  document.body.dataset.qsmTheme = settings.theme || "dark";
+  localStorage.setItem("qsm_theme", settings.theme || "dark");
+  localStorage.setItem("qsm_accent", settings.accentColor || "cyan");
+  localStorage.setItem("qsm_language", settings.language || "es");
+  localStorage.setItem("qsm_settings", JSON.stringify(settings));
+}
+
+const page = (isLight) => ({
   minHeight: "100vh",
   width: "100%",
-  background:
-    "radial-gradient(circle at top right, rgba(53,208,195,0.10), transparent 35%), #020617",
-  color: "white",
-  display: "grid",
-  gridTemplateColumns: "260px minmax(0, 1fr)",
-  overflowX: "hidden"
-};
+  background: isLight
+    ? "radial-gradient(circle at top right, rgba(53,208,195,.16), transparent 34%), #f8fafc"
+    : "radial-gradient(circle at top right, rgba(139,92,246,.14), transparent 34%), radial-gradient(circle at 18% 15%, rgba(53,208,195,.10), transparent 28%), #020617",
+  color: isLight ? "#0f172a" : "white"
+});
 
-const sidebar = {
+const layout = (settings) => ({
+  width: "100%",
   minHeight: "100vh",
-  background: "rgba(8,17,35,0.96)",
-  borderRight: "1px solid rgba(53,208,195,0.18)",
-  padding: "22px 16px",
-  position: "sticky",
-  top: 0
-};
-
-const brand = {
-  display: "flex",
-  alignItems: "center",
-  gap: "12px",
-  color: "white",
-  textDecoration: "none",
-  marginBottom: "34px"
-};
-
-const brandIcon = {
-  width: "44px",
-  height: "44px",
-  borderRadius: "15px",
-  border: "1px solid rgba(53,208,195,0.45)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  color: "#35d0c3"
-};
-
-const brandTitle = {
-  display: "block",
-  fontSize: "28px",
-  lineHeight: "28px"
-};
-
-const brandSub = {
-  color: "#94a3b8",
-  fontSize: "12px"
-};
-
-const menu = {
   display: "grid",
-  gap: "10px"
-};
+  gridTemplateColumns: settings.compactSidebar ? "230px minmax(0, 1fr)" : "280px minmax(0, 1fr)",
+  overflowX: "hidden"
+});
 
-const menuItem = {
-  color: "#cbd5e1",
-  textDecoration: "none",
-  padding: "13px 14px",
-  borderRadius: "14px",
-  background: "rgba(15,23,42,0.34)",
-  border: "1px solid rgba(148,163,184,0.08)",
-  fontWeight: "800"
-};
-
-const activeMenuItem = {
-  ...menuItem,
-  background: "rgba(53,208,195,0.14)",
-  border: "1px solid rgba(53,208,195,0.42)",
-  color: "#35d0c3"
-};
-
-const aiSideCard = {
-  marginTop: "28px",
-  background: "rgba(53,208,195,0.08)",
-  border: "1px solid rgba(53,208,195,0.18)",
-  borderRadius: "20px",
-  padding: "18px",
-  color: "#cbd5e1"
-};
-
-const main = {
+const main = (settings) => ({
   width: "100%",
   minWidth: 0,
-  padding: "18px 28px 54px",
+  padding:
+    settings.density === "compact"
+      ? "18px 24px 42px"
+      : settings.density === "spacious"
+      ? "34px 44px 70px"
+      : "26px 34px 56px",
   overflowX: "hidden"
+});
+
+const header = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: "20px",
+  margin: "22px 0"
 };
 
-const breadcrumb = {
-  color: "#94a3b8",
-  margin: "14px 0 18px",
+const headerActions = {
   display: "flex",
-  alignItems: "center",
-  gap: "14px",
+  gap: "10px",
   flexWrap: "wrap"
 };
 
-const backButton = {
-  background: "rgba(15,23,42,0.58)",
-  color: "#cbd5e1",
-  border: "1px solid rgba(53,208,195,0.18)",
-  padding: "12px 15px",
-  borderRadius: "14px",
-  cursor: "pointer",
-  fontWeight: "800"
-};
+const label = (accent) => ({
+  color: accent,
+  letterSpacing: "4px",
+  fontSize: "12px",
+  fontWeight: "950",
+  textTransform: "uppercase",
+  margin: 0
+});
 
-const productHero = {
+const title = (isLight) => ({
+  fontSize: "clamp(38px, 3.4vw, 62px)",
+  lineHeight: "1",
+  margin: "10px 0",
+  letterSpacing: "-2px",
+  color: isLight ? "#0f172a" : "white"
+});
+
+const muted = (isLight) => ({
+  color: isLight ? "#475569" : "#cbd5e1",
+  lineHeight: "25px"
+});
+
+const productLayout = {
   display: "grid",
-  gridTemplateColumns: "minmax(360px, 1fr) minmax(420px, 1fr) 330px",
-  gap: "22px",
-  alignItems: "stretch",
-  marginBottom: "22px"
+  gridTemplateColumns: "minmax(0, 1.1fr) 430px",
+  gap: "20px",
+  marginBottom: "20px"
 };
 
-const galleryCard = {
-  background: "rgba(15,23,42,0.62)",
-  border: "1px solid rgba(53,208,195,0.16)",
+const galleryPanel = (isLight, settings) => ({
+  background: isLight ? "rgba(255,255,255,.88)" : "rgba(15,23,42,.72)",
+  border: isLight ? "1px solid rgba(15,23,42,.08)" : "1px solid rgba(56,189,248,.16)",
+  borderRadius: "30px",
+  padding: "18px",
+  boxShadow: isLight ? "0 24px 70px rgba(15,23,42,.08)" : "0 24px 90px rgba(0,0,0,.25)",
+  backdropFilter: settings.glassEffect === false ? "none" : "blur(16px)"
+});
+
+const imageBox = (isLight) => ({
+  height: "560px",
   borderRadius: "24px",
-  padding: "16px",
-  minWidth: 0
-};
-
-const imageStage = {
-  height: "470px",
-  position: "relative",
-  borderRadius: "22px",
+  background: isLight ? "rgba(226,232,240,.8)" : "rgba(2,6,23,.45)",
   overflow: "hidden",
-  background: "rgba(2,6,23,0.70)"
-};
-
-const imageGlow = {
-  position: "absolute",
-  inset: "20%",
-  background: "radial-gradient(circle, rgba(53,208,195,0.22), transparent 65%)",
-  filter: "blur(20px)",
-  animation: "pulseGlow 4s ease-in-out infinite"
-};
+  position: "relative",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center"
+});
 
 const mainImage = {
-  position: "relative",
-  zIndex: 2,
   width: "100%",
   height: "100%",
   objectFit: "cover"
 };
 
-const noImage = {
-  width: "100%",
-  height: "100%",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  color: "#64748b",
-  fontSize: "54px"
+const imagePlaceholder = {
+  fontSize: "80px"
 };
 
-const verifiedBadge = (verified) => ({
+const statusBadge = (status) => ({
   position: "absolute",
-  top: "14px",
-  left: "14px",
-  zIndex: 3,
-  background: verified ? "rgba(34,197,94,0.18)" : "rgba(245,158,11,0.18)",
-  color: verified ? "#86efac" : "#fde68a",
-  border: verified
-    ? "1px solid rgba(34,197,94,0.32)"
-    : "1px solid rgba(245,158,11,0.32)",
-  padding: "8px 12px",
+  top: "16px",
+  left: "16px",
+  background: "rgba(34,197,94,.16)",
+  color: "#86efac",
+  border: "1px solid rgba(34,197,94,.34)",
   borderRadius: "999px",
-  fontWeight: "900",
-  fontSize: "12px"
+  padding: "8px 12px",
+  fontWeight: "950"
 });
-
-const favoriteButton = {
-  position: "absolute",
-  top: "14px",
-  right: "14px",
-  zIndex: 3,
-  width: "42px",
-  height: "42px",
-  borderRadius: "50%",
-  background: "rgba(2,6,23,0.72)",
-  border: "1px solid rgba(255,255,255,0.18)",
-  color: "white",
-  cursor: "pointer"
-};
 
 const thumbRow = {
   display: "flex",
@@ -893,21 +693,23 @@ const thumbRow = {
   overflowX: "auto"
 };
 
-const thumb = {
-  width: "76px",
-  height: "76px",
-  borderRadius: "14px",
-  border: "1px solid rgba(148,163,184,0.14)",
-  background: "rgba(2,6,23,0.58)",
+const thumb = (isLight) => ({
+  width: "92px",
+  height: "72px",
+  borderRadius: "16px",
+  border: isLight ? "1px solid rgba(15,23,42,.10)" : "1px solid rgba(148,163,184,.18)",
+  background: "transparent",
   padding: 0,
   overflow: "hidden",
-  cursor: "pointer"
-};
+  cursor: "pointer",
+  flexShrink: 0
+});
 
-const thumbActive = {
-  ...thumb,
-  border: "2px solid #35d0c3"
-};
+const activeThumb = (accent) => ({
+  ...thumb(false),
+  border: `2px solid ${accent}`,
+  boxShadow: `0 0 22px ${accent}44`
+});
 
 const thumbImage = {
   width: "100%",
@@ -915,432 +717,252 @@ const thumbImage = {
   objectFit: "cover"
 };
 
-const emptyThumb = {
-  color: "#94a3b8",
-  padding: "20px"
-};
-
-const productCard = {
-  background: "rgba(15,23,42,0.62)",
-  border: "1px solid rgba(53,208,195,0.16)",
-  borderRadius: "24px",
+const summaryPanel = (isLight, settings) => ({
+  background: isLight ? "rgba(255,255,255,.88)" : "rgba(15,23,42,.72)",
+  border: isLight ? "1px solid rgba(15,23,42,.08)" : "1px solid rgba(56,189,248,.16)",
+  borderRadius: "30px",
   padding: "24px",
-  minWidth: 0
-};
+  boxShadow: isLight ? "0 24px 70px rgba(15,23,42,.08)" : "0 24px 90px rgba(0,0,0,.25)",
+  backdropFilter: settings.glassEffect === false ? "none" : "blur(16px)",
+  alignSelf: "start"
+});
 
-const productTitleRow = {
+const priceRow = {
   display: "flex",
   justifyContent: "space-between",
-  gap: "14px",
+  gap: "16px",
   alignItems: "flex-start"
 };
 
-const productTitle = {
-  fontSize: "34px",
-  lineHeight: "40px",
-  margin: "0 0 8px"
-};
-
-const productSubtitle = {
-  color: "#cbd5e1",
-  margin: 0
-};
-
-const published = {
-  color: "#94a3b8"
-};
-
-const productVerifiedTag = (verified) => ({
-  background: verified ? "rgba(14,165,233,0.16)" : "rgba(245,158,11,0.16)",
-  color: verified ? "#7dd3fc" : "#fde68a",
-  border: verified
-    ? "1px solid rgba(14,165,233,0.28)"
-    : "1px solid rgba(245,158,11,0.28)",
-  padding: "8px 11px",
-  borderRadius: "999px",
-  fontSize: "12px",
-  fontWeight: "900",
-  whiteSpace: "nowrap"
+const priceText = (accent) => ({
+  color: accent,
+  fontSize: "36px",
+  margin: "6px 0 0"
 });
 
-const price = {
-  color: "#35d0c3",
-  fontSize: "40px",
-  margin: "26px 0 8px"
-};
-
-const aiPriceText = {
-  color: "#94a3b8",
-  marginBottom: "22px"
-};
-
-const specGrid = {
-  display: "grid",
-  gridTemplateColumns: "repeat(3, 1fr)",
-  gap: "12px",
-  marginBottom: "22px"
-};
-
-const spec = {
-  background: "rgba(2,6,23,0.46)",
-  border: "1px solid rgba(148,163,184,0.12)",
+const favoriteButton = (active) => ({
+  width: "54px",
+  height: "54px",
   borderRadius: "18px",
-  padding: "16px"
-};
-
-const buyButton = {
-  width: "100%",
-  background: "linear-gradient(135deg, #35d0c3, #2563eb)",
-  color: "#020617",
-  border: "none",
-  padding: "16px",
-  borderRadius: "16px",
-  fontWeight: "900",
+  border: active ? "1px solid rgba(236,72,153,.45)" : "1px solid rgba(148,163,184,.18)",
+  background: active ? "rgba(236,72,153,.16)" : "rgba(15,23,42,.28)",
   cursor: "pointer",
-  marginBottom: "14px"
-};
-
-const cartButton = {
-  ...buyButton,
-  background: "rgba(15,23,42,0.72)",
-  color: "white",
-  border: "1px solid rgba(148,163,184,0.18)"
-};
-
-const reportButton = {
-  ...buyButton,
-  background: "rgba(127,29,29,0.12)",
-  color: "#fca5a5",
-  border: "1px solid rgba(248,113,113,0.28)",
-  marginBottom: 0
-};
-
-const sellerCard = {
-  background: "rgba(15,23,42,0.62)",
-  border: "1px solid rgba(53,208,195,0.16)",
-  borderRadius: "24px",
-  padding: "22px",
-  minWidth: 0
-};
-
-const sectionLabel = {
-  color: "#94a3b8",
-  marginTop: 0
-};
-
-const sellerProfile = {
-  display: "flex",
-  gap: "14px",
-  alignItems: "center",
-  marginBottom: "20px"
-};
-
-const sellerPhoto = {
-  width: "72px",
-  height: "72px",
-  borderRadius: "50%",
-  background: "linear-gradient(135deg, #35d0c3, #7c3aed)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: "30px",
-  fontWeight: "900",
-  flexShrink: 0
-};
-
-const sellerBadge = (verified) => ({
-  display: "inline-block",
-  marginTop: "8px",
-  padding: "6px 10px",
-  borderRadius: "999px",
-  background: verified ? "rgba(34,197,94,0.18)" : "rgba(245,158,11,0.18)",
-  color: verified ? "#86efac" : "#fde68a",
-  fontWeight: "900",
-  fontSize: "12px"
+  fontSize: "24px"
 });
 
-const trustBox = {
-  background: "rgba(2,6,23,0.50)",
-  border: "1px solid rgba(53,208,195,0.16)",
-  borderRadius: "20px",
-  padding: "18px",
-  marginBottom: "18px"
-};
-
-const track = {
-  height: "10px",
-  background: "rgba(148,163,184,0.18)",
-  borderRadius: "999px",
-  overflow: "hidden"
-};
-
-const fill = {
-  height: "100%",
-  background: "linear-gradient(90deg, #35d0c3, #7c3aed)"
-};
-
-const sellerButton = {
-  width: "100%",
-  background: "rgba(148,163,184,0.12)",
-  color: "white",
-  border: "1px solid rgba(148,163,184,0.18)",
-  padding: "14px",
-  borderRadius: "14px",
-  fontWeight: "900",
-  cursor: "pointer",
-  marginTop: "12px"
-};
-
-const tabs = {
-  display: "flex",
-  gap: "18px",
-  borderBottom: "1px solid rgba(148,163,184,0.16)",
-  marginBottom: "18px",
-  overflowX: "auto"
-};
-
-const tab = {
-  background: "transparent",
-  color: "#94a3b8",
-  border: "none",
-  padding: "16px 0",
-  cursor: "pointer",
-  fontWeight: "900",
-  whiteSpace: "nowrap"
-};
-
-const tabActive = {
-  ...tab,
-  color: "#35d0c3",
-  borderBottom: "2px solid #35d0c3"
-};
-
-const belowGrid = {
-  display: "grid",
-  gridTemplateColumns: "minmax(0, 1fr) 360px",
-  gap: "22px",
-  marginBottom: "26px"
-};
-
-const leftContent = {
-  minWidth: 0
-};
-
-const panel = {
-  background: "rgba(15,23,42,0.62)",
-  border: "1px solid rgba(53,208,195,0.16)",
-  borderRadius: "22px",
-  padding: "24px",
-  marginBottom: "18px",
-  minWidth: 0
-};
-
-const panelHeader = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: "12px",
-  alignItems: "center"
-};
-
-const paragraph = {
-  color: "#cbd5e1",
-  lineHeight: "28px"
-};
-
-const infoLine = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: "18px",
-  padding: "13px 0",
-  borderBottom: "1px solid rgba(148,163,184,0.12)",
-  color: "#cbd5e1"
-};
-
-const checkList = {
-  display: "grid",
-  gap: "10px",
-  marginTop: "16px"
-};
-
-const check = {
-  display: "flex",
-  gap: "10px",
-  color: "#cbd5e1"
-};
-
-const insightGrid = {
+const metaGrid = {
   display: "grid",
   gridTemplateColumns: "1fr 1fr",
-  gap: "18px"
+  gap: "12px",
+  margin: "18px 0"
 };
 
-const riskBadge = (risk) => ({
-  padding: "8px 12px",
-  borderRadius: "999px",
-  fontWeight: "900",
-  fontSize: "12px",
-  background:
-    risk === "Alto" || risk === "Crítico"
-      ? "rgba(239,68,68,0.18)"
-      : risk === "Medio"
-      ? "rgba(245,158,11,0.18)"
-      : "rgba(34,197,94,0.18)",
-  color:
-    risk === "Alto" || risk === "Crítico"
-      ? "#fca5a5"
-      : risk === "Medio"
-      ? "#fde68a"
-      : "#86efac"
+const infoBox = (isLight) => ({
+  background: isLight ? "rgba(248,250,252,.85)" : "rgba(2,6,23,.35)",
+  border: isLight ? "1px solid rgba(15,23,42,.08)" : "1px solid rgba(148,163,184,.10)",
+  borderRadius: "16px",
+  padding: "13px",
+  display: "grid",
+  gap: "5px"
 });
 
-const certBox = {
-  display: "flex",
-  gap: "16px",
-  alignItems: "center",
-  color: "#cbd5e1"
-};
-
-const certIcon = {
-  width: "72px",
-  height: "72px",
-  borderRadius: "22px",
-  background: "rgba(53,208,195,0.12)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: "34px",
-  flexShrink: 0
-};
-
-const timeline = {
+const sellerBox = (isLight) => ({
   display: "flex",
   gap: "14px",
-  padding: "14px 0",
-  color: "#cbd5e1"
-};
-
-const timelineDot = {
-  width: "12px",
-  height: "12px",
-  borderRadius: "50%",
-  background: "#35d0c3",
-  marginTop: "6px",
-  flexShrink: 0
-};
-
-const chatCard = {
-  background: "rgba(15,23,42,0.62)",
-  border: "1px solid rgba(53,208,195,0.16)",
-  borderRadius: "22px",
-  overflow: "hidden",
-  minHeight: "520px",
-  display: "grid",
-  gridTemplateRows: "auto 1fr auto"
-};
-
-const chatHeader = {
-  display: "flex",
-  justifyContent: "space-between",
-  padding: "18px",
-  borderBottom: "1px solid rgba(148,163,184,0.12)"
-};
-
-const chatBody = {
-  padding: "18px",
-  display: "grid",
-  gap: "12px",
-  alignContent: "start"
-};
-
-const sellerMessage = {
-  justifySelf: "start",
-  maxWidth: "82%",
-  background: "rgba(30,41,59,0.88)",
-  padding: "12px",
-  borderRadius: "16px",
-  color: "#cbd5e1"
-};
-
-const buyerMessage = {
-  justifySelf: "end",
-  maxWidth: "82%",
-  background: "rgba(37,99,235,0.88)",
-  padding: "12px",
-  borderRadius: "16px",
-  color: "white"
-};
-
-const chatInputRow = {
-  display: "flex",
-  gap: "10px",
-  padding: "14px",
-  borderTop: "1px solid rgba(148,163,184,0.12)"
-};
-
-const chatInput = {
-  flex: 1,
-  background: "rgba(2,6,23,0.55)",
-  border: "1px solid rgba(148,163,184,0.16)",
-  color: "white",
-  padding: "13px",
-  borderRadius: "14px",
-  outline: "none"
-};
-
-const sendButton = {
-  width: "46px",
-  borderRadius: "14px",
-  border: "none",
-  background: "#35d0c3",
-  color: "#020617",
-  cursor: "pointer",
-  fontWeight: "900"
-};
-
-const benefitRow = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
-  gap: "16px"
-};
-
-const benefit = {
-  display: "flex",
-  gap: "14px",
-  background: "rgba(15,23,42,0.45)",
-  border: "1px solid rgba(53,208,195,0.12)",
+  alignItems: "center",
+  background: isLight ? "rgba(248,250,252,.85)" : "rgba(2,6,23,.35)",
+  border: isLight ? "1px solid rgba(15,23,42,.08)" : "1px solid rgba(148,163,184,.10)",
   borderRadius: "18px",
-  padding: "18px",
-  color: "#cbd5e1"
-};
+  padding: "14px",
+  margin: "16px 0"
+});
 
-const benefitIcon = {
-  width: "46px",
-  height: "46px",
-  borderRadius: "14px",
-  background: "rgba(53,208,195,0.12)",
+const sellerAvatar = (accent) => ({
+  width: "58px",
+  height: "58px",
+  borderRadius: "18px",
+  background: `linear-gradient(135deg, ${accent}, #8b5cf6)`,
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  flexShrink: 0
+  color: "white",
+  fontWeight: "950",
+  fontSize: "24px"
+});
+
+const trustBadge = (accent) => ({
+  display: "inline-flex",
+  background: `${accent}22`,
+  color: accent,
+  border: `1px solid ${accent}66`,
+  padding: "7px 10px",
+  borderRadius: "999px",
+  fontWeight: "900"
+});
+
+const riskBox = (risk) => ({
+  background:
+    risk.label === "Alto"
+      ? "rgba(239,68,68,.14)"
+      : risk.label === "Medio"
+      ? "rgba(245,158,11,.14)"
+      : "rgba(34,197,94,.14)",
+  border:
+    risk.label === "Alto"
+      ? "1px solid rgba(239,68,68,.32)"
+      : risk.label === "Medio"
+      ? "1px solid rgba(245,158,11,.32)"
+      : "1px solid rgba(34,197,94,.32)",
+  color:
+    risk.label === "Alto"
+      ? "#fecaca"
+      : risk.label === "Medio"
+      ? "#fde68a"
+      : "#bbf7d0",
+  borderRadius: "18px",
+  padding: "14px",
+  margin: "16px 0"
+});
+
+const actionsRow = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: "10px",
+  margin: "18px 0"
 };
 
-const primaryButton = {
-  background: "#35d0c3",
-  color: "#020617",
+const primaryButton = (accent) => ({
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: `linear-gradient(135deg, ${accent}, #38bdf8, #8b5cf6)`,
+  color: "white",
+  textDecoration: "none",
   border: "none",
   padding: "14px 18px",
   borderRadius: "14px",
+  fontWeight: "950",
   cursor: "pointer",
-  fontWeight: "900"
+  boxShadow: `0 18px 54px ${accent}2e`
+});
+
+const outlineButton = (isLight) => ({
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: isLight ? "rgba(255,255,255,.82)" : "rgba(15,23,42,.64)",
+  border: isLight ? "1px solid rgba(15,23,42,.10)" : "1px solid rgba(148,163,184,.16)",
+  color: isLight ? "#0f172a" : "white",
+  textDecoration: "none",
+  borderRadius: "14px",
+  padding: "14px 18px",
+  fontWeight: "950",
+  cursor: "pointer"
+});
+
+const dangerButton = {
+  background: "rgba(239,68,68,.16)",
+  border: "1px solid rgba(239,68,68,.32)",
+  color: "#fecaca",
+  borderRadius: "14px",
+  padding: "14px 18px",
+  fontWeight: "950",
+  cursor: "pointer"
 };
 
-const centerBox = {
+const escrowBox = (isLight, accent) => ({
+  background: `${accent}14`,
+  border: `1px solid ${accent}44`,
+  color: isLight ? "#0f172a" : "#cbd5e1",
+  borderRadius: "18px",
+  padding: "14px"
+});
+
+const tabsPanel = (isLight, settings) => ({
+  background: isLight ? "rgba(255,255,255,.88)" : "rgba(15,23,42,.72)",
+  border: isLight ? "1px solid rgba(15,23,42,.08)" : "1px solid rgba(56,189,248,.16)",
+  borderRadius: "30px",
+  padding: "24px",
+  boxShadow: isLight ? "0 24px 70px rgba(15,23,42,.08)" : "0 24px 90px rgba(0,0,0,.25)",
+  backdropFilter: settings.glassEffect === false ? "none" : "blur(16px)"
+});
+
+const tabRow = {
+  display: "grid",
+  gridTemplateColumns: "repeat(3, 1fr)",
+  gap: "10px",
+  marginBottom: "18px"
+};
+
+const tabButton = (isLight) => ({
+  background: isLight ? "rgba(248,250,252,.90)" : "rgba(2,6,23,.45)",
+  border: isLight ? "1px solid rgba(15,23,42,.08)" : "1px solid rgba(148,163,184,.14)",
+  color: isLight ? "#0f172a" : "#cbd5e1",
+  padding: "13px",
+  borderRadius: "14px",
+  cursor: "pointer",
+  fontWeight: "900"
+});
+
+const activeTabButton = (accent) => ({
+  ...tabButton(false),
+  background: `${accent}22`,
+  border: `1px solid ${accent}66`,
+  color: "white"
+});
+
+const panelTitle = (isLight) => ({
+  color: isLight ? "#0f172a" : "white"
+});
+
+const descriptionText = (isLight) => ({
+  color: isLight ? "#334155" : "#cbd5e1",
+  lineHeight: "30px",
+  fontSize: "17px"
+});
+
+const benefitsGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+  gap: "14px"
+};
+
+const benefit = (isLight) => ({
+  background: isLight ? "rgba(248,250,252,.85)" : "rgba(2,6,23,.35)",
+  border: isLight ? "1px solid rgba(15,23,42,.08)" : "1px solid rgba(148,163,184,.10)",
+  borderRadius: "18px",
+  padding: "16px",
+  color: isLight ? "#0f172a" : "#cbd5e1"
+});
+
+const successBox = {
+  background: "rgba(34,197,94,.14)",
+  border: "1px solid rgba(34,197,94,.32)",
+  color: "#bbf7d0",
+  padding: "14px 18px",
+  borderRadius: "16px",
+  marginBottom: "16px",
+  fontWeight: "800"
+};
+
+const errorBox = {
+  background: "rgba(127,29,29,.24)",
+  border: "1px solid rgba(248,113,113,.30)",
+  color: "#fecaca",
+  padding: "14px 18px",
+  borderRadius: "16px",
+  marginBottom: "16px",
+  fontWeight: "800"
+};
+
+const centerCard = (isLight) => ({
   minHeight: "100vh",
   display: "flex",
   flexDirection: "column",
   alignItems: "center",
   justifyContent: "center",
-  textAlign: "center"
-};
+  textAlign: "center",
+  color: isLight ? "#0f172a" : "white"
+});
 
 export default ProductDetails;

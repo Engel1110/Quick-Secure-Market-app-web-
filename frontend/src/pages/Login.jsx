@@ -297,7 +297,9 @@ function Login() {
                 </label>
 
                 <button type="button" style={forgotButton}>
-                  ¿Olvidaste tu contraseña?
+                  <Link to="/forgot-password">
+                   ¿Olvidaste tu contraseña?
+                    </Link>
                 </button>
               </div>
 

@@ -5,6 +5,8 @@ const validator = require("validator");
 const User = require("../models/User");
 const SecurityAlert = require("../models/SecurityAlert");
 const SessionLog = require("../models/SessionLog");
+const crypto = require("crypto");
+const { sendPasswordResetEmail } = require("../services/email.service");
 
 const FACE_CHECK_INTERVAL_HOURS = 72;
 const MAX_FAILED_LOGIN_ATTEMPTS = 5;
@@ -373,9 +375,97 @@ const getMe = async (req, res) => {
     });
   }
 };
+const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+    const cleanEmail = String(email || "").toLowerCase().trim();
+
+    const user = await User.findOne({ email: cleanEmail });
+
+    if (!user) {
+      return res.json({
+        success: true,
+        message: "Si existe una cuenta asociada, recibirás un correo de recuperación."
+      });
+    }
+
+    const resetToken = crypto.randomBytes(32).toString("hex");
+
+    user.resetPasswordToken = resetToken;
+    user.resetPasswordExpires = Date.now() + 1000 * 60 * 15;
+
+    await user.save();
+
+    const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
+
+    await sendPasswordResetEmail({
+      to: user.email,
+      resetLink
+    });
+
+    res.json({
+      success: true,
+      message: "Si existe una cuenta asociada, recibirás un correo de recuperación."
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Error enviando correo de recuperación.",
+      error: error.message
+    });
+  }
+};
+
+const resetPassword = async (req, res) => {
+  try {
+    const { token, password } = req.body;
+
+    const user = await User.findOne({
+      resetPasswordToken: token,
+      resetPasswordExpires: { $gt: Date.now() }
+    }).select("+password");
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: "Token inválido o expirado."
+      });
+    }
+
+    if (!isStrongPassword(password)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "La contraseña debe tener mínimo 8 caracteres, una mayúscula, una minúscula, un número y un símbolo."
+      });
+    }
+
+    user.password = await bcrypt.hash(password, 12);
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpires = undefined;
+    user.failedLoginAttempts = 0;
+    user.accountLockedUntil = null;
+    user.securityLevel = "NORMAL";
+
+    await user.save();
+
+    res.json({
+      success: true,
+      message: "Contraseña actualizada correctamente."
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Error restableciendo contraseña.",
+      error: error.message
+    });
+  }
+};
 
 module.exports = {
   register,
   login,
-  getMe
+  getMe,
+  forgotPassword,
+  resetPassword
 };

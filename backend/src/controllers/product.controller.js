@@ -115,6 +115,14 @@ const calculateProductAnalysis = ({
   };
 };
 
+const getUserId = (req) => {
+  return req.user?._id || req.user?.id || req.user?.userId || "";
+};
+
+const isUserAdmin = (req) => {
+  return req.user?.role === "ADMIN" || req.user?.isAdmin === true;
+};
+
 const createProduct = async (req, res) => {
   try {
     const {
@@ -197,7 +205,7 @@ const createProduct = async (req, res) => {
       specialPriceExplanation: specialPriceExplanation ? sanitizeText(specialPriceExplanation) : "",
       images: safeImages,
       video: safeVideo,
-      seller: req.user._id,
+      seller: getUserId(req),
       status: "ACTIVE",
       isQsmVerified: analysis.confidenceScore >= 85,
       riskLevel: analysis.riskLevel,
@@ -235,6 +243,32 @@ const getProducts = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Error obteniendo productos",
+      error: error.message
+    });
+  }
+};
+
+const getMyProducts = async (req, res) => {
+  try {
+    const userId = getUserId(req);
+
+    const products = await Product.find({
+      seller: userId,
+      status: { $ne: "DISABLED" }
+    })
+      .populate("seller", "firstName lastName email trustScore isVerified")
+      .sort({ createdAt: -1 });
+
+    return res.json({
+      success: true,
+      count: products.length,
+      products,
+      myProducts: products
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Error obteniendo tus productos",
       error: error.message
     });
   }
@@ -306,7 +340,10 @@ const improveProductEvidence = async (req, res) => {
       });
     }
 
-    if (product.seller._id.toString() !== req.user._id.toString()) {
+    const userId = getUserId(req);
+    const sellerId = product.seller?._id || product.seller;
+
+    if (String(sellerId) !== String(userId) && !isUserAdmin(req)) {
       return res.status(403).json({
         success: false,
         message: "No tienes permiso para modificar este producto"
@@ -374,9 +411,66 @@ const improveProductEvidence = async (req, res) => {
   }
 };
 
+const deleteProduct = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!isValidObjectId(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "ID de producto no válido"
+      });
+    }
+
+    const product = await Product.findById(id);
+
+    if (!product || product.status === "DISABLED") {
+      return res.status(404).json({
+        success: false,
+        message: "Producto no encontrado"
+      });
+    }
+
+    const userId = getUserId(req);
+    const sellerId = product.seller?._id || product.seller;
+
+    if (String(sellerId) !== String(userId) && !isUserAdmin(req)) {
+      return res.status(403).json({
+        success: false,
+        message: "No tienes permiso para eliminar esta publicación"
+      });
+    }
+
+    /*
+      Recomendado para MVP:
+      No borramos físicamente el documento, lo desactivamos.
+      Así conservas historial para órdenes, reclamos, auditoría y antifraude.
+    */
+    product.status = "DISABLED";
+    product.deletedAt = new Date();
+    product.deletedBy = userId;
+
+    await product.save();
+
+    return res.json({
+      success: true,
+      message: "Publicación eliminada correctamente",
+      productId: id
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Error eliminando la publicación",
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   createProduct,
   getProducts,
+  getMyProducts,
   getProductById,
-  improveProductEvidence
+  improveProductEvidence,
+  deleteProduct
 };
