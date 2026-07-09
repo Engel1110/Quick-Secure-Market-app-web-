@@ -1,23 +1,29 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const validator = require("validator");
+const crypto = require("crypto");
 
 const User = require("../models/User");
 const SecurityAlert = require("../models/SecurityAlert");
 const SessionLog = require("../models/SessionLog");
-const crypto = require("crypto");
-const { sendPasswordResetEmail } = require("../services/email.service");
+
+const {
+  sendPasswordResetEmail,
+  sendPasswordChangedEmail
+} = require("../services/email.service");
 
 const FACE_CHECK_INTERVAL_HOURS = 72;
 const MAX_FAILED_LOGIN_ATTEMPTS = 5;
 const ACCOUNT_LOCK_MINUTES = 30;
+const RESET_TOKEN_MINUTES = 15;
 
 const generateToken = (user) => {
   return jwt.sign(
     {
       id: user._id,
       email: user.email,
-      role: user.role
+      role: user.role,
+      passwordVersion: user.passwordVersion || 0
     },
     process.env.JWT_SECRET,
     {
@@ -34,6 +40,10 @@ const isStrongPassword = (password) => {
     minNumbers: 1,
     minSymbols: 1
   });
+};
+
+const hashResetToken = (token) => {
+  return crypto.createHash("sha256").update(token).digest("hex");
 };
 
 const sanitizeText = (value) => {
@@ -69,22 +79,6 @@ const createSecurityAlertSafe = (data) => {
   });
 };
 
-const shouldRequirePeriodicFaceCheck = (user) => {
-  if (!user.isVerified) {
-    return false;
-  }
-
-  if (!user.lastFaceVerification) {
-    return true;
-  }
-
-  const lastFaceTime = new Date(user.lastFaceVerification).getTime();
-  const now = Date.now();
-  const hoursSinceLastFaceCheck = (now - lastFaceTime) / (1000 * 60 * 60);
-
-  return hoursSinceLastFaceCheck >= FACE_CHECK_INTERVAL_HOURS;
-};
-
 const buildSafeUserResponse = (user) => {
   return {
     id: user._id,
@@ -99,8 +93,20 @@ const buildSafeUserResponse = (user) => {
     trustScore: user.trustScore,
     securityLevel: user.securityLevel,
     requireFaceCheck: user.requireFaceCheck,
-    lastFaceVerification: user.lastFaceVerification || null
+    lastFaceVerification: user.lastFaceVerification || null,
+    passwordChangedAt: user.passwordChangedAt || null
   };
+};
+
+const shouldRequirePeriodicFaceCheck = (user) => {
+  if (!user.isVerified) return false;
+  if (!user.lastFaceVerification) return true;
+
+  const lastFaceTime = new Date(user.lastFaceVerification).getTime();
+  const now = Date.now();
+  const hoursSinceLastFaceCheck = (now - lastFaceTime) / (1000 * 60 * 60);
+
+  return hoursSinceLastFaceCheck >= FACE_CHECK_INTERVAL_HOURS;
 };
 
 const register = async (req, res) => {
@@ -159,6 +165,8 @@ const register = async (req, res) => {
       requireFaceCheck: false,
       failedLoginAttempts: 0,
       suspiciousLoginCount: 0,
+      passwordVersion: 0,
+      passwordChangedAt: null,
       lastLoginIp: getClientIp(req),
       lastLoginDevice: getDeviceInfo(req)
     });
@@ -224,7 +232,7 @@ const login = async (req, res) => {
       });
     }
 
-    if (user.accountLockedUntil && user.accountLockedUntil > new Date()) {
+        if (user.accountLockedUntil && user.accountLockedUntil > new Date()) {
       return res.status(423).json({
         success: false,
         message: "Cuenta bloqueada temporalmente por seguridad",
@@ -234,7 +242,6 @@ const login = async (req, res) => {
 
     const currentIp = getClientIp(req);
     const currentDevice = getDeviceInfo(req);
-
     const passwordMatch = await bcrypt.compare(password, user.password);
 
     if (!passwordMatch) {
@@ -354,7 +361,8 @@ const login = async (req, res) => {
 
 const getMe = async (req, res) => {
   try {
-    const user = await User.findById(req.user._id).select("-password");
+    const userId = req.user?._id || req.user?.id;
+    const user = await User.findById(userId).select("-password");
 
     if (!user) {
       return res.status(404).json({
@@ -367,7 +375,8 @@ const getMe = async (req, res) => {
       success: true,
       user: buildSafeUserResponse(user)
     });
-  } catch (error) {
+
+      } catch (error) {
     return res.status(500).json({
       success: false,
       message: "Error obteniendo usuario",
@@ -375,40 +384,75 @@ const getMe = async (req, res) => {
     });
   }
 };
+
 const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
     const cleanEmail = String(email || "").toLowerCase().trim();
+
+    const genericMessage =
+      "Si existe una cuenta asociada, recibirás un correo de recuperación.";
+
+    if (!cleanEmail || !validator.isEmail(cleanEmail)) {
+      return res.json({
+        success: true,
+        message: genericMessage
+      });
+    }
 
     const user = await User.findOne({ email: cleanEmail });
 
     if (!user) {
       return res.json({
         success: true,
-        message: "Si existe una cuenta asociada, recibirás un correo de recuperación."
+        message: genericMessage
       });
     }
 
     const resetToken = crypto.randomBytes(32).toString("hex");
+    const hashedToken = hashResetToken(resetToken);
 
-    user.resetPasswordToken = resetToken;
-    user.resetPasswordExpires = Date.now() + 1000 * 60 * 15;
+    user.resetPasswordToken = hashedToken;
+    user.resetPasswordExpires = new Date(
+      Date.now() + RESET_TOKEN_MINUTES * 60 * 1000
+    );
 
     await user.save();
 
-    const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+    const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
+
+    createSecurityAlertSafe({
+      user: user._id,
+      type: "PASSWORD_RESET_REQUEST",
+      riskLevel: "MEDIUM",
+      message: "Se solicitó restablecer la contraseña de la cuenta.",
+      ipAddress: getClientIp(req),
+      deviceInfo: getDeviceInfo(req)
+    });
+
+    createSessionLogSafe({
+      user: user._id,
+      ipAddress: getClientIp(req),
+      deviceInfo: getDeviceInfo(req),
+      loginStatus: "PASSWORD_RESET_REQUEST",
+      riskLevel: "MEDIUM",
+      notes: "Solicitud de recuperación de contraseña"
+    });
 
     await sendPasswordResetEmail({
       to: user.email,
-      resetLink
+      resetLink,
+      ip: getClientIp(req),
+      device: getDeviceInfo(req)
     });
 
-    res.json({
+    return res.json({
       success: true,
-      message: "Si existe una cuenta asociada, recibirás un correo de recuperación."
+      message: genericMessage
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Error enviando correo de recuperación.",
       error: error.message
@@ -418,17 +462,19 @@ const forgotPassword = async (req, res) => {
 
 const resetPassword = async (req, res) => {
   try {
-    const { token, password } = req.body;
+    const { token, password, confirmPassword } = req.body;
 
-    const user = await User.findOne({
-      resetPasswordToken: token,
-      resetPasswordExpires: { $gt: Date.now() }
-    }).select("+password");
-
-    if (!user) {
+    if (!token || !password) {
       return res.status(400).json({
         success: false,
-        message: "Token inválido o expirado."
+        message: "Token y nueva contraseña son obligatorios."
+      });
+    }
+
+    if (confirmPassword !== undefined && password !== confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Las contraseñas no coinciden."
       });
     }
 
@@ -440,23 +486,198 @@ const resetPassword = async (req, res) => {
       });
     }
 
+    const hashedToken = hashResetToken(token);
+
+    const user = await User.findOne({
+      resetPasswordToken: hashedToken,
+      resetPasswordExpires: { $gt: new Date() }
+    }).select("+password +resetPasswordToken +resetPasswordExpires");
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+
+         message: "Token inválido o expirado."
+      });
+    }
+
+    const samePassword = await bcrypt.compare(password, user.password);
+
+    if (samePassword) {
+      return res.status(400).json({
+        success: false,
+        message: "La nueva contraseña no puede ser igual a la contraseña anterior."
+      });
+    }
+
     user.password = await bcrypt.hash(password, 12);
-    user.resetPasswordToken = undefined;
-    user.resetPasswordExpires = undefined;
+    user.resetPasswordToken = null;
+    user.resetPasswordExpires = null;
     user.failedLoginAttempts = 0;
     user.accountLockedUntil = null;
     user.securityLevel = "NORMAL";
+    user.requireFaceCheck = true;
+    user.passwordChangedAt = new Date();
+    user.passwordVersion = (user.passwordVersion || 0) + 1;
 
     await user.save();
 
-    res.json({
+    await sendPasswordChangedEmail({
+      to: user.email,
+      ip: getClientIp(req),
+      device: getDeviceInfo(req)
+    });
+
+    createSecurityAlertSafe({
+      user: user._id,
+      type: "PASSWORD_RESET_COMPLETED",
+      riskLevel: "HIGH",
+      message:
+        "La contraseña fue restablecida correctamente mediante enlace de recuperación.",
+      ipAddress: getClientIp(req),
+      deviceInfo: getDeviceInfo(req)
+    });
+
+    createSessionLogSafe({
+      user: user._id,
+      ipAddress: getClientIp(req),
+      deviceInfo: getDeviceInfo(req),
+      loginStatus: "PASSWORD_RESET_COMPLETED",
+      riskLevel: "HIGH",
+      notes: "Contraseña restablecida correctamente"
+    });
+
+    return res.json({
       success: true,
-      message: "Contraseña actualizada correctamente."
+      message:
+        "Contraseña actualizada correctamente. Por seguridad, inicia sesión nuevamente."
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Error restableciendo contraseña.",
+      error: error.message
+    });
+  }
+};
+
+const changePassword = async (req, res) => {
+  try {
+    const userId = req.user?._id || req.user?.id;
+    const { currentPassword, newPassword, confirmPassword } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "No autorizado."
+      });
+    }
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Contraseña actual y nueva contraseña son obligatorias."
+      });
+    }
+
+    if (confirmPassword !== undefined && newPassword !== confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Las contraseñas no coinciden."
+      });
+    }
+
+    if (!isStrongPassword(newPassword)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "La contraseña debe tener mínimo 8 caracteres, una mayúscula, una minúscula, un número y un símbolo."
+      });
+    }
+
+    const user = await User.findById(userId).select("+password");
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "Usuario no encontrado."
+      });
+    }
+
+    const passwordMatch = await bcrypt.compare(currentPassword, user.password);
+
+    if (!passwordMatch) {
+      createSecurityAlertSafe({
+        user: user._id,
+        type: "PASSWORD_CHANGE_FAILED",
+        riskLevel: "HIGH",
+        message:
+          "Intento fallido de cambio de contraseña por contraseña actual incorrecta.",
+        ipAddress: getClientIp(req),
+        deviceInfo: getDeviceInfo(req)
+      });
+
+      return res.status(401).json({
+        success: false,
+        message: "La contraseña actual es incorrecta."
+      });
+    }
+
+    const samePassword = await bcrypt.compare(newPassword, user.password);
+
+    if (samePassword) {
+      return res.status(400).json({
+        success: false,
+        message: "La nueva contraseña no puede ser igual a la contraseña actual."
+      });
+    }
+
+    user.password = await bcrypt.hash(newPassword, 12);
+    user.passwordChangedAt = new Date();
+    user.passwordVersion = (user.passwordVersion || 0) + 1;
+    user.failedLoginAttempts = 0;
+    user.accountLockedUntil = null;
+    user.securityLevel = "NORMAL";
+    user.requireFaceCheck = true;
+    user.resetPasswordToken = null;
+    user.resetPasswordExpires = null;
+
+    await user.save();
+
+    await sendPasswordChangedEmail({
+      to: user.email,
+      ip: getClientIp(req),
+      device: getDeviceInfo(req)
+    });
+
+    createSecurityAlertSafe({
+      user: user._id,
+      type: "PASSWORD_CHANGED",
+      riskLevel: "HIGH",
+      message:
+        "La contraseña fue cambiada correctamente desde la cuenta autenticada.",
+      ipAddress: getClientIp(req),
+      deviceInfo: getDeviceInfo(req)
+    });
+
+    createSessionLogSafe({
+      user: user._id,
+      ipAddress: getClientIp(req),
+      deviceInfo: getDeviceInfo(req),
+      loginStatus: "PASSWORD_CHANGED",
+      riskLevel: "HIGH",
+      notes: "Contraseña cambiada por el usuario autenticado"
+    });
+
+    return res.json({
+      success: true,
+      message:
+        "Contraseña cambiada correctamente. Por seguridad, vuelve a iniciar sesión."
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: "Error cambiando contraseña.",
       error: error.message
     });
   }
@@ -467,5 +688,6 @@ module.exports = {
   login,
   getMe,
   forgotPassword,
-  resetPassword
-};
+  resetPassword,
+  changePassword
+};       

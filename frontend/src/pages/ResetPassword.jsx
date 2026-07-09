@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import api from "../api/axios";
+import api from "../services/api";
 
 function ResetPassword() {
   const navigate = useNavigate();
@@ -28,6 +28,7 @@ function ResetPassword() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     setMessage("");
     setError("");
 
@@ -37,7 +38,9 @@ function ResetPassword() {
     }
 
     if (!passwordValid) {
-      setError("La contraseña debe tener mínimo 8 caracteres, una mayúscula, una minúscula, un número y un símbolo.");
+      setError(
+        "La contraseña debe tener mínimo 8 caracteres, una mayúscula, una minúscula, un número y un símbolo."
+      );
       return;
     }
 
@@ -48,16 +51,18 @@ function ResetPassword() {
 
     try {
       setLoading(true);
+
       const res = await api.post("/auth/reset-password", {
         token,
-        password: form.password
+        password: form.password,
+        confirmPassword: form.confirmPassword
       });
 
       setMessage(res.data.message || "Contraseña actualizada correctamente.");
 
       setTimeout(() => {
         navigate("/login");
-      }, 1200);
+      }, 1400);
     } catch (err) {
       setError(
         err.response?.data?.message ||
@@ -75,13 +80,15 @@ function ResetPassword() {
 
         <p style={label}>NUEVA CONTRASEÑA</p>
         <h1 style={title}>Restablecer acceso</h1>
+
         <p style={subtitle}>
           Crea una contraseña segura para volver a entrar a tu cuenta QSM.
         </p>
 
         {!token && (
           <div style={errorBox}>
-            Este enlace no tiene token válido. Solicita un nuevo enlace de recuperación.
+            Este enlace no tiene token válido. Solicita un nuevo enlace de
+            recuperación.
           </div>
         )}
 
@@ -95,8 +102,11 @@ function ResetPassword() {
               type="password"
               placeholder="Mínimo 8 caracteres"
               value={form.password}
-              onChange={(e) => setForm({ ...form, password: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, password: e.target.value })
+              }
               style={input}
+              autoComplete="new-password"
             />
           </label>
 
@@ -106,17 +116,46 @@ function ResetPassword() {
               type="password"
               placeholder="Repite tu contraseña"
               value={form.confirmPassword}
-              onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, confirmPassword: e.target.value })
+              }
               style={input}
+              autoComplete="new-password"
             />
           </label>
 
           <div style={rulesBox}>
-            <p style={passwordValid ? ruleOk : ruleBad}>
-              {passwordValid ? "✅" : "•"} Mínimo 8 caracteres, mayúscula, minúscula, número y símbolo.
+            <p style={form.password.length >= 8 ? ruleOk : ruleBad}>
+              {form.password.length >= 8 ? "✅" : "•"} Mínimo 8 caracteres
             </p>
-            <p style={form.password && form.password === form.confirmPassword ? ruleOk : ruleBad}>
-              {form.password && form.password === form.confirmPassword ? "✅" : "•"} Las contraseñas deben coincidir.
+
+            <p style={/[A-Z]/.test(form.password) ? ruleOk : ruleBad}>
+              {/[A-Z]/.test(form.password) ? "✅" : "•"} Una letra mayúscula
+            </p>
+
+            <p style={/[a-z]/.test(form.password) ? ruleOk : ruleBad}>
+              {/[a-z]/.test(form.password) ? "✅" : "•"} Una letra minúscula
+            </p>
+
+            <p style={/\d/.test(form.password) ? ruleOk : ruleBad}>
+              {/\d/.test(form.password) ? "✅" : "•"} Un número
+            </p>
+
+            <p style={/[^A-Za-z0-9]/.test(form.password) ? ruleOk : ruleBad}>
+              {/[^A-Za-z0-9]/.test(form.password) ? "✅" : "•"} Un símbolo
+            </p>
+
+            <p
+              style={
+                form.password && form.password === form.confirmPassword
+                  ? ruleOk
+                  : ruleBad
+              }
+            >
+              {form.password && form.password === form.confirmPassword
+                ? "✅"
+                : "•"}{" "}
+              Las contraseñas coinciden
             </p>
           </div>
 
@@ -169,11 +208,38 @@ const icon = {
   fontSize: "32px"
 };
 
-const label = { margin: 0, color: "#35d0c3", letterSpacing: "4px", fontSize: "12px", fontWeight: "950" };
-const title = { fontSize: "38px", lineHeight: "1", margin: "12px 0" };
-const subtitle = { color: "#cbd5e1", lineHeight: "27px", marginBottom: "22px" };
-const formStyle = { display: "grid", gap: "16px", textAlign: "left" };
-const field = { display: "grid", gap: "9px", color: "#e2e8f0", fontWeight: "800" };
+const label = {
+  margin: 0,
+  color: "#35d0c3",
+  letterSpacing: "4px",
+  fontSize: "12px",
+  fontWeight: "950"
+};
+
+const title = {
+  fontSize: "38px",
+  lineHeight: "1",
+  margin: "12px 0"
+};
+
+const subtitle = {
+  color: "#cbd5e1",
+  lineHeight: "27px",
+  marginBottom: "22px"
+};
+
+const formStyle = {
+  display: "grid",
+  gap: "16px",
+  textAlign: "left"
+};
+
+const field = {
+  display: "grid",
+  gap: "9px",
+  color: "#e2e8f0",
+  fontWeight: "800"
+};
 
 const input = {
   height: "56px",
@@ -192,8 +258,16 @@ const rulesBox = {
   padding: "14px"
 };
 
-const ruleOk = { color: "#bbf7d0", margin: "5px 0", fontWeight: "800" };
-const ruleBad = { color: "#cbd5e1", margin: "5px 0" };
+const ruleOk = {
+  color: "#bbf7d0",
+  margin: "5px 0",
+  fontWeight: "800"
+};
+
+const ruleBad = {
+  color: "#cbd5e1",
+  margin: "5px 0"
+};
 
 const button = {
   height: "58px",

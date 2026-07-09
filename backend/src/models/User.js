@@ -164,11 +164,35 @@ const userSchema = new mongoose.Schema(
       type: String,
       enum: ["ACTIVE", "PENDING", "SUSPENDED", "BANNED"],
       default: "PENDING"
+    },
+
+    resetPasswordToken: {
+      type: String,
+      default: null,
+      select: false
+    },
+
+    resetPasswordExpires: {
+      type: Date,
+      default: null,
+      select: false
+    },
+
+    passwordChangedAt: {
+      type: Date,
+      default: null
+    },
+
+    passwordVersion: {
+      type: Number,
+      default: 0,
+      min: 0
     }
   },
   { timestamps: true }
 );
 
 userSchema.index({ documentId: 1 }, { sparse: true });
+userSchema.index({ resetPasswordToken: 1 }, { sparse: true });
 
 module.exports = mongoose.model("User", userSchema);

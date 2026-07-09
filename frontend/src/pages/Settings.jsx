@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "../api/axios";
 import Sidebar from "../components/Sidebar";
 import Topbar from "../components/Topbar";
@@ -18,10 +19,12 @@ const DEFAULT_SETTINGS = {
 };
 
 function Settings() {
+  const navigate = useNavigate();
   const savedUser = safeJson(localStorage.getItem("qsm_user")) || safeJson(localStorage.getItem("user")) || {};
   const [activeTab, setActiveTab] = useState("appearance");
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [passwordForm, setPasswordForm] = useState({ currentPassword: "", newPassword: "", confirmPassword: "" });
+  const [showPasswords, setShowPasswords] = useState({ currentPassword: false, newPassword: false, confirmPassword: false });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -63,16 +66,59 @@ function Settings() {
 
   const changePassword = async (event) => {
     event.preventDefault();
-    if (!passwordForm.currentPassword || !passwordForm.newPassword) return setError("Completa la contraseña actual y la nueva contraseña.");
-    if (passwordForm.newPassword !== passwordForm.confirmPassword) return setError("La nueva contraseña no coincide.");
-    if (passwordForm.newPassword.length < 8) return setError("La nueva contraseña debe tener mínimo 8 caracteres.");
+    setError("");
+    setMessage("");
+
+    if (!passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) {
+      setError("Completa todos los campos de contraseña.");
+      return;
+    }
+
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setError("La nueva contraseña no coincide.");
+      return;
+    }
+
+    if (passwordForm.currentPassword === passwordForm.newPassword) {
+      setError("La nueva contraseña no puede ser igual a la actual.");
+      return;
+    }
+
+    if (!isStrongPasswordLocal(passwordForm.newPassword)) {
+      setError("La contraseña debe tener mínimo 8 caracteres, una mayúscula, una minúscula, un número y un símbolo.");
+      return;
+    }
+
+    const confirmChange = window.confirm("¿Deseas cambiar tu contraseña? Por seguridad se cerrarán tus sesiones activas.");
+    if (!confirmChange) return;
+
     try {
-      setSaving(true); setError(""); setMessage("");
-      await api.patch("/settings/password", { currentPassword: passwordForm.currentPassword, newPassword: passwordForm.newPassword });
+      setSaving(true);
+      setError("");
+      setMessage("");
+
+      await api.post("/auth/change-password", {
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword,
+        confirmPassword: passwordForm.confirmPassword
+      });
+
       setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
-      setMessage("Contraseña actualizada correctamente.");
-    } catch (err) { setError(err?.response?.data?.message || "No se pudo cambiar la contraseña. Verifica PATCH /settings/password."); }
-    finally { setSaving(false); }
+      setMessage("Contraseña actualizada correctamente. Todas las sesiones fueron cerradas.");
+
+      localStorage.removeItem("qsm_token");
+      localStorage.removeItem("token");
+      sessionStorage.removeItem("qsm_token");
+      sessionStorage.removeItem("token");
+
+      setTimeout(() => {
+        navigate("/login");
+      }, 1800);
+    } catch (err) {
+      setError(err?.response?.data?.message || "No se pudo cambiar la contraseña. Verifica tu contraseña actual.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const resetSettings = () => {
@@ -125,7 +171,7 @@ function Settings() {
                 {activeTab==="language" && <><PanelHeader title="Idioma y región" text="Controla el idioma principal, moneda y formato regional." /><div className="two-columns" style={twoColumns}><div style={settingBox}><h3>Idioma principal</h3><select value={settings.language} onChange={(e)=>updateSetting("language",e.target.value)} style={input}><option value="es">Español</option><option value="en">English</option></select></div><InfoBox title="Región" value="República Dominicana" /><InfoBox title="Moneda" value="DOP / RD$" /><InfoBox title="Zona horaria" value="America/Santo_Domingo" /></div></>}
                 {activeTab==="notifications" && <><PanelHeader title="Notificaciones" text="Decide qué alertas quieres recibir dentro de QSM." /><div className="two-columns" style={twoColumns}>{Object.entries({messages:"Mensajes",orders:"Órdenes",disputes:"Reclamos",security:"Seguridad",email:"Correo"}).map(([k,t])=><SettingToggle key={k} title={t} text={`Alertas de ${t.toLowerCase()}.`} checked={settings.notifications[k]} onChange={(v)=>updateNested("notifications",k,v)} />)}</div></>}
                 {activeTab==="privacy" && <><PanelHeader title="Privacidad" text="Controla qué información se muestra a otros usuarios." /><div className="two-columns" style={twoColumns}><SettingToggle title="Mostrar puntuación QSM" text="Permite mostrar tu confianza." checked={settings.privacy.showTrustScore} onChange={(v)=>updateNested("privacy","showTrustScore",v)} /><SettingToggle title="Mostrar ubicación general" text="Ciudad/provincia, no dirección exacta." checked={settings.privacy.showLocation} onChange={(v)=>updateNested("privacy","showLocation",v)} /><SettingToggle title="Permitir mensajes" text="Usuarios pueden contactarte." checked={settings.privacy.allowMessages} onChange={(v)=>updateNested("privacy","allowMessages",v)} /></div></>}
-                {activeTab==="security" && <><PanelHeader title="Seguridad" text="Opciones para proteger tu cuenta QSM." /><div className="two-columns" style={twoColumns}><SettingToggle title="Alertas de inicio" text="Avisar sesiones nuevas." checked={settings.security.loginAlerts} onChange={(v)=>updateNested("security","loginAlerts",v)} /><SettingToggle title="Doble factor" text="Preparado para fase 2FA." checked={settings.security.twoFactorEnabled} onChange={(v)=>updateNested("security","twoFactorEnabled",v)} /><div style={settingBox}><h3>Tiempo de sesión</h3><p style={muted}>Inactividad antes de nueva sesión.</p><select value={settings.security.sessionTimeout} onChange={(e)=>updateNested("security","sessionTimeout",e.target.value)} style={input}><option value="15">15 minutos</option><option value="30">30 minutos</option><option value="60">1 hora</option><option value="240">4 horas</option></select></div></div><form onSubmit={changePassword} style={passwordBox}><h3>Cambiar contraseña</h3><div className="two-columns" style={twoColumns}><input type="password" placeholder="Contraseña actual" value={passwordForm.currentPassword} onChange={(e)=>setPasswordForm({...passwordForm,currentPassword:e.target.value})} style={input}/><input type="password" placeholder="Nueva contraseña" value={passwordForm.newPassword} onChange={(e)=>setPasswordForm({...passwordForm,newPassword:e.target.value})} style={input}/><input type="password" placeholder="Confirmar contraseña" value={passwordForm.confirmPassword} onChange={(e)=>setPasswordForm({...passwordForm,confirmPassword:e.target.value})} style={input}/></div><button type="submit" disabled={saving} style={primaryButton}>Actualizar contraseña</button></form></>}
+                {activeTab==="security" && <><PanelHeader title="Seguridad" text="Opciones para proteger tu cuenta QSM." /><div className="two-columns" style={twoColumns}><SettingToggle title="Alertas de inicio" text="Avisar sesiones nuevas." checked={settings.security.loginAlerts} onChange={(v)=>updateNested("security","loginAlerts",v)} /><SettingToggle title="Doble factor" text="Preparado para fase 2FA." checked={settings.security.twoFactorEnabled} onChange={(v)=>updateNested("security","twoFactorEnabled",v)} /><div style={settingBox}><h3>Tiempo de sesión</h3><p style={muted}>Inactividad antes de nueva sesión.</p><select value={settings.security.sessionTimeout} onChange={(e)=>updateNested("security","sessionTimeout",e.target.value)} style={input}><option value="15">15 minutos</option><option value="30">30 minutos</option><option value="60">1 hora</option><option value="240">4 horas</option></select></div></div><form onSubmit={changePassword} style={passwordBox}><h3>🔐 Cambiar contraseña</h3><p style={muted}>Usa una contraseña fuerte. Al cambiarla, QSM cerrará tus sesiones activas por seguridad.</p><div className="two-columns" style={twoColumns}><PasswordField placeholder="Contraseña actual" value={passwordForm.currentPassword} show={showPasswords.currentPassword} onToggle={()=>setShowPasswords({...showPasswords,currentPassword:!showPasswords.currentPassword})} onChange={(e)=>setPasswordForm({...passwordForm,currentPassword:e.target.value})}/><PasswordField placeholder="Nueva contraseña" value={passwordForm.newPassword} show={showPasswords.newPassword} onToggle={()=>setShowPasswords({...showPasswords,newPassword:!showPasswords.newPassword})} onChange={(e)=>setPasswordForm({...passwordForm,newPassword:e.target.value})}/><PasswordField placeholder="Confirmar contraseña" value={passwordForm.confirmPassword} show={showPasswords.confirmPassword} onToggle={()=>setShowPasswords({...showPasswords,confirmPassword:!showPasswords.confirmPassword})} onChange={(e)=>setPasswordForm({...passwordForm,confirmPassword:e.target.value})}/></div><PasswordRules password={passwordForm.newPassword} confirmPassword={passwordForm.confirmPassword}/><button type="submit" disabled={saving} style={primaryButton}>{saving ? "Actualizando..." : "Actualizar contraseña →"}</button></form></>}
                 {activeTab==="account" && <><PanelHeader title="Cuenta" text="Resumen de tu usuario actual." /><div style={profileBox}><div style={avatar}>{(savedUser.firstName||savedUser.email||"U").charAt(0).toUpperCase()}</div><div><h2>{savedUser.firstName||"Usuario"} {savedUser.lastName||"QSM"}</h2><p>{savedUser.email||"usuario@qsm.com"}</p><strong>Confianza QSM: {savedUser.trustScore||50}/100</strong></div></div><div style={dangerBox}><h3>Zona sensible</h3><p>En una siguiente fase puedes agregar eliminación de cuenta, exportación de datos y cierre de sesiones.</p></div></>}
                 <div className="action-row" style={actionRow}><button onClick={resetSettings} style={outlineButton}>Restaurar</button><button onClick={saveSettings} disabled={saving} style={primaryButton}>{saving ? "Guardando..." : "Guardar cambios →"}</button></div>
               </section>
@@ -150,6 +196,18 @@ function formatAccent(color){return ({cyan:"Cian",purple:"Morado",pink:"Rosado",
 function getAccentColor(color){return ({cyan:"#35d0c3",purple:"#8b5cf6",pink:"#ec4899",blue:"#38bdf8",green:"#22c55e",orange:"#f59e0b"}[color]||"#35d0c3")}
 function applyLocalTheme(settings){const root=document.documentElement;root.style.setProperty("--qsm-accent",getAccentColor(settings.accentColor));root.style.setProperty("--qsm-theme",settings.theme);localStorage.setItem("qsm_theme",settings.theme);localStorage.setItem("qsm_accent",settings.accentColor);localStorage.setItem("qsm_language",settings.language);localStorage.setItem("qsm_settings",JSON.stringify(settings));document.body.dataset.qsmTheme=settings.theme}
 function getThemePreview(theme,accentColor){const accent=getAccentColor(accentColor);const dark=theme==="dark";return{card:{marginTop:"16px",padding:"22px",borderRadius:"22px",background:dark?"rgba(2,6,23,.70)":"rgba(255,255,255,.92)",color:dark?"white":"#0f172a",border:`1px solid ${accent}55`},badge:{display:"inline-flex",padding:"7px 11px",borderRadius:"999px",background:`${accent}22`,color:accent,fontWeight:"900"},button:{marginTop:"10px",background:`linear-gradient(135deg, ${accent}, #8b5cf6)`,color:"white",border:"none",padding:"12px 16px",borderRadius:"13px",fontWeight:"950"}}}
+
+function isStrongPasswordLocal(password) {
+  return password.length >= 8 && /[A-Z]/.test(password) && /[a-z]/.test(password) && /\d/.test(password) && /[^A-Za-z0-9]/.test(password);
+}
+
+function PasswordField({ placeholder, value, onChange, show, onToggle }) {
+  return <div style={passwordInputWrap}><input type={show ? "text" : "password"} placeholder={placeholder} value={value} onChange={onChange} style={passwordInput} autoComplete="new-password"/><button type="button" onClick={onToggle} style={passwordEye}>{show ? "🙈" : "👁️"}</button></div>;
+}
+
+function PasswordRules({ password, confirmPassword }) {
+  return <div style={passwordRulesBox}><p style={password.length >= 8 ? ruleOk : ruleBad}>✓ Mínimo 8 caracteres</p><p style={/[A-Z]/.test(password) ? ruleOk : ruleBad}>✓ Una mayúscula</p><p style={/[a-z]/.test(password) ? ruleOk : ruleBad}>✓ Una minúscula</p><p style={/\d/.test(password) ? ruleOk : ruleBad}>✓ Un número</p><p style={/[^A-Za-z0-9]/.test(password) ? ruleOk : ruleBad}>✓ Un símbolo</p><p style={password && password === confirmPassword ? ruleOk : ruleBad}>✓ Las contraseñas coinciden</p></div>;
+}
 
 const page={minHeight:"100vh",width:"100%",background:"radial-gradient(circle at top right, rgba(139,92,246,.14), transparent 34%), radial-gradient(circle at 18% 15%, rgba(53,208,195,.10), transparent 28%), #020617",color:"white"};
 const layout={width:"100%",minHeight:"100vh",display:"grid",gridTemplateColumns:"280px minmax(0, 1fr)",overflowX:"hidden"};
@@ -194,4 +252,10 @@ const primaryButton={display:"inline-flex",alignItems:"center",justifyContent:"c
 const successBox={background:"rgba(34,197,94,.14)",border:"1px solid rgba(34,197,94,.32)",color:"#bbf7d0",padding:"14px 18px",borderRadius:"16px",marginBottom:"16px",fontWeight:"800"};
 const errorBox={background:"rgba(127,29,29,.24)",border:"1px solid rgba(248,113,113,.30)",color:"#fecaca",padding:"14px 18px",borderRadius:"16px",marginBottom:"16px",fontWeight:"800"};
 const centerCard={background:"rgba(15,23,42,.72)",border:"1px solid rgba(56,189,248,.14)",borderRadius:"24px",padding:"44px",textAlign:"center",color:"#cbd5e1"};
+const passwordInputWrap={display:"flex",alignItems:"center",background:"rgba(2,6,23,.55)",border:"1px solid rgba(148,163,184,.16)",borderRadius:"15px",padding:"0 12px"};
+const passwordInput={flex:1,minHeight:"54px",background:"transparent",border:"none",color:"white",outline:"none"};
+const passwordEye={background:"transparent",border:"none",color:"white",cursor:"pointer",fontSize:"18px"};
+const passwordRulesBox={background:"rgba(2,6,23,.45)",border:"1px solid rgba(148,163,184,.12)",borderRadius:"16px",padding:"14px"};
+const ruleOk={color:"#bbf7d0",margin:"6px 0",fontWeight:"800"};
+const ruleBad={color:"#94a3b8",margin:"6px 0"};
 export default Settings;

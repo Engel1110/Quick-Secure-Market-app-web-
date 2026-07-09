@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import api from "../api/axios";
+import api from "../services/api";
 
 function ForgotPassword() {
   const [email, setEmail] = useState("");

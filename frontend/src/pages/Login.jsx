@@ -296,11 +296,16 @@ function Login() {
                   Recordarme
                 </label>
 
-                <button type="button" style={forgotButton}>
-                  <Link to="/forgot-password">
-                   ¿Olvidaste tu contraseña?
-                    </Link>
-                </button>
+               <Link
+                 to="/forgot-password"
+                 style={{
+                  textDecoration: "none",
+                 color: "#35d0c3",
+                 fontWeight: "800"
+               }}
+                  >
+               ¿Olvidaste tu contraseña?
+                 </Link>
               </div>
 
               {message && <div style={alertBox}>{message}</div>}

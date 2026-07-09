@@ -2,8 +2,10 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
-const mongoSanitize = require("express-mongo-sanitize");
 const hpp = require("hpp");
+const path = require("path");
+const http = require("http");
+const { Server } = require("socket.io");
 require("dotenv").config();
 
 const connectDB = require("./config/db");
@@ -23,23 +25,65 @@ const notificationRoutes = require("./routes/notification.routes");
 const shippingRoutes = require("./routes/shipping.routes");
 const paymentRoutes = require("./routes/payment.routes");
 const adminRoutes = require("./routes/admin.routes");
-//const aiRoutes = require("./routes/ai.routes");
-//const validateObjectId = require("../middleware/validateObjectId.middleware");
 const uploadRoutes = require("./routes/upload.routes");
 
 const app = express();
-
-const path = require("path");
-
-app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
-
-connectDB();
+const server = http.createServer(app);
 
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:5174",
   "http://localhost:3000"
 ];
+
+const io = new Server(server, {
+  cors: {
+    origin: allowedOrigins,
+    credentials: true,
+    methods: ["GET", "POST"]
+  }
+});
+
+app.set("io", io);
+
+io.on("connection", (socket) => {
+  console.log("Socket conectado:", socket.id);
+
+  socket.on("joinConversation", (conversationId) => {
+    if (conversationId) {
+      socket.join(`conversation:${conversationId}`);
+      console.log(`Socket ${socket.id} unido a conversation:${conversationId}`);
+    }
+  });
+
+  socket.on("leaveConversation", (conversationId) => {
+    if (conversationId) {
+      socket.leave(`conversation:${conversationId}`);
+    }
+  });
+
+  socket.on("typing", ({ conversationId, userId }) => {
+    socket.to(`conversation:${conversationId}`).emit("typing", {
+      conversationId,
+      userId
+    });
+  });
+
+  socket.on("stopTyping", ({ conversationId, userId }) => {
+    socket.to(`conversation:${conversationId}`).emit("stopTyping", {
+      conversationId,
+      userId
+    });
+  });
+
+  socket.on("disconnect", () => {
+    console.log("Socket desconectado:", socket.id);
+  });
+});
+
+connectDB();
+
+app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
 app.use(
   cors({
@@ -62,20 +106,8 @@ app.use(
   })
 );
 
-app.use(
-  express.json({
-    limit: "10kb"
-  })
-);
-
-app.use(
-  express.urlencoded({
-    extended: true,
-    limit: "10kb"
-  })
-);
-
-//app.use(mongoSanitize());
+app.use(express.json({ limit: "10kb" }));
+app.use(express.urlencoded({ extended: true, limit: "10kb" }));
 app.use(hpp());
 
 const globalLimiter = rateLimit({
@@ -125,9 +157,7 @@ app.use("/api/notifications", notificationRoutes);
 app.use("/api/shipping", shippingRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/admin", adminRoutes);
-//app.use("/api/ai", aiRoutes);
 app.use("/api/upload", uploadRoutes);
-
 
 app.use((req, res) => {
   res.status(404).json({
@@ -151,8 +181,9 @@ app.use((error, req, res, next) => {
 const PORT = process.env.PORT || 5000;
 
 if (process.env.NODE_ENV !== "production") {
-  app.listen(PORT, () => {
+  server.listen(PORT, () => {
     console.log(`Servidor ejecutándose en puerto ${PORT}`);
+    console.log("Socket.IO activo");
   });
 }
 
