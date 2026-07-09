@@ -180,11 +180,9 @@ app.use((error, req, res, next) => {
 
 const PORT = process.env.PORT || 5000;
 
-if (process.env.NODE_ENV !== "production") {
-  server.listen(PORT, () => {
-    console.log(`Servidor ejecutándose en puerto ${PORT}`);
-    console.log("Socket.IO activo");
-  });
-}
+server.listen(PORT, "0.0.0.0", () => {
+  console.log(`Servidor ejecutándose en puerto ${PORT}`);
+  console.log("Socket.IO activo");
+});
 
 module.exports = app;
