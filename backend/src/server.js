@@ -26,6 +26,7 @@ const shippingRoutes = require("./routes/shipping.routes");
 const paymentRoutes = require("./routes/payment.routes");
 const adminRoutes = require("./routes/admin.routes");
 const uploadRoutes = require("./routes/upload.routes");
+const favoriteRoutes = require("./routes/favorite.routes");
 
 const app = express();
 const server = http.createServer(app);
@@ -33,8 +34,10 @@ const server = http.createServer(app);
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:5174",
-  "http://localhost:3000"
-];
+  "http://localhost:3000",
+  "https://quick-secure-market-app-web.vercel.app",
+  process.env.FRONTEND_URL
+].filter(Boolean);
 
 const io = new Server(server, {
   cors: {
@@ -158,6 +161,11 @@ app.use("/api/shipping", shippingRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/upload", uploadRoutes);
+app.use("/api/favorite", favoriteRoutes);
+
+app.get("/api/favorite-test", (req, res) => {
+  res.json({ ok: true, message: "Favorite test funcionando" });
+});
 
 app.use((req, res) => {
   res.status(404).json({
