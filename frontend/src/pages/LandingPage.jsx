@@ -128,6 +128,41 @@ function LandingPage() {
   return (
     <div style={page(isDark)}>
       <style>{`
+
+      .admin-access-button:hover {
+  border-color: rgba(250, 204, 21, 0.8) !important;
+  box-shadow:
+    0 16px 44px rgba(250, 204, 21, 0.14),
+    0 0 26px rgba(250, 204, 21, 0.08) !important;
+}
+
+@media (max-width: 1380px) {
+  .admin-access-label {
+    display: none;
+  }
+
+  .admin-access-button {
+    width: 48px !important;
+    min-width: 48px !important;
+    padding: 10px !important;
+  }
+}
+
+@media (max-width: 950px) {
+  .topbar {
+    gap: 12px !important;
+  }
+
+  .admin-access-button {
+    display: inline-flex !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .admin-access-button {
+    display: none !important;
+  }
+}
         * { box-sizing: border-box; }
 
         html, body, #root {
@@ -233,24 +268,37 @@ function LandingPage() {
           </button>
         </nav>
 
-        <div style={navActions}>
-          <button
-            type="button"
-            onClick={() => setTheme(isDark ? "light" : "dark")}
-            style={themeToggle(isDark)}
-            title="Cambiar tema"
-          >
-            {isDark ? "☀️" : "🌙"}
-          </button>
+         <div style={navActions}>
+           <button
+             type="button"
+           onClick={() => setTheme(isDark ? "light" : "dark")}
+           style={themeToggle(isDark)}
+           title="Cambiar tema"
+  >
+           {isDark ? "☀️" : "🌙"}
+         </button>
 
-          <Link to="/login" style={loginButton(isDark)}>
-            Iniciar sesión
-          </Link>
+          <Link
+            to="/admin/login"
+          className="admin-access-button"
+         style={adminAccessButton(isDark)}
+         title="Acceso exclusivo para personal autorizado"
+      >
+    <span style={adminAccessIcon}>🛡</span>
 
-          <Link to="/register" style={registerButton}>
-            Crear cuenta
-          </Link>
-        </div>
+    <span className="admin-access-label">
+      Acceso administrativo
+    </span>
+  </Link>
+
+  <Link to="/login" style={loginButton(isDark)}>
+    Iniciar sesión
+  </Link>
+
+  <Link to="/register" style={registerButton}>
+    Crear cuenta
+        </Link>
+      </div>
       </header>
 
       <main>
@@ -677,6 +725,47 @@ const themeToggle = (dark) => ({
   color: dark ? "white" : "#0f172a",
   cursor: "pointer"
 });
+
+const adminAccessButton = (dark) => ({
+  minHeight: "48px",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "9px",
+  padding: "12px 18px",
+  borderRadius: "14px",
+  textDecoration: "none",
+  whiteSpace: "nowrap",
+  fontSize: "14px",
+  fontWeight: "900",
+
+  color: dark ? "#fde68a" : "#92400e",
+
+  background: dark
+    ? "linear-gradient(135deg, rgba(250,204,21,.10), rgba(245,158,11,.06))"
+    : "linear-gradient(135deg, rgba(250,204,21,.18), rgba(245,158,11,.10))",
+
+  border: dark
+    ? "1px solid rgba(250,204,21,.40)"
+    : "1px solid rgba(202,138,4,.30)",
+
+  boxShadow: dark
+    ? "0 12px 34px rgba(250,204,21,.08)"
+    : "0 12px 34px rgba(146,64,14,.08)",
+
+  backdropFilter: "blur(14px)"
+});
+
+const adminAccessIcon = {
+  width: "26px",
+  height: "26px",
+  borderRadius: "9px",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "rgba(250,204,21,.12)",
+  fontSize: "15px"
+};
 
 const loginButton = (dark) => ({
   color: dark ? "white" : "#0f172a",

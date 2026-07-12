@@ -27,11 +27,34 @@ function Favorites() {
       setError("");
       setMessage("");
 
-      const response = await api.get("/favorites");
-      const backendFavorites = response.data.favorites || response.data.products || response.data.data || [];
-      setFavorites(Array.isArray(backendFavorites) ? backendFavorites : []);
+      const response = await api.get("/favorite");
+
+      const rawFavorites =
+        response?.data?.favorites ??
+        response?.data?.favorite ??
+        response?.data?.products ??
+        response?.data?.data?.favorites ??
+        response?.data?.data ??
+        [];
+
+      const normalizedFavorites = Array.isArray(rawFavorites)
+        ? rawFavorites
+            .map((item) => item?.product || item)
+            .filter((item) => item && (item._id || item.id))
+        : [];
+
+      console.log("FAVORITOS RECIBIDOS:", response.data);
+      console.log("FAVORITOS NORMALIZADOS:", normalizedFavorites);
+
+      setFavorites(normalizedFavorites);
     } catch (err) {
-      setError(err?.response?.data?.message || "No se pudieron cargar tus favoritos. Verifica GET /favorites en el backend.");
+      console.error("ERROR CARGANDO FAVORITOS:", err?.response?.status, err?.response?.data);
+
+      setFavorites([]);
+      setError(
+        err?.response?.data?.message ||
+          "No se pudieron cargar tus favoritos. Verifica GET /favorite en el backend."
+      );
     } finally {
       setLoading(false);
     }
@@ -45,18 +68,18 @@ function Favorites() {
       setError("");
       setMessage("");
 
-      await api.delete(`/favorites/${productId}`);
+      await api.delete(`/favorite/${productId}`);
 
       setFavorites((prev) => prev.filter((product) => String(product._id || product.id) !== String(productId)));
       setMessage("Producto eliminado de favoritos.");
     } catch (err) {
-      setError(err?.response?.data?.message || "No se pudo eliminar de favoritos. Verifica DELETE /favorites/:productId.");
+      setError(err?.response?.data?.message || "No se pudo eliminar de favoritos. Verifica DELETE /favorite/:productId.");
     } finally {
       setRemovingId("");
     }
   };
 
-  const filteredFavorites = useMemo(() => {
+  const filteredFavorite = useMemo(() => {
     let result = [...favorites];
 
     if (categoryFilter !== "Todos") {
@@ -93,19 +116,19 @@ function Favorites() {
         .favorite-card { transition: transform .25s ease, border .25s ease, box-shadow .25s ease; }
         .favorite-card:hover { transform: translateY(-8px); border-color: rgba(236,72,153,.45); box-shadow: 0 0 35px rgba(236,72,153,.12), 0 0 70px rgba(56,189,248,.08), 0 26px 80px rgba(0,0,0,.45); }
         @media (max-width: 1200px) {
-          .favorites-page { grid-template-columns: 1fr !important; }
+          .favorite-page { grid-template-columns: 1fr !important; }
           .sidebar-wrapper { display:none !important; }
           .stats-grid, .filters-row { grid-template-columns: 1fr !important; }
           .hero-row { flex-direction: column !important; align-items:flex-start !important; }
-          .favorites-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+          .favorite-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
         }
         @media (max-width: 760px) {
           .main-content { padding:18px !important; }
-          .favorites-grid { grid-template-columns: 1fr !important; }
+          .favorite-grid { grid-template-columns: 1fr !important; }
         }
       `}</style>
 
-      <div className="favorites-page" style={layout}>
+      <div className="favorite-page" style={layout}>
         <div className="sidebar-wrapper"><Sidebar /></div>
 
         <main className="main-content" style={main}>
@@ -128,10 +151,10 @@ function Favorites() {
           </section>
 
           <section className="stats-grid" style={statsGrid}>
-            <StatCard icon="❤️" title="Favoritos guardados" value={favorites.length} />
-            <StatCard icon="🔎" title="Resultados filtrados" value={filteredFavorites.length} />
-            <StatCard icon="🛡" title="Protección" value="Pago QSM" />
-            <StatCard icon="⚡" title="Modo" value="Backend/API" />
+            <StatCard icon="❤️" title="  Favoritos guardados  " value={favorites.length} />
+            <StatCard icon="🔎" title="Resultados filtrados  " value={filteredFavorite.length} />
+            <StatCard icon="🛡" title="Protección  " value="Pago QSM" />
+            <StatCard icon="📦" title="Productos disponibles  " value={favorites.length} />
           </section>
 
           <section style={controlPanel}>
@@ -160,7 +183,7 @@ function Favorites() {
 
           {loading && <div style={centerCard}><h2>Cargando favoritos...</h2><p>QSM está consultando tus productos guardados.</p></div>}
 
-          {!loading && filteredFavorites.length === 0 && (
+          {!loading && filteredFavorite.length === 0 && (
             <div style={centerCard}>
               <div style={emptyIcon}>❤️</div>
               <h2>No tienes favoritos todavía</h2>
@@ -169,9 +192,9 @@ function Favorites() {
             </div>
           )}
 
-          {!loading && filteredFavorites.length > 0 && (
-            <section className="favorites-grid" style={favoritesGrid}>
-              {filteredFavorites.map((product, index) => (
+          {!loading && filteredFavorite.length > 0 && (
+            <section className="favorite-grid" style={favoriteGrid}>
+              {filteredFavorite.map((product, index) => (
                 <FavoriteCard key={product._id || product.id || index} product={product} removingId={removingId} onRemove={removeFavorite} />
               ))}
             </section>
@@ -261,7 +284,16 @@ function getProductImage(product) {
 const page = { minHeight: "100vh", width: "100%", background: "radial-gradient(circle at top right, rgba(236,72,153,.14), transparent 34%), radial-gradient(circle at 18% 15%, rgba(56,189,248,.09), transparent 28%), #020617", color: "white" };
 const layout = { width: "100%", minHeight: "100vh", display: "grid", gridTemplateColumns: "280px minmax(0, 1fr)", overflowX: "hidden" };
 const main = { width: "100%", minWidth: 0, padding: "26px 34px 56px", overflowX: "hidden" };
-const hero = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "24px", margin: "22px 0" };
+const hero = {
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+  textAlign: "center",
+  margin: "10px 0 20px",
+  width: "100%"
+};
+
+
 const label = { color: "#38bdf8", letterSpacing: "4px", fontSize: "12px", fontWeight: "950", textTransform: "uppercase", margin: 0 };
 const title = { fontSize: "clamp(40px, 3.6vw, 62px)", lineHeight: "1", margin: "10px 0", letterSpacing: "-2px" };
 const subtitle = { color: "#cbd5e1", lineHeight: "29px", maxWidth: "780px", margin: 0 };
@@ -280,7 +312,7 @@ const errorBox = { background: "rgba(127,29,29,.24)", border: "1px solid rgba(24
 const centerCard = { background: "rgba(15,23,42,.72)", border: "1px solid rgba(56,189,248,.14)", borderRadius: "24px", padding: "44px", textAlign: "center", color: "#cbd5e1" };
 const emptyIcon = { fontSize: "70px", marginBottom: "14px" };
 const primaryButton = { display: "inline-flex", alignItems: "center", justifyContent: "center", background: "linear-gradient(135deg, #38bdf8, #8b5cf6, #ec4899)", color: "white", textDecoration: "none", border: "none", padding: "14px 20px", borderRadius: "14px", fontWeight: "950", cursor: "pointer", boxShadow: "0 18px 54px rgba(139,92,246,.22)" };
-const favoritesGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: "20px" };
+const favoriteGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gap: "20px" };
 const card = { background: "rgba(15,23,42,.72)", border: "1px solid rgba(56,189,248,.16)", borderRadius: "26px", overflow: "hidden", boxShadow: "0 24px 80px rgba(0,0,0,.20)", animation: "fadeUp .45s ease" };
 const imageWrap = { height: "240px", position: "relative", background: "linear-gradient(135deg, rgba(56,189,248,.16), rgba(236,72,153,.14))", overflow: "hidden" };
 const imageStyle = { width: "100%", height: "100%", objectFit: "cover" };

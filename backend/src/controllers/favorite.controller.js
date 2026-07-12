@@ -1,7 +1,7 @@
-import User from "../models/User.js";
-import Product from "../models/Product.js";
+const User = require("../models/User");
+const Product = require("../models/Product");
 
-export const getFavorites = async (req, res) => {
+const getFavorites = async (req, res) => {
   const userId = req.user.id || req.user._id;
 
   const user = await User.findById(userId).populate({
@@ -19,7 +19,7 @@ export const getFavorites = async (req, res) => {
   res.json({ favorites: user.favorites || [] });
 };
 
-export const addFavorite = async (req, res) => {
+const addFavorite = async (req, res) => {
   const userId = req.user.id || req.user._id;
   const { productId } = req.params;
 
@@ -47,7 +47,7 @@ export const addFavorite = async (req, res) => {
   });
 };
 
-export const removeFavorite = async (req, res) => {
+const removeFavorite = async (req, res) => {
   const userId = req.user.id || req.user._id;
   const { productId } = req.params;
 
@@ -73,7 +73,7 @@ export const removeFavorite = async (req, res) => {
   });
 };
 
-export const checkFavorite = async (req, res) => {
+const checkFavorite = async (req, res) => {
   const userId = req.user.id || req.user._id;
   const { productId } = req.params;
 
@@ -88,4 +88,11 @@ export const checkFavorite = async (req, res) => {
   );
 
   res.json({ isFavorite });
+};
+
+module.exports = {
+  getFavorites,
+  addFavorite,
+  removeFavorite,
+  checkFavorite
 };

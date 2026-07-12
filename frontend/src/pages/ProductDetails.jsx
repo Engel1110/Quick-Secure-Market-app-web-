@@ -30,6 +30,7 @@ function ProductDetails() {
   const [activeImage, setActiveImage] = useState("");
   const [activeTab, setActiveTab] = useState("description");
   const [favorite, setFavorite] = useState(false);
+  const [imageModalOpen, setImageModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState("");
   const [error, setError] = useState("");
@@ -47,12 +48,16 @@ function ProductDetails() {
 
   const gallery = useMemo(() => {
     if (!product) return [];
+
     const images = Array.isArray(product.images)
       ? product.images.map((img) => getImageUrl(img)).filter(Boolean)
       : [];
 
     const fallback = getProductImage(product);
-    return [...images, fallback].filter(Boolean).filter((item, index, arr) => arr.indexOf(item) === index);
+
+    return [...images, fallback]
+      .filter(Boolean)
+      .filter((item, index, arr) => arr.indexOf(item) === index);
   }, [product]);
 
   const risk = useMemo(() => getRiskLevel(product), [product]);
@@ -76,10 +81,12 @@ function ProductDetails() {
       const loaded = response.data.product || response.data.data || response.data;
 
       setProduct(loaded);
-      setActiveImage(getProductImage(loaded));
+
+      const firstImage = getProductImage(loaded);
+      setActiveImage(firstImage);
 
       try {
-        const favResponse = await api.get(`/favorites/${id}/check`);
+        const favResponse = await api.get(`/favorite/${id}/check`);
         setFavorite(Boolean(favResponse.data.isFavorite));
       } catch {
         setFavorite(false);
@@ -95,6 +102,7 @@ function ProductDetails() {
     try {
       const response = await api.get("/settings/me");
       const backendSettings = response.data.settings || response.data.data || response.data;
+
       if (backendSettings) {
         const merged = { ...savedSettings, ...backendSettings };
         setSettings(merged);
@@ -105,27 +113,35 @@ function ProductDetails() {
     }
   };
 
-  const toggleFavorite = async () => {
-    try {
-      setActionLoading("favorite");
-      setError("");
-      setMessage("");
+ const toggleFavorite = async () => {
+  try {
+    setActionLoading("favorite");
+    setError("");
+    setMessage("");
 
-      if (favorite) {
-        await api.delete(`/favorites/${id}`);
-        setFavorite(false);
-        setMessage("Producto eliminado de favoritos.");
-      } else {
-        await api.post(`/favorites/${id}`);
-        setFavorite(true);
-        setMessage("Producto agregado a favoritos.");
-      }
-    } catch (err) {
-      setError(err?.response?.data?.message || "No se pudo actualizar favoritos.");
-    } finally {
-      setActionLoading("");
+    console.log("Agregando favorito:", id);
+
+    if (favorite) {
+      const res = await api.delete(`/favorite/${id}`);
+      console.log("DELETE favorito:", res.data);
+      setFavorite(false);
+      setMessage("Producto eliminado de favoritos.");
+    } else {
+      const res = await api.post(`/favorite/${id}`);
+      console.log("POST favorito:", res.data);
+      setFavorite(true);
+      setMessage("Producto agregado a favoritos.");
     }
-  };
+  } catch (err) {
+    console.log("ERROR FAVORITO:", err.response?.status, err.response?.data);
+    setError(
+      err?.response?.data?.message ||
+        "No se pudo actualizar favoritos."
+    );
+  } finally {
+    setActionLoading("");
+  }
+};
 
   const contactSeller = async () => {
     if (!sellerId) {
@@ -169,6 +185,7 @@ function ProductDetails() {
       await api.delete(`/products/${id}`);
 
       setMessage("Publicación eliminada correctamente.");
+
       setTimeout(() => {
         navigate("/sales");
       }, 600);
@@ -229,11 +246,6 @@ function ProductDetails() {
           transform: ${settings.animations === false ? "none" : "translateY(-2px)"};
         }
 
-        @keyframes fadeUp {
-          from { opacity: 0; transform: translateY(18px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-
         @media (max-width: 1240px) {
           .product-page {
             grid-template-columns: 1fr !important;
@@ -285,7 +297,11 @@ function ProductDetails() {
               </button>
 
               {(isOwner || isAdmin) && (
-                <button onClick={deleteProduct} disabled={actionLoading === "delete"} style={dangerButton}>
+                <button
+                  onClick={deleteProduct}
+                  disabled={actionLoading === "delete"}
+                  style={dangerButton}
+                >
                   {actionLoading === "delete" ? "Eliminando..." : "Eliminar publicación"}
                 </button>
               )}
@@ -299,12 +315,19 @@ function ProductDetails() {
             <div style={galleryPanel(isLight, settings)}>
               <div style={imageBox(isLight)}>
                 {activeImage ? (
-                  <img src={activeImage} alt={product.title || "Producto"} style={mainImage} />
+                  <img
+                    src={activeImage}
+                    alt={product.title || "Producto"}
+                    style={mainImage}
+                    onClick={() => setImageModalOpen(true)}
+                  />
                 ) : (
                   <span style={imagePlaceholder}>📦</span>
                 )}
 
-                <span style={statusBadge(product.status)}>{product.status || "ACTIVE"}</span>
+                <span style={statusBadge(product.status)}>
+                  {formatProductStatus(product.status)}
+                </span>
               </div>
 
               {gallery.length > 1 && (
@@ -329,7 +352,11 @@ function ProductDetails() {
                   <h2 style={priceText(accent)}>{formatMoney(product.price)}</h2>
                 </div>
 
-                <button onClick={toggleFavorite} disabled={actionLoading === "favorite"} style={favoriteButton(favorite)}>
+                <button
+                  onClick={toggleFavorite}
+                  disabled={actionLoading === "favorite"}
+                  style={favoriteButton(favorite)}
+                >
                   {favorite ? "❤️" : "🤍"}
                 </button>
               </div>
@@ -337,7 +364,7 @@ function ProductDetails() {
               <div className="meta-grid" style={metaGrid}>
                 <Info title="Categoría" value={product.category || "Producto"} isLight={isLight} />
                 <Info title="Ubicación" value={product.location || "República Dominicana"} isLight={isLight} />
-                <Info title="Condición" value={product.condition || "No especificada"} isLight={isLight} />
+                <Info title="Condición" value={formatCondition(product.condition)} isLight={isLight} />
                 <Info title="Riesgo QSM" value={risk.label} isLight={isLight} />
               </div>
 
@@ -349,7 +376,9 @@ function ProductDetails() {
                 <div>
                   <strong>{formatUser(seller, "Vendedor QSM")}</strong>
                   <p style={muted(isLight)}>{seller.email || "Vendedor protegido"}</p>
-                  <span style={trustBadge(accent)}>Confianza {seller.trustScore || 50}/100</span>
+                  <span style={trustBadge(accent)}>
+                    Confianza {seller.trustScore || 50}/100
+                  </span>
                 </div>
               </div>
 
@@ -366,7 +395,11 @@ function ProductDetails() {
                 )}
 
                 {!isOwner && (
-                  <button onClick={contactSeller} disabled={actionLoading === "message"} style={outlineButton(isLight)}>
+                  <button
+                    onClick={contactSeller}
+                    disabled={actionLoading === "message"}
+                    style={outlineButton(isLight)}
+                  >
                     {actionLoading === "message" ? "Abriendo..." : "Contactar vendedor"}
                   </button>
                 )}
@@ -385,8 +418,7 @@ function ProductDetails() {
               <div style={escrowBox(isLight, accent)}>
                 <strong>🛡 Pago Protegido QSM</strong>
                 <p>
-                  Puedes pagar por transferencia, tarjeta, PayPal o contra entrega cuando conectemos el Checkout.
-                  QSM retiene el pago hasta confirmar la entrega.
+                  QSM protege la operación y permite dar seguimiento al producto dentro de la plataforma.
                 </p>
               </div>
             </aside>
@@ -394,13 +426,24 @@ function ProductDetails() {
 
           <section style={tabsPanel(isLight, settings)}>
             <div className="tab-row" style={tabRow}>
-              <button onClick={() => setActiveTab("description")} style={activeTab === "description" ? activeTabButton(accent) : tabButton(isLight)}>
+              <button
+                onClick={() => setActiveTab("description")}
+                style={activeTab === "description" ? activeTabButton(accent) : tabButton(isLight)}
+              >
                 Descripción
               </button>
-              <button onClick={() => setActiveTab("security")} style={activeTab === "security" ? activeTabButton(accent) : tabButton(isLight)}>
+
+              <button
+                onClick={() => setActiveTab("security")}
+                style={activeTab === "security" ? activeTabButton(accent) : tabButton(isLight)}
+              >
                 Seguridad QSM
               </button>
-              <button onClick={() => setActiveTab("seller")} style={activeTab === "seller" ? activeTabButton(accent) : tabButton(isLight)}>
+
+              <button
+                onClick={() => setActiveTab("seller")}
+                style={activeTab === "seller" ? activeTabButton(accent) : tabButton(isLight)}
+              >
                 Vendedor
               </button>
             </div>
@@ -416,20 +459,22 @@ function ProductDetails() {
 
             {activeTab === "security" && (
               <div className="benefits-grid" style={benefitsGrid}>
-                <Benefit icon="🧾" title="Producto trazable" text="El producto queda asociado a una publicación y usuario." isLight={isLight} />
-                <Benefit icon="🛡" title="Pago protegido" text="El dinero puede retenerse hasta confirmar entrega." isLight={isLight} />
-                <Benefit icon="⚖️" title="Reclamos" text="Puedes abrir un reclamo si hay problema." isLight={isLight} />
-                <Benefit icon="🤖" title="QSM AI" text="El asistente puede ayudar a detectar señales de riesgo." isLight={isLight} />
+                <Benefit icon="🧾" title="Producto trazable" text="El producto queda asociado a esta publicación." isLight={isLight} />
+                <Benefit icon="🛡" title="Pago protegido" text="La compra puede manejarse dentro de QSM." isLight={isLight} />
+                <Benefit icon="⚖️" title="Reclamos" text="Puedes abrir un reclamo si hay algún problema." isLight={isLight} />
+                <Benefit icon="🤖" title="QSM AI" text="El asistente puede orientar sobre señales de riesgo." isLight={isLight} />
               </div>
             )}
 
             {activeTab === "seller" && (
               <div>
                 <h2 style={panelTitle(isLight)}>Información del vendedor</h2>
+
                 <div style={sellerBox(isLight)}>
                   <div style={sellerAvatar(accent)}>
                     {(seller.firstName || seller.email || "V").charAt(0).toUpperCase()}
                   </div>
+
                   <div>
                     <strong>{formatUser(seller, "Vendedor QSM")}</strong>
                     <p style={muted(isLight)}>{seller.email || "Correo no visible"}</p>
@@ -443,6 +488,21 @@ function ProductDetails() {
           </section>
         </main>
       </div>
+
+      {imageModalOpen && activeImage && (
+        <div style={modalOverlay} onClick={() => setImageModalOpen(false)}>
+          <button style={modalClose} onClick={() => setImageModalOpen(false)}>
+            ×
+          </button>
+
+          <img
+            src={activeImage}
+            alt={product.title || "Producto"}
+            style={modalImage}
+            onClick={(event) => event.stopPropagation()}
+          />
+        </div>
+      )}
 
       <AiAssistant pageContext="product-details" />
     </div>
@@ -480,7 +540,9 @@ function safeJson(value) {
 
 function formatUser(user, fallback) {
   if (!user || typeof user !== "object") return fallback;
+
   const name = `${user.firstName || ""} ${user.lastName || ""}`.trim();
+
   return name || user.name || user.email || fallback;
 }
 
@@ -490,6 +552,31 @@ function formatMoney(value) {
     currency: "DOP",
     maximumFractionDigits: 0
   }).format(Number(value || 0));
+}
+
+function formatCondition(condition) {
+  const map = {
+    NEW: "Nuevo",
+    USED: "Usado",
+    LIKE_NEW: "Como nuevo",
+    REFURBISHED: "Reacondicionado",
+    FOR_PARTS: "Para piezas"
+  };
+
+  return map[String(condition || "").toUpperCase()] || condition || "No especificada";
+}
+
+function formatProductStatus(status) {
+  const map = {
+    ACTIVE: "Disponible",
+    SOLD: "Vendido",
+    RESERVED: "Reservado",
+    PENDING: "Pendiente",
+    DISABLED: "Desactivado",
+    BLOCKED: "Bloqueado"
+  };
+
+  return map[String(status || "ACTIVE").toUpperCase()] || status || "Disponible";
 }
 
 function getImageUrl(image) {
@@ -520,7 +607,11 @@ function getProductImage(product) {
 
 function getRiskLevel(product) {
   if (!product) {
-    return { label: "Medio", icon: "🟡", text: "No hay datos suficientes para evaluar el producto." };
+    return {
+      label: "Medio",
+      icon: "🟡",
+      text: "No hay datos suficientes para evaluar el producto."
+    };
   }
 
   const score = Number(product.riskScore || product.fraudScore || 25);
@@ -559,13 +650,16 @@ function getAccentColor(color) {
     green: "#22c55e",
     orange: "#f59e0b"
   };
+
   return map[color] || "#35d0c3";
 }
 
 function applySettings(settings) {
   const accent = getAccentColor(settings.accentColor || "cyan");
+
   document.documentElement.style.setProperty("--qsm-accent", accent);
   document.body.dataset.qsmTheme = settings.theme || "dark";
+
   localStorage.setItem("qsm_theme", settings.theme || "dark");
   localStorage.setItem("qsm_accent", settings.accentColor || "cyan");
   localStorage.setItem("qsm_language", settings.language || "es");
@@ -603,10 +697,11 @@ const main = (settings) => ({
 
 const header = {
   display: "flex",
-  justifyContent: "space-between",
-  alignItems: "flex-start",
-  gap: "20px",
-  margin: "22px 0"
+  flexDirection: "column",
+  alignItems: "center",
+  textAlign: "center",
+  gap: "18px",
+  margin: "30px 0 40px"
 };
 
 const headerActions = {
@@ -634,7 +729,8 @@ const title = (isLight) => ({
 
 const muted = (isLight) => ({
   color: isLight ? "#475569" : "#cbd5e1",
-  lineHeight: "25px"
+  lineHeight: "25px",
+  margin: "4px 0"
 });
 
 const productLayout = {
@@ -667,24 +763,31 @@ const imageBox = (isLight) => ({
 const mainImage = {
   width: "100%",
   height: "100%",
-  objectFit: "cover"
+  objectFit: "contain",
+  background: "#020617",
+  cursor: "zoom-in"
 };
 
 const imagePlaceholder = {
   fontSize: "80px"
 };
 
-const statusBadge = (status) => ({
-  position: "absolute",
-  top: "16px",
-  left: "16px",
-  background: "rgba(34,197,94,.16)",
-  color: "#86efac",
-  border: "1px solid rgba(34,197,94,.34)",
-  borderRadius: "999px",
-  padding: "8px 12px",
-  fontWeight: "950"
-});
+const statusBadge = (status) => {
+  const value = String(status || "ACTIVE").toUpperCase();
+  const sold = value === "SOLD";
+
+  return {
+    position: "absolute",
+    top: "16px",
+    left: "16px",
+    background: sold ? "rgba(239,68,68,.18)" : "rgba(34,197,94,.16)",
+    color: sold ? "#fecaca" : "#86efac",
+    border: sold ? "1px solid rgba(239,68,68,.34)" : "1px solid rgba(34,197,94,.34)",
+    borderRadius: "999px",
+    padding: "8px 12px",
+    fontWeight: "950"
+  };
+};
 
 const thumbRow = {
   display: "flex",
@@ -964,5 +1067,41 @@ const centerCard = (isLight) => ({
   textAlign: "center",
   color: isLight ? "#0f172a" : "white"
 });
+
+const modalOverlay = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(2,6,23,.94)",
+  zIndex: 9999,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "28px",
+  cursor: "zoom-out"
+};
+
+const modalImage = {
+  maxWidth: "96vw",
+  maxHeight: "92vh",
+  objectFit: "contain",
+  borderRadius: "18px",
+  boxShadow: "0 30px 100px rgba(0,0,0,.70)"
+};
+
+const modalClose = {
+  position: "fixed",
+  top: "22px",
+  right: "28px",
+  width: "48px",
+  height: "48px",
+  borderRadius: "50%",
+  border: "1px solid rgba(255,255,255,.22)",
+  background: "rgba(15,23,42,.88)",
+  color: "white",
+  fontSize: "32px",
+  cursor: "pointer",
+  zIndex: 10000,
+  lineHeight: "42px"
+};
 
 export default ProductDetails;

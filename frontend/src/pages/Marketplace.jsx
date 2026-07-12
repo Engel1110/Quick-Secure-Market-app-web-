@@ -4,6 +4,7 @@ import Sidebar from "../components/Sidebar";
 import Topbar from "../components/Topbar";
 import AiAssistant from "../components/AiAssistant";
 import { getProducts } from "../api/products";
+import api from "../api/axios";
 
 function Marketplace() {
   const navigate = useNavigate();
@@ -18,6 +19,8 @@ function Marketplace() {
   const [visibleCount, setVisibleCount] = useState(12);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [favoriteIds, setFavoriteIds] = useState([]);
+  const [favoriteLoadingId, setFavoriteLoadingId] = useState("");
 
   const categories = [
     "Todos",
@@ -42,6 +45,7 @@ function Marketplace() {
 
   useEffect(() => {
     loadProducts();
+    loadFavorites();
   }, []);
 
   const loadProducts = async () => {
@@ -58,10 +62,73 @@ function Marketplace() {
     } catch (err) {
       setError(
         err?.response?.data?.message ||
-          "No se pudieron cargar los productos. Verifica que el backend esté funcionando."
+          "No se pudieron cargar los productos. Intenta nuevamente."
       );
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadFavorites = async () => {
+    try {
+      const response = await api.get("/favorite");
+
+      const rawFavorites =
+        response?.data?.favorites ??
+        response?.data?.favorite ??
+        response?.data?.products ??
+        response?.data?.data?.favorites ??
+        response?.data?.data ??
+        [];
+
+      const ids = Array.isArray(rawFavorites)
+        ? rawFavorites
+            .map((item) => item?.product?._id || item?._id || item?.id)
+            .filter(Boolean)
+            .map(String)
+        : [];
+
+      setFavoriteIds(ids);
+    } catch (err) {
+      console.error(
+        "No se pudieron cargar los favoritos:",
+        err?.response?.data || err.message
+      );
+    }
+  };
+
+  const toggleMarketplaceFavorite = async (productId) => {
+    if (!productId) return;
+
+    const normalizedId = String(productId);
+    const isFavorite = favoriteIds.includes(normalizedId);
+
+    try {
+      setFavoriteLoadingId(normalizedId);
+      setError("");
+
+      if (isFavorite) {
+        await api.delete(`/favorite/${normalizedId}`);
+
+        setFavoriteIds((current) =>
+          current.filter((favoriteId) => favoriteId !== normalizedId)
+        );
+      } else {
+        await api.post(`/favorite/${normalizedId}`);
+
+        setFavoriteIds((current) =>
+          current.includes(normalizedId)
+            ? current
+            : [...current, normalizedId]
+        );
+      }
+    } catch (err) {
+      setError(
+        err?.response?.data?.message ||
+          "No se pudo actualizar este producto en favoritos."
+      );
+    } finally {
+      setFavoriteLoadingId("");
     }
   };
 
@@ -200,8 +267,9 @@ function Marketplace() {
             display: none !important;
           }
 
-          .market-hero {
-            grid-template-columns: 1fr !important;
+          .title-shield-row {
+            flex-direction: column !important;
+            text-align: center !important;
           }
 
           .products-grid {
@@ -246,53 +314,71 @@ function Marketplace() {
           <Topbar />
 
           <div className="top-row" style={topRow}>
-            <div>
-              <p style={label}>MARKETPLACE QSM</p>
-              <h1 style={pageTitle}>Compra con Pago Protegido</h1>
-              <p style={pageSubtitle}>
-                Productos cargados desde el backend, organizados con filtros reales y búsqueda funcional.
-              </p>
-            </div>
+            <div style={topContent}>
+              <div className="title-shield-row" style={titleShieldRow}>
+                <div style={compactShieldWrap}>
+                  <div style={compactShieldGlow}></div>
+                  <div style={compactShieldIcon}>🛡</div>
+                </div>
 
-            <div style={topActions}>
-              <button onClick={loadProducts} style={ghostButton}>
-                Actualizar
-              </button>
+                <div style={titleTextArea}>
+                  <p style={label}>MARKETPLACE QSM</p>
 
-              <Link to="/new-product" style={sellButton}>
-                + Vender producto
-              </Link>
+                  <h1 style={pageTitle}>
+                    Compra con Pago Protegido
+                  </h1>
+
+                  <p style={pageSubtitle}>
+                    Compra y vende con total seguridad. QSM protege el pago,
+                    valida a los usuarios y permite revisar la información del vendedor
+                    antes de completar una compra.
+                  </p>
+                </div>
+              </div>
+
+              <div style={securityBadges}>
+                <span>🧾 Identidad verificada</span>
+                <span>💰 Pago protegido</span>
+                <span>🤖 IA antifraude</span>
+                <span>⚖️ Reclamos QSM</span>
+              </div>
+
+              <div style={topActions}>
+                <button onClick={loadProducts} style={ghostButton}>
+                  Actualizar
+                </button>
+
+                <Link to="/new-product" style={sellButton}>
+                  + Vender producto
+                </Link>
+              </div>
             </div>
           </div>
 
-          <section className="market-hero" style={hero}>
-            <div style={heroVisual}>
-              <div style={shieldGlow}></div>
-              <div style={shieldIcon}>🛡</div>
-            </div>
-
-            <div style={heroText}>
-              <span style={protectedPill}>Protección activa QSM</span>
-              <h2>Compra y vende con total seguridad</h2>
-              <p>
-                QSM protege el pago, valida usuarios y permite revisar el vendedor antes de comprar.
-                Los filtros, categorías y búsqueda están conectados a los productos del backend.
-              </p>
-
-              <div style={heroBadges}>
-                <span>🧾 Identidad verificada</span>
-                <span>💰 Pago Protegido</span>
-                <span>🤖 IA antifraude</span>
-                <span>⚖ Reclamos QSM</span>
-              </div>
-            </div>
-          </section>
-
           <section style={statsRow} className="stats-row">
-            <StatBox title="Productos disponibles" value={products.length} />
-            <StatBox title="Resultados filtrados" value={filteredProducts.length} />
-            <StatBox title="Modo de datos" value="Backend / API" />
-            <StatBox title="Protección" value="Pago Protegido" />
+            <StatBox
+              icon="📦"
+              title="Productos disponibles"
+              value={products.length}
+            />
+
+            <StatBox
+              icon="🔎"
+              title="Resultados encontrados"
+              value={filteredProducts.length}
+            />
+
+            <StatBox
+              icon="🗂️"
+              title="Categorías disponibles"
+              value={categories.length - 1}
+            />
+
+            <StatBox
+              icon="💰"
+              title="Protección de pago"
+              value="Activa"
+            />
           </section>
 
           <section style={filtersPanel} className="filters-panel">
@@ -406,6 +492,11 @@ function Marketplace() {
                     key={product._id || index}
                     product={product}
                     index={index}
+                    isFavorite={favoriteIds.includes(
+                      String(product._id || product.id)
+                    )}
+                    favoriteLoadingId={favoriteLoadingId}
+                    onToggleFavorite={toggleMarketplaceFavorite}
                   />
                 ))}
               </section>
@@ -430,16 +521,27 @@ function Marketplace() {
   );
 }
 
-function StatBox({ title, value }) {
+function StatBox({ icon, title, value }) {
   return (
     <div style={statBox}>
-      <span>{title}</span>
-      <strong>{value}</strong>
+      <div style={statIcon}>{icon}</div>
+
+      <div style={statContent}>
+        <span style={statTitle}>{title}</span>
+        <strong style={statValue}>{value}</strong>
+      </div>
     </div>
   );
 }
 
-function ProductCard({ product, index }) {
+function ProductCard({
+  product,
+  index,
+  isFavorite,
+  favoriteLoadingId,
+  onToggleFavorite
+}) {
+  const productId = product._id || product.id;
   const seller = product.seller || {};
   const image = getProductImage(product);
   const price = formatMoney(product.price);
@@ -463,8 +565,23 @@ function ProductCard({ product, index }) {
         }}
       ></div>
 
-      <button style={heartButton} title="Agregar a favoritos">
-        ♡
+      <button
+        type="button"
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          onToggleFavorite(productId);
+        }}
+        disabled={favoriteLoadingId === String(productId)}
+        style={heartButton(isFavorite)}
+        title={isFavorite ? "Quitar de favoritos" : "Agregar a favoritos"}
+        aria-label={isFavorite ? "Quitar de favoritos" : "Agregar a favoritos"}
+      >
+        {favoriteLoadingId === String(productId)
+          ? "..."
+          : isFavorite
+          ? "♥"
+          : "♡"}
       </button>
 
       <Link to={`/product/${product._id}`} style={imageLink}>
@@ -581,17 +698,73 @@ const main = {
 };
 
 const topRow = {
+  width: "100%",
   display: "flex",
-  justifyContent: "space-between",
+  justifyContent: "center",
   alignItems: "center",
-  gap: "18px",
-  margin: "24px 0 20px"
+  margin: "26px 0 24px"
+};
+
+const topContent = {
+  width: "100%",
+  maxWidth: "1050px",
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center"
+};
+
+const titleShieldRow = {
+  width: "100%",
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "center",
+  gap: "24px"
+};
+
+const compactShieldWrap = {
+  position: "relative",
+  width: "92px",
+  height: "92px",
+  flexShrink: 0,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center"
+};
+
+const compactShieldGlow = {
+  position: "absolute",
+  width: "125px",
+  height: "125px",
+  borderRadius: "50%",
+  background:
+    "radial-gradient(circle, rgba(56,189,248,.30), rgba(139,92,246,.25), transparent 68%)",
+  filter: "blur(8px)"
+};
+
+const compactShieldIcon = {
+  position: "relative",
+  width: "76px",
+  height: "76px",
+  borderRadius: "22px",
+  background: "linear-gradient(135deg, #38bdf8, #8b5cf6, #ec4899)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: "32px",
+  boxShadow: "0 0 38px rgba(139,92,246,.34)"
+};
+
+const titleTextArea = {
+  maxWidth: "760px",
+  textAlign: "left"
 };
 
 const topActions = {
   display: "flex",
+  justifyContent: "center",
   gap: "12px",
-  flexWrap: "wrap"
+  flexWrap: "wrap",
+  marginTop: "18px"
 };
 
 const label = {
@@ -604,86 +777,28 @@ const label = {
 };
 
 const pageTitle = {
-  fontSize: "clamp(38px, 3vw, 58px)",
-  lineHeight: "1",
-  margin: "10px 0 8px",
+  fontSize: "clamp(40px, 3.5vw, 58px)",
+  lineHeight: "1.05",
+  margin: "10px 0",
   letterSpacing: "-1.8px"
 };
 
 const pageSubtitle = {
   color: "#cbd5e1",
   margin: 0,
-  maxWidth: "780px",
-  lineHeight: "28px"
+  maxWidth: "760px",
+  lineHeight: "26px",
+  fontSize: "15px"
 };
 
-const hero = {
-  display: "grid",
-  gridTemplateColumns: "330px minmax(0, 1fr)",
-  gap: "26px",
-  alignItems: "center",
-  background:
-    "linear-gradient(135deg, rgba(15,23,42,.82), rgba(15,23,42,.55))",
-  border: "1px solid rgba(56,189,248,.16)",
-  borderRadius: "26px",
-  padding: "26px 32px",
-  marginBottom: "20px",
-  animation: "fadeUp .55s ease"
-};
-
-const heroVisual = {
-  position: "relative",
-  height: "170px",
+const securityBadges = {
   display: "flex",
-  alignItems: "center",
   justifyContent: "center",
-  overflow: "hidden"
-};
-
-const shieldGlow = {
-  position: "absolute",
-  width: "220px",
-  height: "220px",
-  borderRadius: "50%",
-  background:
-    "radial-gradient(circle, rgba(56,189,248,.34), rgba(139,92,246,.30), transparent 68%)",
-  filter: "blur(10px)",
-  animation: "softPulse 4s ease-in-out infinite"
-};
-
-const shieldIcon = {
-  position: "relative",
-  width: "100px",
-  height: "100px",
-  borderRadius: "30px",
-  background: "linear-gradient(135deg, #38bdf8, #8b5cf6, #ec4899)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: "44px",
-  boxShadow: "0 0 60px rgba(139,92,246,.42)"
-};
-
-const heroText = {
-  color: "#cbd5e1"
-};
-
-const protectedPill = {
-  display: "inline-block",
-  color: "#35d0c3",
-  background: "rgba(53,208,195,.10)",
-  border: "1px solid rgba(53,208,195,.25)",
-  padding: "8px 12px",
-  borderRadius: "999px",
-  fontWeight: "900",
-  fontSize: "12px"
-};
-
-const heroBadges = {
-  display: "flex",
   flexWrap: "wrap",
-  gap: "12px",
-  marginTop: "18px"
+  gap: "12px 18px",
+  marginTop: "18px",
+  color: "#e2e8f0",
+  fontSize: "14px"
 };
 
 const statsRow = {
@@ -694,11 +809,45 @@ const statsRow = {
 };
 
 const statBox = {
+  display: "flex",
+  alignItems: "center",
+  gap: "14px",
+  minHeight: "86px",
   background: "rgba(15,23,42,.70)",
   border: "1px solid rgba(56,189,248,.14)",
   borderRadius: "18px",
-  padding: "18px",
-  textAlign: "center"
+  padding: "18px"
+};
+
+const statIcon = {
+  width: "46px",
+  height: "46px",
+  flexShrink: 0,
+  borderRadius: "14px",
+  background: "rgba(56,189,248,.12)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: "22px"
+};
+
+const statContent = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "5px",
+  minWidth: 0
+};
+
+const statTitle = {
+  color: "#94a3b8",
+  fontSize: "13px",
+  fontWeight: "700"
+};
+
+const statValue = {
+  color: "white",
+  fontSize: "18px",
+  lineHeight: "1.2"
 };
 
 const filtersPanel = {
@@ -819,8 +968,8 @@ const sellButton = {
 
 const grid = {
   display: "grid",
-  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-  gap: "20px"
+  gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+  gap: "22px"
 };
 
 const productCard = {
@@ -829,7 +978,7 @@ const productCard = {
   borderRadius: "22px",
   background: "rgba(15,23,42,.72)",
   border: "1px solid rgba(56,189,248,.18)",
-  minHeight: "455px",
+  minHeight: "430px",
   animation: "fadeUp .55s ease"
 };
 
@@ -843,20 +992,28 @@ const cardGlow = {
   zIndex: 0
 };
 
-const heartButton = {
+const heartButton = (active) => ({
   position: "absolute",
   top: "15px",
   right: "15px",
-  width: "38px",
-  height: "38px",
+  width: "42px",
+  height: "42px",
   borderRadius: "50%",
-  background: "rgba(2,6,23,.70)",
-  border: "1px solid rgba(255,255,255,.18)",
-  color: "#cbd5e1",
-  fontSize: "22px",
+  background: active
+    ? "rgba(236,72,153,.22)"
+    : "rgba(2,6,23,.78)",
+  border: active
+    ? "1px solid rgba(236,72,153,.55)"
+    : "1px solid rgba(255,255,255,.18)",
+  color: active ? "#fb7185" : "#e2e8f0",
+  fontSize: active ? "21px" : "25px",
   zIndex: 4,
-  cursor: "pointer"
-};
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  lineHeight: 1
+});
 
 const imageLink = {
   textDecoration: "none",
@@ -865,7 +1022,7 @@ const imageLink = {
 
 const imageWrap = {
   position: "relative",
-  height: "250px",
+  height: "265px",
   overflow: "hidden",
   background: "radial-gradient(circle at center, rgba(56,189,248,.15), rgba(15,23,42,.55))"
 };
@@ -894,7 +1051,7 @@ const protectedBadge = {
 const productBody = {
   position: "relative",
   zIndex: 2,
-  padding: "18px"
+  padding: "20px"
 };
 
 const productTitleLink = {

@@ -1,5 +1,42 @@
-node_modules
-# Keep environment variables out of version control
+# Variables privadas
 .env
+.env.*
+!.env.example
 
-/generated/prisma
+# Dependencias
+node_modules/
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Archivos temporales
+.tmp/
+temp/
+tmp/
+.cache/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Visual Studio Code
+.vscode/
+!.vscode/extensions.json
+
+# Subidas locales
+uploads/*
+!uploads/.gitkeep
+
+# Cobertura y compilación
+coverage/
+dist/
+build/
+
+# Prisma
+prisma/*.db
+prisma/*.db-journal

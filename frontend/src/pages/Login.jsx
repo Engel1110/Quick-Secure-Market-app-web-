@@ -322,7 +322,7 @@ function Login() {
             </div>
 
             <div style={socialGrid}>
-              <button type="button" style={socialButton(isDark)}>G</button>
+              <button type="button" style={socialButton(isDark)}>Google</button>
               <button type="button" style={socialButton(isDark)}></button>
               <button type="button" style={socialButton(isDark)}>▦</button>
             </div>

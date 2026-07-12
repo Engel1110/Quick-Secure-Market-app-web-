@@ -1,17 +1,14 @@
-import express from "express";
-import {
-  getFavorites,
-  addFavorite,
-  removeFavorite,
-  checkFavorite
-} from "../controllers/favorite.controller.js";
-import { protect } from "../middleware/auth.middleware.js";
+const express = require("express");
+const favoriteController = require("../controllers/favorite.controller");
+const authMiddleware = require("../middleware/auth.middleware");
 
 const router = express.Router();
 
-router.get("/", protect, getFavorites);
-router.get("/:productId/check", protect, checkFavorite);
-router.post("/:productId", protect, addFavorite);
-router.delete("/:productId", protect, removeFavorite);
+const protect = authMiddleware.protect || authMiddleware;
 
-export default router;
+router.get("/", protect, favoriteController.getFavorites);
+router.get("/:productId/check", protect, favoriteController.checkFavorite);
+router.post("/:productId", protect, favoriteController.addFavorite);
+router.delete("/:productId", protect, favoriteController.removeFavorite);
+
+module.exports = router;
