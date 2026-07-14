@@ -4,54 +4,67 @@ require("dotenv").config();
 const Permission = require("../src/models/Permission");
 
 const definitions = [
-  /*
-  |--------------------------------------------------------------------------
-  | Administración de usuarios internos
-  |--------------------------------------------------------------------------
-  */
+/*
+|--------------------------------------------------------------------------
+| Administración de usuarios internos
+|--------------------------------------------------------------------------
+*/
 
-  [
-    "INTERNAL_USERS_VIEW",
-    "Ver usuarios internos",
-    "ADMIN",
-    "Permite consultar empleados y cuentas administrativas."
-  ],
-  [
-    "INTERNAL_USERS_CREATE",
-    "Crear usuarios internos",
-    "ADMIN",
-    "Permite crear empleados administrativos."
-  ],
-  [
-    "INTERNAL_USERS_UPDATE",
-    "Editar usuarios internos",
-    "ADMIN",
-    "Permite modificar empleados, departamentos y roles."
-  ],
-  [
-    "INTERNAL_USERS_SUSPEND",
-    "Suspender usuarios internos",
-    "ADMIN",
-    "Permite suspender temporalmente cuentas internas."
-  ],
-  [
-    "INTERNAL_USERS_ACTIVATE",
-    "Activar usuarios internos",
-    "ADMIN",
-    "Permite activar cuentas administrativas."
-  ],
-  [
-    "INTERNAL_USERS_RESET_PASSWORD",
-    "Restablecer contraseñas internas",
-    "ADMIN",
-    "Permite generar una contraseña temporal para un empleado."
-  ],
-  [
-    "INTERNAL_USERS_CHANGE_ROLE",
-    "Cambiar roles internos",
-    "ADMIN",
-    "Permite cambiar el rol administrativo de un empleado."
-  ],
+[
+  "INTERNAL_USERS_VIEW",
+  "Ver usuarios internos",
+  "ADMIN",
+  "Permite consultar empleados y cuentas administrativas."
+],
+[
+  "INTERNAL_USERS_CREATE",
+  "Crear usuarios internos",
+  "ADMIN",
+  "Permite crear empleados administrativos."
+],
+[
+  "INTERNAL_USERS_UPDATE",
+  "Editar usuarios internos",
+  "ADMIN",
+  "Permite modificar la información general de empleados internos."
+],
+[
+  "INTERNAL_USERS_SUSPEND",
+  "Suspender usuarios internos",
+  "ADMIN",
+  "Permite suspender temporalmente cuentas internas."
+],
+[
+  "INTERNAL_USERS_ACTIVATE",
+  "Activar usuarios internos",
+  "ADMIN",
+  "Permite activar o reactivar cuentas administrativas."
+],
+[
+  "INTERNAL_USERS_RESET_PASSWORD",
+  "Restablecer contraseñas internas",
+  "ADMIN",
+  "Permite generar una contraseña temporal para un empleado."
+],
+[
+  "INTERNAL_USERS_CHANGE_ROLE",
+  "Cambiar roles internos",
+  "ADMIN",
+  "Permite cambiar el rol y el departamento de un empleado interno."
+],
+[
+  "INTERNAL_USERS_ASSIGN_PERMISSIONS",
+  "Asignar permisos internos",
+  "ADMIN",
+  "Permite asignar o retirar permisos específicos a una cuenta interna."
+],
+[
+  "INTERNAL_USERS_VIEW_ACTIVITY",
+  "Ver actividad de usuarios internos",
+  "ADMIN",
+  "Permite consultar el historial y las acciones de empleados internos."
+],
+
 
   /*
   |--------------------------------------------------------------------------

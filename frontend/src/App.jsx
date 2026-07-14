@@ -1,14 +1,13 @@
 import {
   BrowserRouter,
-  Routes,
+  Navigate,
   Route,
-  Navigate
+  Routes
 } from "react-router-dom";
 
 import LandingPage from "./pages/LandingPage";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
-import AdminLogin from "./pages/admin/auth/AdminLogin";
 import Dashboard from "./pages/Dashboard";
 import Profile from "./pages/Profile";
 import Marketplace from "./pages/Marketplace";
@@ -21,7 +20,6 @@ import Favorites from "./pages/Favorites";
 import Messages from "./pages/Messages";
 import Disputes from "./pages/Disputes";
 import Settings from "./pages/Settings";
-import AdminPanel from "./pages/AdminPanel";
 import ProductHistory from "./pages/ProductHistory";
 import CompleteProfile from "./pages/CompleteProfile";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -29,20 +27,36 @@ import ResetPassword from "./pages/ResetPassword";
 import VoucherCompra from "./pages/VoucherCompra";
 import OrderTracking from "./pages/OrderTracking";
 
+import AdminLogin from "./pages/admin/auth/AdminLogin";
+import AdminAreaSelector from "./pages/admin/AdminAreaSelector";
+import AdminModulePlaceholder from "./pages/admin/AdminModulePlaceholder";
+import AdminDashboard from "./pages/admin/dashboard/AdminDashboard";
+import InternalUsers from "./pages/admin/internalUsers/InternalUsers";
+
 import ProtectedRoute from "./components/ProtectedRoute";
+import AdminProtectedRoute from "./components/AdminProtectedRoute";
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<LandingPage />} />
-
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
+        {/* =====================================================
+            RUTAS PÚBLICAS
+        ====================================================== */}
 
         <Route
-          path="/admin/login"
-          element={<AdminLogin />}
+          path="/"
+          element={<LandingPage />}
+        />
+
+        <Route
+          path="/login"
+          element={<Login />}
+        />
+
+        <Route
+          path="/register"
+          element={<Register />}
         />
 
         <Route
@@ -54,6 +68,10 @@ function App() {
           path="/reset-password"
           element={<ResetPassword />}
         />
+
+        {/* =====================================================
+            RUTAS DE COMPRADORES Y VENDEDORES
+        ====================================================== */}
 
         <Route
           path="/dashboard"
@@ -199,18 +217,263 @@ function App() {
           }
         />
 
+        {/* =====================================================
+            AUTENTICACIÓN ADMINISTRATIVA
+        ====================================================== */}
+
+        <Route
+          path="/admin/login"
+          element={<AdminLogin />}
+        />
+
         <Route
           path="/admin"
           element={
-            <ProtectedRoute requireAdmin={true}>
-              <AdminPanel />
-            </ProtectedRoute>
+            <Navigate
+              to="/admin/select-area"
+              replace
+            />
           }
         />
 
         <Route
+          path="/admin/select-area"
+          element={
+            <AdminProtectedRoute>
+              <AdminAreaSelector />
+            </AdminProtectedRoute>
+          }
+        />
+
+        {/* =====================================================
+            DASHBOARD GENERAL
+        ====================================================== */}
+
+        <Route
+          path="/admin/dashboard"
+          element={
+            <AdminProtectedRoute
+              allowedDepartments={[
+                "ADMINISTRATION"
+              ]}
+            >
+              <AdminDashboard />
+            </AdminProtectedRoute>
+          }
+        />
+        <Route
+  path="/admin/internal-users"
+  element={
+    <AdminProtectedRoute
+      allowedRoles={[
+        "SUPER_ADMIN",
+        "SENIOR_ADMIN",
+        "ADMIN",
+        "SUPERVISOR"
+      ]}
+      allowedDepartments={[
+        "ADMINISTRATION"
+      ]}
+    >
+      <InternalUsers />
+    </AdminProtectedRoute>
+  }
+/>
+
+        {/* =====================================================
+            ALMACÉN
+        ====================================================== */}
+
+        <Route
+          path="/admin/warehouse"
+          element={
+            <AdminProtectedRoute
+              allowedDepartments={[
+                "WAREHOUSE"
+              ]}
+            >
+              <AdminModulePlaceholder
+                title="Dashboard de Almacén"
+                description="Recepción, inspección, inventario, productos dañados y despacho de órdenes."
+                icon="🏬"
+              />
+            </AdminProtectedRoute>
+          }
+        />
+
+        {/* =====================================================
+            DELIVERY
+        ====================================================== */}
+
+        <Route
+          path="/admin/delivery"
+          element={
+            <AdminProtectedRoute
+              allowedDepartments={[
+                "DELIVERY"
+              ]}
+            >
+              <AdminModulePlaceholder
+                title="Dashboard de Delivery"
+                description="Asignaciones, repartidores, rutas, entregas, PIN e incidencias."
+                icon="🚚"
+              />
+            </AdminProtectedRoute>
+          }
+        />
+
+        {/* =====================================================
+            DISPUTAS
+        ====================================================== */}
+
+        <Route
+          path="/admin/disputes"
+          element={
+            <AdminProtectedRoute
+              allowedDepartments={[
+                "DISPUTES"
+              ]}
+            >
+              <AdminModulePlaceholder
+                title="Dashboard de Disputas"
+                description="Casos abiertos, evidencias, investigación, escalamiento y resolución."
+                icon="⚖️"
+              />
+            </AdminProtectedRoute>
+          }
+        />
+
+        {/* =====================================================
+            AUDITORÍA
+        ====================================================== */}
+
+        <Route
+          path="/admin/audit"
+          element={
+            <AdminProtectedRoute
+              allowedDepartments={[
+                "AUDIT"
+              ]}
+            >
+              <AdminModulePlaceholder
+                title="Dashboard de Auditoría"
+                description="Logs, trazabilidad, cambios administrativos y revisión de operaciones."
+                icon="📋"
+              />
+            </AdminProtectedRoute>
+          }
+        />
+
+        {/* =====================================================
+            FINANZAS
+        ====================================================== */}
+
+        <Route
+          path="/admin/finance"
+          element={
+            <AdminProtectedRoute
+              allowedDepartments={[
+                "FINANCE"
+              ]}
+            >
+              <AdminModulePlaceholder
+                title="Dashboard de Finanzas"
+                description="Pagos, escrow, comisiones, liberación de fondos y reembolsos."
+                icon="💰"
+              />
+            </AdminProtectedRoute>
+          }
+        />
+
+        {/* =====================================================
+            SOPORTE
+        ====================================================== */}
+
+        <Route
+          path="/admin/support"
+          element={
+            <AdminProtectedRoute
+              allowedDepartments={[
+                "SUPPORT"
+              ]}
+            >
+              <AdminModulePlaceholder
+                title="Dashboard de Soporte"
+                description="Tickets, atención al usuario, seguimiento y escalamiento de casos."
+                icon="🎧"
+              />
+            </AdminProtectedRoute>
+          }
+        />
+
+        {/* =====================================================
+            MODERACIÓN
+        ====================================================== */}
+
+        <Route
+          path="/admin/moderation"
+          element={
+            <AdminProtectedRoute
+              allowedDepartments={[
+                "MODERATION"
+              ]}
+            >
+              <AdminModulePlaceholder
+                title="Dashboard de Moderación"
+                description="Productos reportados, usuarios, publicaciones y contenido sospechoso."
+                icon="🚩"
+              />
+            </AdminProtectedRoute>
+          }
+        />
+
+        {/* =====================================================
+            SEGURIDAD
+        ====================================================== */}
+
+        <Route
+          path="/admin/security"
+          element={
+            <AdminProtectedRoute
+              allowedDepartments={[
+                "SECURITY"
+              ]}
+            >
+              <AdminModulePlaceholder
+                title="Dashboard de Seguridad"
+                description="Sesiones, intentos fallidos, alertas, IP bloqueadas y accesos sospechosos."
+                icon="🔐"
+              />
+            </AdminProtectedRoute>
+          }
+        />
+
+        {/* =====================================================
+            RUTAS ADMINISTRATIVAS TODAVÍA NO CREADAS
+        ====================================================== */}
+
+        <Route
+          path="/admin/*"
+          element={
+            <Navigate
+              to="/admin/select-area"
+              replace
+            />
+          }
+        />
+
+        {/* =====================================================
+            RUTA GENERAL NO ENCONTRADA
+        ====================================================== */}
+
+        <Route
           path="*"
-          element={<Navigate to="/" replace />}
+          element={
+            <Navigate
+              to="/"
+              replace
+            />
+          }
         />
       </Routes>
     </BrowserRouter>

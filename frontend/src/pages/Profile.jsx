@@ -1,1153 +1,7411 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState
+} from "react";
+
+import {
+  Link,
+  useNavigate
+} from "react-router-dom";
+
 import api from "../api/axios";
+
 import Sidebar from "../components/Sidebar";
 import Topbar from "../components/Topbar";
 import AiAssistant from "../components/AiAssistant";
 
+/*
+|--------------------------------------------------------------------------
+| Valores predeterminados
+|--------------------------------------------------------------------------
+*/
+
+const DEFAULT_USER = {
+  firstName: "Usuario",
+  lastName: "QSM",
+  email: "usuario@qsm.com",
+
+  username: "",
+  phone: "",
+  country: "República Dominicana",
+  province: "",
+  city: "",
+  address: "",
+  dateOfBirth: "",
+  gender: "PREFER_NOT_TO_SAY",
+  bio: "",
+
+  profilePhoto: "",
+  coverPhoto: "",
+
+  trustScore: 50,
+
+  role: "USER",
+  status: "PENDING",
+
+  buyerEnabled: true,
+  sellerEnabled: true,
+
+  isVerified: false,
+  verificationStatus: "NOT_STARTED",
+  securityLevel: "NORMAL"
+};
+
+const DEFAULT_SETTINGS = {
+  theme: "dark",
+  accentColor: "cyan",
+  language: "es",
+  density: "comfortable",
+  animations: true,
+  glassEffect: true,
+  compactSidebar: false
+};
+
+const ALLOWED_PROFILE_IMAGE_TYPES = [
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp"
+];
+
+const MAX_PROFILE_IMAGE_SIZE =
+  5 * 1024 * 1024;
+
+const ALLOWED_COVER_IMAGE_TYPES = [
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp"
+];
+
+const MAX_COVER_IMAGE_SIZE =
+  8 * 1024 * 1024;
+
+/*
+|--------------------------------------------------------------------------
+| Componente principal
+|--------------------------------------------------------------------------
+*/
+
 function Profile() {
-  const navigate = useNavigate();
+  const navigate =
+    useNavigate();
+
+  /*
+  |--------------------------------------------------------------------------
+  | Información local de respaldo
+  |--------------------------------------------------------------------------
+  */
 
   const savedUser =
-    safeJson(localStorage.getItem("qsm_user")) ||
-    safeJson(localStorage.getItem("user")) ||
-    {
-      firstName: "Usuario",
-      lastName: "QSM",
-      email: "usuario@qsm.com",
-      trustScore: 60,
-      verificationStatus: "NOT_SUBMITTED",
-      role: "USER"
-    };
+    useMemo(() => {
+      return {
+        ...DEFAULT_USER,
+        ...(
+          safeJson(
+            localStorage.getItem(
+              "qsm_user"
+            )
+          ) ||
+          safeJson(
+            localStorage.getItem(
+              "user"
+            )
+          ) ||
+          {}
+        )
+      };
+    }, []);
 
   const savedSettings =
-    safeJson(localStorage.getItem("qsm_settings")) || {
-      theme: localStorage.getItem("qsm_theme") || "dark",
-      accentColor: localStorage.getItem("qsm_accent") || "cyan",
-      language: localStorage.getItem("qsm_language") || "es",
-      density: "comfortable",
-      animations: true,
-      glassEffect: true,
-      compactSidebar: false
-    };
+    useMemo(() => {
+      const storedSettings =
+        safeJson(
+          localStorage.getItem(
+            "qsm_settings"
+          )
+        ) || {};
 
-  const [user, setUser] = useState(savedUser);
-  const [settings, setSettings] = useState(savedSettings);
-  const [profilePreview, setProfilePreview] = useState(savedUser.profilePhoto || savedUser.avatar || "");
-  const [coverPreview, setCoverPreview] = useState(savedUser.coverPhoto || "");
-  const [profileFile, setProfileFile] = useState(null);
-  const [coverFile, setCoverFile] = useState(null);
-  const [stats, setStats] = useState({
+      return {
+        ...DEFAULT_SETTINGS,
+        ...storedSettings,
+
+        theme:
+          localStorage.getItem(
+            "qsm_theme"
+          ) ||
+          storedSettings?.theme ||
+          DEFAULT_SETTINGS.theme,
+
+        accentColor:
+          localStorage.getItem(
+            "qsm_accent"
+          ) ||
+          storedSettings?.accentColor ||
+          DEFAULT_SETTINGS.accentColor,
+
+        language:
+          localStorage.getItem(
+            "qsm_language"
+          ) ||
+          storedSettings?.language ||
+          DEFAULT_SETTINGS.language
+      };
+    }, []);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Estados principales
+  |--------------------------------------------------------------------------
+  */
+
+  const [
+    user,
+    setUser
+  ] = useState(savedUser);
+
+  const [
+    settings,
+    setSettings
+  ] = useState(
+    savedSettings
+  );
+
+  const [
+    sidebarCollapsed,
+    setSidebarCollapsed
+  ] = useState(() => {
+    return (
+      localStorage.getItem(
+        "qsm_sidebar_collapsed"
+      ) === "true"
+    );
+  });
+
+  /*
+  |--------------------------------------------------------------------------
+  | Imágenes
+  |--------------------------------------------------------------------------
+  */
+
+  const [
+    profilePreview,
+    setProfilePreview
+  ] = useState(() => {
+    return getProfilePhotoUrl(
+      savedUser?.profilePhoto ||
+      savedUser?.avatar ||
+      savedUser?.photo ||
+      ""
+    );
+  });
+
+  const [
+    coverPreview,
+    setCoverPreview
+  ] = useState(() => {
+    return getCoverPhotoUrl(
+      savedUser?.coverPhoto ||
+      ""
+    );
+  });
+
+  const [
+    profileFile,
+    setProfileFile
+  ] = useState(null);
+
+  const [
+    coverFile,
+    setCoverFile
+  ] = useState(null);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Estadísticas
+  |--------------------------------------------------------------------------
+  */
+
+  const [
+    stats,
+    setStats
+  ] = useState({
     products: 0,
     sales: 0,
     purchases: 0,
     disputes: 0
   });
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
 
-  const [form, setForm] = useState({
-    firstName: savedUser.firstName || "",
-    lastName: savedUser.lastName || "",
-    username: savedUser.username || "",
-    phone: savedUser.phone || "",
-    city: savedUser.city || "",
-    province: savedUser.province || "",
-    address: savedUser.address || "",
-    birthDate: savedUser.birthDate ? String(savedUser.birthDate).slice(0, 10) : "",
-    gender: savedUser.gender || "",
-    bio: savedUser.bio || ""
-  });
+  /*
+  |--------------------------------------------------------------------------
+  | Estados de la interfaz
+  |--------------------------------------------------------------------------
+  */
 
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
+  const [
+    loading,
+    setLoading
+  ] = useState(true);
 
-  const theme = settings.theme || "dark";
-  const accent = getAccentColor(settings.accentColor || "cyan");
-  const isLight = theme === "light";
+  const [
+    refreshing,
+    setRefreshing
+  ] = useState(false);
+
+  const [
+    saving,
+    setSaving
+  ] = useState(false);
+
+  const [
+    uploadingProfilePhoto,
+    setUploadingProfilePhoto
+  ] = useState(false);
+
+  const [
+    uploadingCoverPhoto,
+    setUploadingCoverPhoto
+  ] = useState(false);
+
+  const [
+    deletingProfilePhoto,
+    setDeletingProfilePhoto
+  ] = useState(false);
+
+  const [
+    message,
+    setMessage
+  ] = useState("");
+
+  const [
+    error,
+    setError
+  ] = useState("");
+
+  const [
+    warnings,
+    setWarnings
+  ] = useState([]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Formulario compatible con User.js
+  |--------------------------------------------------------------------------
+  */
+
+  const [
+    form,
+    setForm
+  ] = useState(
+    createProfileForm(
+      savedUser
+    )
+  );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Tema
+  |--------------------------------------------------------------------------
+  */
+
+  const theme =
+    settings?.theme ||
+    "dark";
+
+  const isLight =
+    theme === "light";
+
+  const accent =
+    getAccentColor(
+      settings?.accentColor ||
+      "cyan"
+    );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Usuario normalizado
+  |--------------------------------------------------------------------------
+  */
+
+  const displayFirstName =
+    useMemo(() => {
+      return (
+        formatPersonName(
+          form?.firstName ||
+          user?.firstName
+        ) ||
+        "Usuario"
+      );
+    }, [
+      form?.firstName,
+      user?.firstName
+    ]);
+
+  const displayLastName =
+    useMemo(() => {
+      return formatPersonName(
+        form?.lastName ||
+        user?.lastName
+      );
+    }, [
+      form?.lastName,
+      user?.lastName
+    ]);
+
+  const displayFullName =
+    useMemo(() => {
+      return [
+        displayFirstName,
+        displayLastName
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .trim();
+    }, [
+      displayFirstName,
+      displayLastName
+    ]);
+
+  const role =
+    String(
+      user?.role ||
+      "USER"
+    ).toUpperCase();
+
+  const trustScore =
+    clampNumber(
+      user?.trustScore,
+      0,
+      100,
+      50
+    );
 
   const isVerified =
-    user.isVerified ||
-    user.verificationStatus === "APPROVED" ||
-    user.verificationStatus === "VERIFIED" ||
-    user.kycStatus === "VERIFIED";
+    Boolean(
+      user?.isVerified
+    ) ||
+    [
+      "APPROVED",
+      "VERIFIED"
+    ].includes(
+      String(
+        user?.verificationStatus ||
+        ""
+      ).toUpperCase()
+    ) ||
+    String(
+      user?.kycStatus ||
+      ""
+    ).toUpperCase() ===
+      "VERIFIED";
 
-  const trustScore = Number(user.trustScore || 50);
+  /*
+  |--------------------------------------------------------------------------
+  | Porcentaje del perfil
+  |--------------------------------------------------------------------------
+  */
 
-  const completion = useMemo(() => {
-    const checks = [
-      Boolean(form.firstName.trim()),
-      Boolean(form.lastName.trim()),
-      Boolean(user.email),
-      Boolean(form.phone.trim()),
-      Boolean(form.city.trim()),
-      Boolean(form.province.trim()),
-      Boolean(form.gender),
-      Boolean(form.birthDate),
-      Boolean(profilePreview),
+  const completion =
+    useMemo(() => {
+      const checks = [
+        Boolean(
+          form?.firstName?.trim()
+        ),
+
+        Boolean(
+          form?.lastName?.trim()
+        ),
+
+        Boolean(
+          user?.email
+        ),
+
+        Boolean(
+          form?.phone?.trim()
+        ),
+
+        Boolean(
+          form?.country?.trim()
+        ),
+
+        Boolean(
+          form?.province?.trim()
+        ),
+
+        Boolean(
+          form?.city?.trim()
+        ),
+
+        Boolean(
+          form?.dateOfBirth
+        ),
+
+        Boolean(
+          form?.gender &&
+          form?.gender !==
+            "PREFER_NOT_TO_SAY"
+        ),
+
+        Boolean(
+          profilePreview
+        ),
+
+        isVerified
+      ];
+
+      return Math.round(
+        (
+          checks.filter(
+            Boolean
+          ).length /
+          checks.length
+        ) * 100
+      );
+    }, [
+      form,
+      user?.email,
+      profilePreview,
       isVerified
-    ];
+    ]);
 
-    return Math.round((checks.filter(Boolean).length / checks.length) * 100);
-  }, [form, user.email, profilePreview, isVerified]);
+  /*
+  |--------------------------------------------------------------------------
+  | Cargar perfil
+  |--------------------------------------------------------------------------
+  */
+
+  const loadProfile =
+    useCallback(
+      async (
+        showMainLoader = true
+      ) => {
+        try {
+          if (
+            showMainLoader
+          ) {
+            setLoading(true);
+          } else {
+            setRefreshing(true);
+          }
+
+          setError("");
+          setMessage("");
+          setWarnings([]);
+
+          const response =
+            await api.get(
+              "/users/me"
+            );
+
+          const backendUser =
+            extractObject(
+              response?.data,
+              [
+                "user",
+                "data"
+              ]
+            );
+
+          if (
+            !backendUser ||
+            typeof backendUser !==
+              "object"
+          ) {
+            throw new Error(
+              "El backend no devolvió un perfil válido."
+            );
+          }
+
+          const resolvedUser = {
+            ...DEFAULT_USER,
+            ...backendUser
+          };
+
+          setUser(
+            resolvedUser
+          );
+
+          setForm(
+            createProfileForm(
+              resolvedUser
+            )
+          );
+
+          setProfilePreview(
+            getProfilePhotoUrl(
+              resolvedUser
+                ?.profilePhoto ||
+              resolvedUser
+                ?.avatar ||
+              resolvedUser
+                ?.photo ||
+              ""
+            )
+          );
+
+          setCoverPreview(
+            getCoverPhotoUrl(
+              resolvedUser
+                ?.coverPhoto ||
+              ""
+            )
+          );
+
+          setProfileFile(null);
+          setCoverFile(null);
+
+          persistUser(
+            resolvedUser
+          );
+
+          await loadProfileStats(
+            resolvedUser
+          );
+        } catch (requestError) {
+          console.error(
+            "Error cargando perfil:",
+            requestError
+          );
+
+          setError(
+            requestError
+              ?.response
+              ?.data
+              ?.message ||
+            requestError
+              ?.message ||
+            "No se pudo cargar el perfil."
+          );
+
+          setWarnings([
+            "Se están mostrando los datos guardados localmente."
+          ]);
+
+          setUser(
+            savedUser
+          );
+
+          setForm(
+            createProfileForm(
+              savedUser
+            )
+          );
+
+          setProfilePreview(
+            getProfilePhotoUrl(
+              savedUser
+                ?.profilePhoto ||
+              savedUser
+                ?.avatar ||
+              ""
+            )
+          );
+
+          setCoverPreview(
+            getCoverPhotoUrl(
+              savedUser
+                ?.coverPhoto ||
+              ""
+            )
+          );
+
+          await loadProfileStats(
+            savedUser
+          );
+        } finally {
+          setLoading(false);
+          setRefreshing(false);
+        }
+      },
+      [
+        savedUser
+      ]
+    );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Cargar estadísticas
+  |--------------------------------------------------------------------------
+  */
+
+  const loadProfileStats =
+    useCallback(
+      async (
+        resolvedUser =
+          user
+      ) => {
+        try {
+          const response =
+            await api.get(
+              "/users/me/stats"
+            );
+
+          const backendStats =
+            extractObject(
+              response?.data,
+              [
+                "stats",
+                "data"
+              ]
+            ) || {};
+
+          setStats({
+            products:
+              safeNumber(
+                backendStats
+                  ?.products ??
+                backendStats
+                  ?.productsCount
+              ),
+
+            sales:
+              safeNumber(
+                backendStats
+                  ?.sales ??
+                backendStats
+                  ?.salesCount
+              ),
+
+            purchases:
+              safeNumber(
+                backendStats
+                  ?.purchases ??
+                backendStats
+                  ?.purchasesCount
+              ),
+
+            disputes:
+              safeNumber(
+                backendStats
+                  ?.disputes ??
+                backendStats
+                  ?.disputesCount
+              )
+          });
+        } catch {
+          /*
+          |--------------------------------------------------------------------------
+          | Fallback con rutas existentes
+          |--------------------------------------------------------------------------
+          */
+
+          const results =
+            await Promise.allSettled(
+              [
+                api.get(
+                  "/products/my-products"
+                ),
+
+                api.get(
+                  "/orders/my-orders"
+                ),
+
+                api.get(
+                  "/disputes"
+                )
+              ]
+            );
+
+          const [
+            productsResult,
+            ordersResult,
+            disputesResult
+          ] = results;
+
+          const products =
+            productsResult.status ===
+            "fulfilled"
+              ? extractArray(
+                  productsResult.value
+                    ?.data,
+                  [
+                    "products",
+                    "myProducts",
+                    "data"
+                  ]
+                )
+              : [];
+
+          const orders =
+            ordersResult.status ===
+            "fulfilled"
+              ? extractArray(
+                  ordersResult.value
+                    ?.data,
+                  [
+                    "orders",
+                    "myOrders",
+                    "data"
+                  ]
+                )
+              : [];
+
+          const disputes =
+            disputesResult.status ===
+            "fulfilled"
+              ? extractArray(
+                  disputesResult.value
+                    ?.data,
+                  [
+                    "disputes",
+                    "data"
+                  ]
+                )
+              : [];
+
+          const userId =
+            getEntityId(
+              resolvedUser
+            );
+
+          const purchases =
+            userId
+              ? orders.filter(
+                  (order) =>
+                    String(
+                      getEntityId(
+                        order?.buyer
+                      ) ||
+                      order?.buyerId ||
+                      ""
+                    ) ===
+                    String(
+                      userId
+                    )
+                )
+              : [];
+
+          const sales =
+            userId
+              ? orders.filter(
+                  (order) =>
+                    String(
+                      getEntityId(
+                        order?.seller
+                      ) ||
+                      order?.sellerId ||
+                      ""
+                    ) ===
+                    String(
+                      userId
+                    )
+                )
+              : [];
+
+          setStats({
+            products:
+              products.length ||
+              safeNumber(
+                resolvedUser
+                  ?.productsCount
+              ),
+
+            sales:
+              sales.length ||
+              safeNumber(
+                resolvedUser
+                  ?.salesCount
+              ),
+
+            purchases:
+              purchases.length ||
+              safeNumber(
+                resolvedUser
+                  ?.purchasesCount
+              ),
+
+            disputes:
+              disputes.length ||
+              safeNumber(
+                resolvedUser
+                  ?.disputesCount
+              )
+          });
+        }
+      },
+      [
+        user
+      ]
+    );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Cargar configuración
+  |--------------------------------------------------------------------------
+  */
+
+  const loadSettings =
+    useCallback(
+      async () => {
+        try {
+          const response =
+            await api.get(
+              "/settings/me"
+            );
+
+          const backendSettings =
+            extractObject(
+              response?.data,
+              [
+                "settings",
+                "data"
+              ]
+            );
+
+          if (
+            backendSettings &&
+            typeof backendSettings ===
+              "object"
+          ) {
+            const mergedSettings = {
+              ...DEFAULT_SETTINGS,
+              ...savedSettings,
+              ...backendSettings
+            };
+
+            setSettings(
+              mergedSettings
+            );
+
+            localStorage.setItem(
+              "qsm_settings",
+              JSON.stringify(
+                mergedSettings
+              )
+            );
+
+            return;
+          }
+
+          setSettings(
+            savedSettings
+          );
+        } catch {
+          setSettings(
+            savedSettings
+          );
+        }
+      },
+      [
+        savedSettings
+      ]
+    );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Cambiar campos del formulario
+  |--------------------------------------------------------------------------
+  */
+
+  const handleChange = (
+    event
+  ) => {
+    const {
+      name,
+      value,
+      type,
+      checked
+    } = event.target;
+
+    setMessage("");
+    setError("");
+
+    setForm(
+      (
+        currentForm
+      ) => ({
+        ...currentForm,
+
+        [name]:
+          type ===
+          "checkbox"
+            ? checked
+            : value
+      })
+    );
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Seleccionar foto de perfil
+  |--------------------------------------------------------------------------
+  */
+
+  const handleProfileImageChange = (
+    event
+  ) => {
+    const file =
+      event.target
+        .files?.[0];
+
+    event.target.value =
+      "";
+
+    if (!file) {
+      return;
+    }
+
+    setError("");
+    setMessage("");
+
+    const validation =
+      validateImageFile(
+        file,
+        {
+          allowedTypes:
+            ALLOWED_PROFILE_IMAGE_TYPES,
+
+          maxSize:
+            MAX_PROFILE_IMAGE_SIZE,
+
+          label:
+            "La foto de perfil"
+        }
+      );
+
+    if (
+      !validation.valid
+    ) {
+      setError(
+        validation.message
+      );
+
+      return;
+    }
+
+    revokeBlobUrl(
+      profilePreview
+    );
+
+    const previewUrl =
+      URL.createObjectURL(
+        file
+      );
+
+    setProfileFile(file);
+
+    setProfilePreview(
+      previewUrl
+    );
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Seleccionar portada
+  |--------------------------------------------------------------------------
+  */
+
+  const handleCoverImageChange = (
+    event
+  ) => {
+    const file =
+      event.target
+        .files?.[0];
+
+    event.target.value =
+      "";
+
+    if (!file) {
+      return;
+    }
+
+    setError("");
+    setMessage("");
+
+    const validation =
+      validateImageFile(
+        file,
+        {
+          allowedTypes:
+            ALLOWED_COVER_IMAGE_TYPES,
+
+          maxSize:
+            MAX_COVER_IMAGE_SIZE,
+
+          label:
+            "La portada"
+        }
+      );
+
+    if (
+      !validation.valid
+    ) {
+      setError(
+        validation.message
+      );
+
+      return;
+    }
+
+    revokeBlobUrl(
+      coverPreview
+    );
+
+    const previewUrl =
+      URL.createObjectURL(
+        file
+      );
+
+    setCoverFile(file);
+
+    setCoverPreview(
+      previewUrl
+    );
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Cerrar sesión
+  |--------------------------------------------------------------------------
+  */
+
+  const logout = () => {
+    [
+      "token",
+      "qsm_token",
+      "qsm_user",
+      "user",
+      "admin_token",
+      "admin_user"
+    ].forEach(
+      (storageKey) =>
+        localStorage.removeItem(
+          storageKey
+        )
+    );
+
+    navigate(
+      "/login",
+      {
+        replace: true
+      }
+    );
+  };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Efectos iniciales
+  |--------------------------------------------------------------------------
+  */
 
   useEffect(() => {
-    loadProfile();
+    loadProfile(true);
     loadSettings();
+  }, [
+    loadProfile,
+    loadSettings
+  ]);
+
+  useEffect(() => {
+    applySettings(
+      settings
+    );
+  }, [
+    settings
+  ]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Sincronizar Sidebar completo o minimizado
+  |--------------------------------------------------------------------------
+  */
+
+  useEffect(() => {
+    const handleSidebarChange = (
+      event
+    ) => {
+      const nextValue =
+        typeof event
+          ?.detail
+          ?.collapsed ===
+        "boolean"
+          ? event.detail
+              .collapsed
+          : localStorage.getItem(
+              "qsm_sidebar_collapsed"
+            ) === "true";
+
+      setSidebarCollapsed(
+        nextValue
+      );
+    };
+
+    window.addEventListener(
+      "qsm-sidebar-changed",
+      handleSidebarChange
+    );
+
+    window.addEventListener(
+      "storage",
+      handleSidebarChange
+    );
+
+    return () => {
+      window.removeEventListener(
+        "qsm-sidebar-changed",
+        handleSidebarChange
+      );
+
+      window.removeEventListener(
+        "storage",
+        handleSidebarChange
+      );
+    };
   }, []);
 
+  /*
+  |--------------------------------------------------------------------------
+  | Liberar vistas previas blob
+  |--------------------------------------------------------------------------
+  */
+
   useEffect(() => {
-    applySettings(settings);
-  }, [settings]);
-
-  const loadProfile = async () => {
-    try {
-      setLoading(true);
-      setError("");
-      setMessage("");
-
-      const response = await api.get("/users/me");
-      const backendUser = response.data.user || response.data.data || response.data;
-
-      if (backendUser) {
-        setUser(backendUser);
-        localStorage.setItem("qsm_user", JSON.stringify(backendUser));
-
-        setForm({
-          firstName: backendUser.firstName || "",
-          lastName: backendUser.lastName || "",
-          username: backendUser.username || "",
-          phone: backendUser.phone || "",
-          city: backendUser.city || "",
-          province: backendUser.province || "",
-          address: backendUser.address || "",
-          birthDate: backendUser.birthDate ? String(backendUser.birthDate).slice(0, 10) : "",
-          gender: backendUser.gender || "",
-          bio: backendUser.bio || ""
-        });
-
-        setProfilePreview(toAbsoluteFile(backendUser.profilePhoto || backendUser.avatar || ""));
-        setCoverPreview(toAbsoluteFile(backendUser.coverPhoto || ""));
-      }
-
-      await loadProfileStats();
-    } catch (err) {
-      setError(
-        err?.response?.data?.message ||
-          "No se pudo cargar el perfil desde el backend. Mostrando datos locales."
+    return () => {
+      revokeBlobUrl(
+        profilePreview
       );
-    } finally {
-      setLoading(false);
+
+      revokeBlobUrl(
+        coverPreview
+      );
+    };
+  }, [
+    profilePreview,
+    coverPreview
+  ]);
+   /*
+  |--------------------------------------------------------------------------
+  | Validar formulario
+  |--------------------------------------------------------------------------
+  */
+
+  const validateProfileForm = () => {
+    const firstName =
+      String(
+        form?.firstName || ""
+      ).trim();
+
+    const lastName =
+      String(
+        form?.lastName || ""
+      ).trim();
+
+    const phone =
+      String(
+        form?.phone || ""
+      ).trim();
+
+    if (
+      firstName.length < 2
+    ) {
+      return {
+        valid: false,
+        message:
+          "El nombre debe tener al menos 2 caracteres."
+      };
     }
-  };
 
-  const loadProfileStats = async () => {
-    try {
-      const response = await api.get("/users/me/stats");
-      const backendStats = response.data.stats || response.data.data || response.data;
-
-      setStats({
-        products: backendStats.products || backendStats.productsCount || 0,
-        sales: backendStats.sales || backendStats.salesCount || 0,
-        purchases: backendStats.purchases || backendStats.purchasesCount || 0,
-        disputes: backendStats.disputes || backendStats.disputesCount || 0
-      });
-    } catch {
-      setStats({
-        products: user.productsCount || 0,
-        sales: user.salesCount || 0,
-        purchases: user.purchasesCount || 0,
-        disputes: user.disputesCount || 0
-      });
+    if (
+      lastName.length < 2
+    ) {
+      return {
+        valid: false,
+        message:
+          "El apellido debe tener al menos 2 caracteres."
+      };
     }
-  };
 
-  const loadSettings = async () => {
-    try {
-      const response = await api.get("/settings/me");
-      const backendSettings = response.data.settings || response.data.data || response.data;
+    if (
+      phone &&
+      phone.length < 7
+    ) {
+      return {
+        valid: false,
+        message:
+          "El número de teléfono no parece válido."
+      };
+    }
 
-      if (backendSettings) {
-        const merged = {
-          ...savedSettings,
-          ...backendSettings
+    if (
+      form?.dateOfBirth
+    ) {
+      const selectedDate =
+        new Date(
+          form.dateOfBirth
+        );
+
+      if (
+        Number.isNaN(
+          selectedDate.getTime()
+        )
+      ) {
+        return {
+          valid: false,
+          message:
+            "La fecha de nacimiento no es válida."
         };
-
-        setSettings(merged);
-        localStorage.setItem("qsm_settings", JSON.stringify(merged));
       }
-    } catch {
-      setSettings(savedSettings);
-    }
-  };
 
-  const handleChange = (event) => {
-    setForm({
-      ...form,
-      [event.target.name]: event.target.value
-    });
-  };
-
-  const handleImageChange = (event, type) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    const preview = URL.createObjectURL(file);
-
-    if (type === "profile") {
-      setProfileFile(file);
-      setProfilePreview(preview);
+      if (
+        selectedDate >
+        new Date()
+      ) {
+        return {
+          valid: false,
+          message:
+            "La fecha de nacimiento no puede estar en el futuro."
+        };
+      }
     }
 
-    if (type === "cover") {
-      setCoverFile(file);
-      setCoverPreview(preview);
-    }
+    return {
+      valid: true,
+      message: ""
+    };
   };
 
-  const saveProfile = async () => {
-    try {
-      setSaving(true);
-      setError("");
-      setMessage("");
+  /*
+  |--------------------------------------------------------------------------
+  | Guardar datos personales
+  |--------------------------------------------------------------------------
+  */
 
-      let uploadedProfilePhoto = user.profilePhoto || user.avatar || "";
-      let uploadedCoverPhoto = user.coverPhoto || "";
+  const saveProfileData =
+    async () => {
+      const validation =
+        validateProfileForm();
 
-      if (profileFile || coverFile) {
-        const formData = new FormData();
-
-        if (profileFile) formData.append("profilePhoto", profileFile);
-        if (coverFile) formData.append("coverPhoto", coverFile);
-
-        try {
-          const uploadResponse = await api.post("/users/me/photos", formData, {
-            headers: { "Content-Type": "multipart/form-data" }
-          });
-
-          uploadedProfilePhoto =
-            uploadResponse.data.profilePhoto ||
-            uploadResponse.data.avatar ||
-            uploadedProfilePhoto;
-
-          uploadedCoverPhoto =
-            uploadResponse.data.coverPhoto ||
-            uploadedCoverPhoto;
-        } catch {
-          // Si el endpoint de fotos no existe todavía, guardamos solo los datos de texto.
-        }
+      if (
+        !validation.valid
+      ) {
+        throw new Error(
+          validation.message
+        );
       }
 
       const payload = {
-        ...form,
-        profilePhoto: uploadedProfilePhoto,
-        coverPhoto: uploadedCoverPhoto
+        firstName:
+          formatPersonName(
+            form.firstName
+          ),
+
+        lastName:
+          formatPersonName(
+            form.lastName
+          ),
+
+        phone:
+          String(
+            form.phone || ""
+          ).trim(),
+
+        documentId:
+          String(
+            form.documentId || ""
+          ).trim(),
+
+        dateOfBirth:
+          form.dateOfBirth ||
+          null,
+
+        gender:
+          form.gender ||
+          "PREFER_NOT_TO_SAY",
+
+        country:
+          String(
+            form.country ||
+            "República Dominicana"
+          ).trim(),
+
+        province:
+          String(
+            form.province || ""
+          ).trim(),
+
+        city:
+          String(
+            form.city || ""
+          ).trim(),
+
+        address:
+          String(
+            form.address || ""
+          ).trim(),
+
+        language:
+          settings?.language ||
+          "es",
+
+        timezone:
+          user?.timezone ||
+          "America/Santo_Domingo",
+
+        notificationsEnabled:
+          user
+            ?.notificationsEnabled !==
+          false,
+
+        emailNotificationsEnabled:
+          user
+            ?.emailNotificationsEnabled !==
+          false
       };
 
-      const response = await api.put("/users/me", payload);
-      const updatedUser = response.data.user || response.data.data || response.data;
+      /*
+      |--------------------------------------------------------------------------
+      | Campos opcionales
+      |--------------------------------------------------------------------------
+      | Estos se enviarán si ya fueron agregados al modelo User.js y al
+      | controlador updateMe.
+      |--------------------------------------------------------------------------
+      */
 
-      const finalUser = {
+      if (
+        form?.username !==
+        undefined
+      ) {
+        payload.username =
+          String(
+            form.username || ""
+          )
+            .trim()
+            .toLowerCase()
+            .replace(/\s+/g, "");
+      }
+
+      if (
+        form?.bio !==
+        undefined
+      ) {
+        payload.bio =
+          String(
+            form.bio || ""
+          )
+            .trim()
+            .slice(0, 500);
+      }
+
+      const response =
+        await api.patch(
+          "/users/me",
+          payload
+        );
+
+      const updatedUser =
+        extractObject(
+          response?.data,
+          [
+            "user",
+            "data"
+          ]
+        );
+
+      if (
+        !updatedUser
+      ) {
+        throw new Error(
+          "El backend no devolvió el perfil actualizado."
+        );
+      }
+
+      return {
         ...user,
-        ...updatedUser,
-        ...payload
+        ...updatedUser
       };
+    };
 
-      setUser(finalUser);
-      localStorage.setItem("qsm_user", JSON.stringify(finalUser));
-      setMessage("Perfil actualizado correctamente.");
-    } catch (err) {
-      const localUser = {
-        ...user,
-        ...form,
-        profilePhoto: profilePreview,
-        coverPhoto: coverPreview
-      };
+  /*
+  |--------------------------------------------------------------------------
+  | Subir foto de perfil
+  |--------------------------------------------------------------------------
+  */
 
-      setUser(localUser);
-      localStorage.setItem("qsm_user", JSON.stringify(localUser));
+  const uploadProfilePhoto =
+    async () => {
+      if (
+        !profileFile
+      ) {
+        return user;
+      }
 
-      setError(
-        err?.response?.data?.message ||
-          "No se pudo guardar en backend. Se guardó temporalmente en localStorage."
+      try {
+        setUploadingProfilePhoto(
+          true
+        );
+
+        const formData =
+          new FormData();
+
+        formData.append(
+          "profilePhoto",
+          profileFile
+        );
+
+        /*
+        |--------------------------------------------------------------------------
+        | No se establece manualmente Content-Type
+        |--------------------------------------------------------------------------
+        | El navegador añade automáticamente el boundary correcto.
+        |--------------------------------------------------------------------------
+        */
+
+        const response =
+          await api.patch(
+            "/users/me/avatar",
+            formData
+          );
+
+        const updatedUser =
+          extractObject(
+            response?.data,
+            [
+              "user",
+              "data"
+            ]
+          );
+
+        const profilePhoto =
+          response?.data
+            ?.profilePhoto ||
+          updatedUser
+            ?.profilePhoto ||
+          "";
+
+        const finalUser = {
+          ...user,
+          ...(updatedUser || {}),
+          profilePhoto:
+            profilePhoto ||
+            updatedUser
+              ?.profilePhoto ||
+            user?.profilePhoto ||
+            ""
+        };
+
+        setUser(
+          finalUser
+        );
+
+        persistUser(
+          finalUser
+        );
+
+        revokeBlobUrl(
+          profilePreview
+        );
+
+        setProfilePreview(
+          getProfilePhotoUrl(
+            finalUser
+              ?.profilePhoto ||
+            ""
+          )
+        );
+
+        setProfileFile(
+          null
+        );
+
+        window.dispatchEvent(
+          new CustomEvent(
+            "qsm-user-updated",
+            {
+              detail:
+                finalUser
+            }
+          )
+        );
+
+        return finalUser;
+      } finally {
+        setUploadingProfilePhoto(
+          false
+        );
+      }
+    };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Eliminar foto de perfil
+  |--------------------------------------------------------------------------
+  */
+
+  const deleteProfilePhoto =
+    async () => {
+      if (
+        deletingProfilePhoto
+      ) {
+        return;
+      }
+
+      try {
+        setDeletingProfilePhoto(
+          true
+        );
+
+        setError("");
+        setMessage("");
+
+        const response =
+          await api.delete(
+            "/users/me/avatar"
+          );
+
+        const updatedUser =
+          extractObject(
+            response?.data,
+            [
+              "user",
+              "data"
+            ]
+          );
+
+        const finalUser = {
+          ...user,
+          ...(updatedUser || {}),
+          profilePhoto: "",
+          avatar: ""
+        };
+
+        revokeBlobUrl(
+          profilePreview
+        );
+
+        setProfilePreview("");
+        setProfileFile(null);
+        setUser(finalUser);
+
+        persistUser(
+          finalUser
+        );
+
+        window.dispatchEvent(
+          new CustomEvent(
+            "qsm-user-updated",
+            {
+              detail:
+                finalUser
+            }
+          )
+        );
+
+        setMessage(
+          "Foto de perfil eliminada correctamente."
+        );
+      } catch (
+        requestError
+      ) {
+        console.error(
+          "Error eliminando foto:",
+          requestError
+        );
+
+        setError(
+          requestError
+            ?.response
+            ?.data
+            ?.message ||
+          requestError
+            ?.message ||
+          "No se pudo eliminar la foto de perfil."
+        );
+      } finally {
+        setDeletingProfilePhoto(
+          false
+        );
+      }
+    };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Cancelar cambio de foto
+  |--------------------------------------------------------------------------
+  */
+
+  const cancelProfilePhotoChange =
+    () => {
+      revokeBlobUrl(
+        profilePreview
       );
-    } finally {
-      setSaving(false);
-    }
-  };
 
-  const logout = () => {
-    localStorage.removeItem("qsm_user");
-    localStorage.removeItem("user");
-    localStorage.removeItem("qsm_token");
-    localStorage.removeItem("token");
-    navigate("/login");
-  };
+      setProfileFile(null);
 
-  return (
+      setProfilePreview(
+        getProfilePhotoUrl(
+          user?.profilePhoto ||
+          user?.avatar ||
+          ""
+        )
+      );
+
+      setError("");
+    };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Cancelar cambio de portada
+  |--------------------------------------------------------------------------
+  */
+
+  const cancelCoverPhotoChange =
+    () => {
+      revokeBlobUrl(
+        coverPreview
+      );
+
+      setCoverFile(null);
+
+      setCoverPreview(
+        getCoverPhotoUrl(
+          user?.coverPhoto ||
+          ""
+        )
+      );
+
+      setError("");
+    };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Subir portada
+  |--------------------------------------------------------------------------
+  | Esta función utilizará:
+  |
+  | PATCH /api/users/me/cover
+  |
+  | campo FormData:
+  |
+  | coverPhoto
+  |
+  | La ruta debe crearse en el backend para que la portada sea persistente.
+  |--------------------------------------------------------------------------
+  */
+
+  const uploadCoverPhoto =
+    async (
+      baseUser = user
+    ) => {
+      if (
+        !coverFile
+      ) {
+        return baseUser;
+      }
+
+      try {
+        setUploadingCoverPhoto(
+          true
+        );
+
+        const formData =
+          new FormData();
+
+        formData.append(
+          "coverPhoto",
+          coverFile
+        );
+
+        const response =
+          await api.patch(
+            "/users/me/cover",
+            formData
+          );
+
+        const updatedUser =
+          extractObject(
+            response?.data,
+            [
+              "user",
+              "data"
+            ]
+          );
+
+        const coverPhoto =
+          response?.data
+            ?.coverPhoto ||
+          updatedUser
+            ?.coverPhoto ||
+          "";
+
+        const finalUser = {
+          ...baseUser,
+          ...(updatedUser || {}),
+          coverPhoto:
+            coverPhoto ||
+            updatedUser
+              ?.coverPhoto ||
+            baseUser
+              ?.coverPhoto ||
+            ""
+        };
+
+        revokeBlobUrl(
+          coverPreview
+        );
+
+        setCoverPreview(
+          getCoverPhotoUrl(
+            finalUser
+              ?.coverPhoto ||
+            ""
+          )
+        );
+
+        setCoverFile(null);
+
+        return finalUser;
+      } finally {
+        setUploadingCoverPhoto(
+          false
+        );
+      }
+    };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Eliminar portada
+  |--------------------------------------------------------------------------
+  | Requiere:
+  |
+  | DELETE /api/users/me/cover
+  |--------------------------------------------------------------------------
+  */
+
+  const deleteCoverPhoto =
+    async () => {
+      try {
+        setUploadingCoverPhoto(
+          true
+        );
+
+        setError("");
+        setMessage("");
+
+        const response =
+          await api.delete(
+            "/users/me/cover"
+          );
+
+        const updatedUser =
+          extractObject(
+            response?.data,
+            [
+              "user",
+              "data"
+            ]
+          );
+
+        const finalUser = {
+          ...user,
+          ...(updatedUser || {}),
+          coverPhoto: ""
+        };
+
+        revokeBlobUrl(
+          coverPreview
+        );
+
+        setCoverPreview("");
+        setCoverFile(null);
+        setUser(finalUser);
+
+        persistUser(
+          finalUser
+        );
+
+        window.dispatchEvent(
+          new CustomEvent(
+            "qsm-user-updated",
+            {
+              detail:
+                finalUser
+            }
+          )
+        );
+
+        setMessage(
+          "Portada eliminada correctamente."
+        );
+      } catch (
+        requestError
+      ) {
+        console.error(
+          "Error eliminando portada:",
+          requestError
+        );
+
+        setError(
+          requestError
+            ?.response
+            ?.data
+            ?.message ||
+          requestError
+            ?.message ||
+          "No se pudo eliminar la portada."
+        );
+      } finally {
+        setUploadingCoverPhoto(
+          false
+        );
+      }
+    };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Guardar perfil completo
+  |--------------------------------------------------------------------------
+  */
+
+  const saveProfile =
+    async () => {
+      if (
+        saving
+      ) {
+        return;
+      }
+
+      try {
+        setSaving(true);
+        setError("");
+        setMessage("");
+
+        /*
+        |--------------------------------------------------------------------------
+        | 1. Guardar datos personales
+        |--------------------------------------------------------------------------
+        */
+
+        let finalUser =
+          await saveProfileData();
+
+        /*
+        |--------------------------------------------------------------------------
+        | 2. Guardar foto de perfil
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+          profileFile
+        ) {
+          const formData =
+            new FormData();
+
+          formData.append(
+            "profilePhoto",
+            profileFile
+          );
+
+          setUploadingProfilePhoto(
+            true
+          );
+
+          try {
+            const photoResponse =
+              await api.patch(
+                "/users/me/avatar",
+                formData
+              );
+
+            const photoUser =
+              extractObject(
+                photoResponse?.data,
+                [
+                  "user",
+                  "data"
+                ]
+              );
+
+            finalUser = {
+              ...finalUser,
+              ...(photoUser || {}),
+
+              profilePhoto:
+                photoResponse
+                  ?.data
+                  ?.profilePhoto ||
+                photoUser
+                  ?.profilePhoto ||
+                finalUser
+                  ?.profilePhoto ||
+                ""
+            };
+          } finally {
+            setUploadingProfilePhoto(
+              false
+            );
+          }
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | 3. Guardar portada
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+          coverFile
+        ) {
+          try {
+            finalUser =
+              await uploadCoverPhoto(
+                finalUser
+              );
+          } catch (
+            coverError
+          ) {
+            console.error(
+              "Portada no guardada:",
+              coverError
+            );
+
+            setWarnings(
+              (
+                currentWarnings
+              ) => [
+                ...new Set([
+                  ...currentWarnings,
+                  "Los datos y la foto de perfil fueron guardados, pero la portada todavía no pudo guardarse."
+                ])
+              ]
+            );
+          }
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | 4. Guardar usuario final localmente
+        |--------------------------------------------------------------------------
+        */
+
+        setUser(
+          finalUser
+        );
+
+        setForm(
+          createProfileForm(
+            finalUser
+          )
+        );
+
+        persistUser(
+          finalUser
+        );
+
+        revokeBlobUrl(
+          profilePreview
+        );
+
+        revokeBlobUrl(
+          coverPreview
+        );
+
+        setProfilePreview(
+          getProfilePhotoUrl(
+            finalUser
+              ?.profilePhoto ||
+            finalUser
+              ?.avatar ||
+            ""
+          )
+        );
+
+        setCoverPreview(
+          getCoverPhotoUrl(
+            finalUser
+              ?.coverPhoto ||
+            ""
+          )
+        );
+
+        setProfileFile(null);
+        setCoverFile(null);
+
+        /*
+        |--------------------------------------------------------------------------
+        | Actualizar Sidebar, Topbar y otros componentes
+        |--------------------------------------------------------------------------
+        */
+
+        window.dispatchEvent(
+          new CustomEvent(
+            "qsm-user-updated",
+            {
+              detail:
+                finalUser
+            }
+          )
+        );
+
+        setMessage(
+          "Perfil actualizado correctamente."
+        );
+      } catch (
+        requestError
+      ) {
+        console.error(
+          "Error guardando perfil:",
+          requestError
+        );
+
+        setError(
+          requestError
+            ?.response
+            ?.data
+            ?.message ||
+          requestError
+            ?.message ||
+          "No se pudo guardar el perfil."
+        );
+
+        /*
+        |--------------------------------------------------------------------------
+        | No guardamos URLs blob en localStorage
+        |--------------------------------------------------------------------------
+        */
+
+        const safeLocalUser = {
+          ...user,
+
+          firstName:
+            formatPersonName(
+              form.firstName
+            ),
+
+          lastName:
+            formatPersonName(
+              form.lastName
+            ),
+
+          phone:
+            form.phone,
+
+          country:
+            form.country,
+
+          province:
+            form.province,
+
+          city:
+            form.city,
+
+          address:
+            form.address,
+
+          dateOfBirth:
+            form.dateOfBirth,
+
+          gender:
+            form.gender,
+
+          username:
+            form.username,
+
+          bio:
+            form.bio
+        };
+
+        setUser(
+          safeLocalUser
+        );
+
+        persistUser(
+          safeLocalUser
+        );
+      } finally {
+        setSaving(false);
+      }
+    };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Restablecer formulario
+  |--------------------------------------------------------------------------
+  */
+
+  const resetProfileForm =
+    () => {
+      setForm(
+        createProfileForm(
+          user
+        )
+      );
+
+      cancelProfilePhotoChange();
+      cancelCoverPhotoChange();
+
+      setMessage("");
+      setError("");
+    };
+
+  /*
+  |--------------------------------------------------------------------------
+  | Estado global de guardado
+  |--------------------------------------------------------------------------
+  */
+
+  const isBusy =
+    saving ||
+    refreshing ||
+    uploadingProfilePhoto ||
+    uploadingCoverPhoto ||
+    deletingProfilePhoto;
+
+  const hasPendingChanges =
+    Boolean(
+      profileFile ||
+      coverFile
+    ) ||
+    hasProfileFormChanges(
+      form,
+      user
+    );
+     return (
     <div style={page(isLight)}>
       <style>{`
-        * { box-sizing: border-box; }
+        * {
+          box-sizing: border-box;
+        }
 
-        html, body, #root {
+        html,
+        body,
+        #root {
           width: 100%;
           min-height: 100%;
           margin: 0;
           padding: 0;
           overflow-x: hidden;
-          background: ${isLight ? "#f8fafc" : "#020617"};
-          font-family: Inter, "Plus Jakarta Sans", system-ui, sans-serif;
+          background:
+            ${isLight
+              ? "#f8fafc"
+              : "#020617"};
+          font-family:
+            Inter,
+            "Plus Jakarta Sans",
+            system-ui,
+            sans-serif;
         }
 
-        input::placeholder, textarea::placeholder {
-          color: ${isLight ? "#94a3b8" : "#64748b"};
-        }
-
-        input, select, textarea, button, a {
+        input,
+        select,
+        textarea,
+        button,
+        a {
           font-family: inherit;
         }
 
-        button, a {
-          transition: ${settings.animations === false ? "none" : "all .25s ease"};
+        input::placeholder,
+        textarea::placeholder {
+          color:
+            ${isLight
+              ? "#94a3b8"
+              : "#64748b"};
         }
 
-        button:hover, a:hover {
-          transform: ${settings.animations === false ? "none" : "translateY(-2px)"};
+        button,
+        a,
+        label {
+          transition:
+            ${settings?.animations === false
+              ? "none"
+              : "transform .22s ease, opacity .22s ease, border-color .22s ease, background .22s ease"};
         }
 
-        @keyframes fadeUp {
-          from { opacity: 0; transform: translateY(18px); }
-          to { opacity: 1; transform: translateY(0); }
+        button:hover,
+        a:hover,
+        label:hover {
+          transform:
+            ${settings?.animations === false
+              ? "none"
+              : "translateY(-2px)"};
         }
 
-        @media (max-width: 1240px) {
-          .profile-page {
-            grid-template-columns: 1fr !important;
+        button:disabled {
+          opacity: .62;
+          cursor: not-allowed;
+          transform: none !important;
+        }
+
+        @keyframes profileFadeUp {
+          from {
+            opacity: 0;
+            transform: translateY(18px);
           }
 
-          .sidebar-wrapper {
-            display: none !important;
-          }
-
-          .profile-layout,
-          .stats-grid,
-          .two-columns {
-            grid-template-columns: 1fr !important;
-          }
-
-          .hero-actions {
-            grid-template-columns: 1fr !important;
+          to {
+            opacity: 1;
+            transform: translateY(0);
           }
         }
 
-        @media (max-width: 760px) {
-          .main-content {
-            padding: 18px !important;
+        @keyframes profilePulse {
+          0% {
+            opacity: .65;
           }
 
-          .profile-header {
-            flex-direction: column !important;
-            align-items: flex-start !important;
+          50% {
+            opacity: 1;
           }
 
-          .photo-row {
-            flex-direction: column !important;
+          100% {
+            opacity: .65;
+          }
+        }
+
+        @media (max-width: 1320px) {
+          .profile-content-grid {
+            grid-template-columns:
+              1fr !important;
+          }
+
+          .profile-side-column {
+            grid-template-columns:
+              repeat(2, minmax(0, 1fr))
+              !important;
+          }
+        }
+
+        @media (max-width: 1160px) {
+          .profile-page-layout {
+            grid-template-columns:
+              1fr !important;
+          }
+
+          .profile-sidebar-wrapper {
+            display:
+              none !important;
+          }
+
+          .profile-header-content {
+            grid-template-columns:
+              1fr !important;
+          }
+
+          .profile-main-actions {
+            justify-content:
+              flex-start !important;
+          }
+        }
+
+        @media (max-width: 850px) {
+          .profile-main-content {
+            padding:
+              80px 18px 40px !important;
+          }
+
+          .profile-stats-grid {
+            grid-template-columns:
+              repeat(2, minmax(0, 1fr))
+              !important;
+          }
+
+          .profile-form-grid {
+            grid-template-columns:
+              1fr !important;
+          }
+
+          .profile-side-column {
+            grid-template-columns:
+              1fr !important;
+          }
+
+          .profile-photo-section {
+            flex-direction:
+              column !important;
+            align-items:
+              flex-start !important;
+          }
+
+          .profile-main-actions {
+            display:
+              grid !important;
+            grid-template-columns:
+              1fr 1fr !important;
+            width:
+              100% !important;
+          }
+
+          .profile-main-actions > * {
+            width:
+              100% !important;
+          }
+        }
+
+        @media (max-width: 580px) {
+          .profile-stats-grid {
+            grid-template-columns:
+              1fr !important;
+          }
+
+          .profile-main-actions {
+            grid-template-columns:
+              1fr !important;
+          }
+
+          .profile-cover-actions {
+            left:
+              14px !important;
+            right:
+              14px !important;
+            bottom:
+              14px !important;
+            justify-content:
+              stretch !important;
+          }
+
+          .profile-cover-actions > * {
+            flex:
+              1 !important;
+          }
+
+          .profile-photo-card {
+            width:
+              116px !important;
+            height:
+              116px !important;
+            border-radius:
+              30px !important;
+          }
+
+          .profile-identity-name {
+            font-size:
+              34px !important;
+          }
+
+          .profile-form-actions {
+            grid-template-columns:
+              1fr !important;
           }
         }
       `}</style>
 
-      <div className="profile-page" style={layout(settings)}>
-        <div className="sidebar-wrapper">
-          <Sidebar />
+      <div
+        className="profile-page-layout"
+        style={layout(
+          settings,
+          sidebarCollapsed
+        )}
+      >
+        <div className="profile-sidebar-wrapper">
+          <Sidebar
+            counts={{
+              purchases:
+                stats.purchases,
+              sales:
+                stats.sales,
+              favorites:
+                Array.isArray(
+                  user?.favorites
+                )
+                  ? user.favorites.length
+                  : 0,
+              messages:
+                safeNumber(
+                  user?.messagesCount
+                ),
+              disputes:
+                stats.disputes
+            }}
+          />
         </div>
 
-        <main className="main-content" style={main(settings)}>
+        <main
+          className="profile-main-content"
+          style={main(settings)}
+        >
           <Topbar />
 
-          {loading ? (
-            <div style={centerCard(isLight)}>
-              <h2>Cargando perfil...</h2>
-              <p>QSM está consultando tu información.</p>
-            </div>
-          ) : (
-            <>
-              <section style={profileShell(isLight, settings)}>
-                <div style={cover(isLight, accent)}>
-                  {coverPreview ? (
-                    <img src={coverPreview} alt="Portada" style={coverImage} />
-                  ) : (
-                    <div style={coverDefault(accent)}>
-                      <div style={coverGlass(isLight)}>
-                        <span>🛡 Identidad protegida</span>
-                        <span>💰 Pago Protegido</span>
-                        <span>🤖 QSM AI</span>
-                        <span>📦 Historial seguro</span>
-                      </div>
-                    </div>
-                  )}
+          <div style={contentContainer}>
+            <section style={pageToolbar}>
+              <div>
+                <p style={eyebrow(accent)}>
+                  PERFIL PERSONAL
+                </p>
 
-                  <label style={coverButton(accent)}>
-                    📷 Cambiar portada
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(event) => handleImageChange(event, "cover")}
-                      style={{ display: "none" }}
-                    />
-                  </label>
+                <h1 style={pageTitle(isLight)}>
+                  Administra tu identidad QSM
+                </h1>
+
+                <p style={pageDescription(isLight)}>
+                  Actualiza tus datos, foto, portada,
+                  información de contacto y nivel de
+                  seguridad.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  loadProfile(false)
+                }
+                disabled={
+                  loading ||
+                  refreshing ||
+                  saving
+                }
+                style={refreshButton(
+                  isLight,
+                  accent
+                )}
+              >
+                {refreshing
+                  ? "Actualizando..."
+                  : "↻ Actualizar perfil"}
+              </button>
+            </section>
+
+            {message && (
+              <div style={successBox}>
+                <span style={messageIcon}>
+                  ✓
+                </span>
+
+                <div>
+                  <strong>
+                    Operación completada
+                  </strong>
+
+                  <p>
+                    {message}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {error && (
+              <div style={errorBox}>
+                <span style={messageIcon}>
+                  !
+                </span>
+
+                <div>
+                  <strong>
+                    No se pudo completar la operación
+                  </strong>
+
+                  <p>
+                    {error}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {warnings.length > 0 && (
+              <div style={warningBox(isLight)}>
+                <span style={messageIcon}>
+                  ⚠
+                </span>
+
+                <div>
+                  <strong>
+                    Información importante
+                  </strong>
+
+                  <ul style={warningList}>
+                    {warnings.map(
+                      (
+                        warning,
+                        index
+                      ) => (
+                        <li
+                          key={`${warning}-${index}`}
+                        >
+                          {warning}
+                        </li>
+                      )
+                    )}
+                  </ul>
+                </div>
+              </div>
+            )}
+
+            {loading ? (
+              <div style={loadingCard(isLight)}>
+                <div style={loadingSymbol}>
+                  ◌
                 </div>
 
-                <div className="profile-header" style={profileHeader}>
-                  <div className="photo-row" style={photoRow}>
-                    <div style={photoFrame(accent)}>
-                      {profilePreview ? (
-                        <img src={profilePreview} alt="Perfil" style={photoImage} />
-                      ) : (
-                        <span>{(form.firstName || user.email || "U").charAt(0).toUpperCase()}</span>
-                      )}
+                <h2>
+                  Cargando tu perfil
+                </h2>
 
-                      <label style={photoButton(accent)}>
-                        📷
+                <p>
+                  QSM está consultando tus datos,
+                  operaciones y configuración.
+                </p>
+              </div>
+            ) : (
+              <>
+                <section
+                  style={profileHero(
+                    isLight,
+                    settings
+                  )}
+                >
+                  <div
+                    style={coverContainer(
+                      isLight,
+                      accent
+                    )}
+                  >
+                    {coverPreview ? (
+                      <img
+                        src={coverPreview}
+                        alt="Portada del perfil"
+                        style={coverImage}
+                      />
+                    ) : (
+                      <div
+                        style={defaultCover(
+                          accent
+                        )}
+                      >
+                        <div style={coverGridPattern} />
+
+                        <div style={coverIdentityBox}>
+                          <span>
+                            🛡 Identidad protegida
+                          </span>
+
+                          <span>
+                            💰 Pago Protegido
+                          </span>
+
+                          <span>
+                            🤖 QSM AI
+                          </span>
+
+                          <span>
+                            📦 Historial seguro
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    <div
+                      className="profile-cover-actions"
+                      style={coverActions}
+                    >
+                      <label
+                        style={coverActionButton(
+                          accent
+                        )}
+                      >
+                        📷{" "}
+                        {coverPreview
+                          ? "Cambiar portada"
+                          : "Agregar portada"}
+
                         <input
                           type="file"
-                          accept="image/*"
-                          onChange={(event) => handleImageChange(event, "profile")}
-                          style={{ display: "none" }}
+                          accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                          onChange={
+                            handleCoverImageChange
+                          }
+                          disabled={isBusy}
+                          style={{
+                            display:
+                              "none"
+                          }}
                         />
                       </label>
+
+                      {coverFile && (
+                        <button
+                          type="button"
+                          onClick={
+                            cancelCoverPhotoChange
+                          }
+                          disabled={isBusy}
+                          style={coverSecondaryButton}
+                        >
+                          Cancelar cambio
+                        </button>
+                      )}
+
+                      {!coverFile &&
+                        user?.coverPhoto && (
+                          <button
+                            type="button"
+                            onClick={
+                              deleteCoverPhoto
+                            }
+                            disabled={isBusy}
+                            style={coverDangerButton}
+                          >
+                            Eliminar portada
+                          </button>
+                        )}
                     </div>
+                  </div>
 
-                    <div>
-                      <p style={label(accent)}>MI PERFIL QSM</p>
-                      <h1 style={profileName(isLight)}>
-                        {form.firstName || "Usuario"} {form.lastName || "QSM"}
-                      </h1>
-                      <p style={muted(isLight)}>{user.email || "usuario@qsm.com"}</p>
+                  <div
+                    className="profile-header-content"
+                    style={profileHeaderContent}
+                  >
+                    <div
+                      className="profile-photo-section"
+                      style={profilePhotoSection}
+                    >
+                      <div
+                        className="profile-photo-card"
+                        style={profilePhotoFrame(
+                          accent
+                        )}
+                      >
+                        {profilePreview ? (
+                          <img
+                            src={profilePreview}
+                            alt={`Foto de perfil de ${displayFullName}`}
+                            style={profilePhotoImage}
+                          />
+                        ) : (
+                          <span>
+                            {getInitials(
+                              displayFullName
+                            )}
+                          </span>
+                        )}
 
-                      <div style={badges}>
-                        <span style={verifiedBadge(isVerified)}>
-                          {isVerified ? "✅ Verificado" : "🟡 Pendiente de verificación"}
-                        </span>
+                        <label
+                          style={profilePhotoButton(
+                            accent
+                          )}
+                          title="Cambiar foto de perfil"
+                        >
+                          📷
 
-                        <span style={trustBadge(accent)}>
-                          Confianza {trustScore}/100
-                        </span>
+                          <input
+                            type="file"
+                            accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                            onChange={
+                              handleProfileImageChange
+                            }
+                            disabled={isBusy}
+                            style={{
+                              display:
+                                "none"
+                            }}
+                          />
+                        </label>
 
-                        <span style={roleBadge}>
-                          {user.role || "USER"}
-                        </span>
+                        {isVerified && (
+                          <span
+                            style={profileVerifiedMark}
+                            title="Identidad verificada"
+                          >
+                            ✓
+                          </span>
+                        )}
+                      </div>
+
+                      <div style={identityInformation}>
+                        <p style={eyebrow(accent)}>
+                          MI PERFIL QSM
+                        </p>
+
+                        <h2
+                          className="profile-identity-name"
+                          style={identityName(isLight)}
+                        >
+                          {displayFullName}
+                        </h2>
+
+                        <p style={identityEmail(isLight)}>
+                          {user?.email ||
+                            "usuario@qsm.com"}
+                        </p>
+
+                        {form?.username && (
+                          <p style={usernameText(accent)}>
+                            @
+                            {String(
+                              form.username
+                            ).replace(
+                              /^@/,
+                              ""
+                            )}
+                          </p>
+                        )}
+
+                        <div style={identityBadges}>
+                          <span
+                            style={verifiedBadge(
+                              isVerified
+                            )}
+                          >
+                            {isVerified
+                              ? "✓ Identidad verificada"
+                              : "● Pendiente de verificación"}
+                          </span>
+
+                          <span
+                            style={trustBadge(accent)}
+                          >
+                            Confianza{" "}
+                            {trustScore}/100
+                          </span>
+
+                          <span style={roleBadge}>
+                            {formatRole(role)}
+                          </span>
+                        </div>
+
+                        {profileFile && (
+                          <div style={pendingImageNotice}>
+                            <span>
+                              📷
+                            </span>
+
+                            <div>
+                              <strong>
+                                Nueva foto seleccionada
+                              </strong>
+
+                              <p>
+                                Guarda el perfil para conservarla
+                                permanentemente.
+                              </p>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={
+                                cancelProfilePhotoChange
+                              }
+                              disabled={isBusy}
+                              style={smallCancelButton}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
-                  </div>
 
-                  <div className="hero-actions" style={heroActions}>
-                    <Link to="/complete-profile" style={outlineButton(isLight)}>
-                      Verificación
-                    </Link>
+                    <div
+                      className="profile-main-actions"
+                      style={profileMainActions}
+                    >
+                      <Link
+                        to="/complete-profile"
+                        style={secondaryActionButton(
+                          isLight
+                        )}
+                      >
+                        🛡 Verificación
+                      </Link>
 
-                    <Link to="/settings" style={outlineButton(isLight)}>
-                      Configuración
-                    </Link>
+                      <Link
+                        to="/settings"
+                        style={secondaryActionButton(
+                          isLight
+                        )}
+                      >
+                        ⚙ Configuración
+                      </Link>
 
-                    <button onClick={logout} style={dangerButton}>
-                      Cerrar sesión
-                    </button>
-                  </div>
-                </div>
-              </section>
+                      {user?.profilePhoto &&
+                        !profileFile && (
+                          <button
+                            type="button"
+                            onClick={
+                              deleteProfilePhoto
+                            }
+                            disabled={isBusy}
+                            style={removePhotoButton}
+                          >
+                            {deletingProfilePhoto
+                              ? "Eliminando..."
+                              : "🗑 Eliminar foto"}
+                          </button>
+                        )}
 
-              {message && <div style={successBox}>{message}</div>}
-              {error && <div style={errorBox}>{error}</div>}
-
-              <section className="stats-grid" style={statsGrid}>
-                <StatCard icon="📦" title="Productos" value={stats.products} isLight={isLight} accent={accent} />
-                <StatCard icon="💰" title="Ventas" value={stats.sales} isLight={isLight} accent={accent} />
-                <StatCard icon="🛒" title="Compras" value={stats.purchases} isLight={isLight} accent={accent} />
-                <StatCard icon="⚖️" title="Reclamos" value={stats.disputes} isLight={isLight} accent={accent} />
-              </section>
-
-              <section className="profile-layout" style={profileLayout}>
-                <section style={panel(isLight, settings)}>
-                  <div style={sectionHeader}>
-                    <p style={label(accent)}>DATOS PERSONALES</p>
-                    <h2 style={panelTitle(isLight)}>Editar perfil</h2>
-                    <p style={muted(isLight)}>
-                      Esta información se conecta al backend y se usa para mejorar tu reputación dentro de QSM.
-                    </p>
-                  </div>
-
-                  <div className="two-columns" style={twoColumns}>
-                    <Field label="Nombre" isLight={isLight}>
-                      <input name="firstName" value={form.firstName} onChange={handleChange} style={input(isLight)} />
-                    </Field>
-
-                    <Field label="Apellido" isLight={isLight}>
-                      <input name="lastName" value={form.lastName} onChange={handleChange} style={input(isLight)} />
-                    </Field>
-
-                    <Field label="Usuario" isLight={isLight}>
-                      <input name="username" value={form.username} onChange={handleChange} placeholder="@usuario" style={input(isLight)} />
-                    </Field>
-
-                    <Field label="Teléfono" isLight={isLight}>
-                      <input name="phone" value={form.phone} onChange={handleChange} placeholder="809-000-0000" style={input(isLight)} />
-                    </Field>
-
-                    <Field label="Provincia" isLight={isLight}>
-                      <input name="province" value={form.province} onChange={handleChange} placeholder="Distrito Nacional" style={input(isLight)} />
-                    </Field>
-
-                    <Field label="Ciudad" isLight={isLight}>
-                      <input name="city" value={form.city} onChange={handleChange} placeholder="Santo Domingo" style={input(isLight)} />
-                    </Field>
-
-                    <Field label="Fecha de nacimiento" isLight={isLight}>
-                      <input name="birthDate" type="date" value={form.birthDate} onChange={handleChange} style={input(isLight)} />
-                    </Field>
-
-                    <Field label="Género" isLight={isLight}>
-                      <select name="gender" value={form.gender} onChange={handleChange} style={input(isLight)}>
-                        <option value="">Seleccionar</option>
-                        <option value="MASCULINO">Masculino</option>
-                        <option value="FEMENINO">Femenino</option>
-                        <option value="OTRO">Otro</option>
-                      </select>
-                    </Field>
-                  </div>
-
-                  <Field label="Dirección general" isLight={isLight}>
-                    <input
-                      name="address"
-                      value={form.address}
-                      onChange={handleChange}
-                      placeholder="No se mostrará públicamente"
-                      style={input(isLight)}
-                    />
-                  </Field>
-
-                  <Field label="Biografía / descripción" isLight={isLight}>
-                    <textarea
-                      name="bio"
-                      value={form.bio}
-                      onChange={handleChange}
-                      placeholder="Ej: Vendedor verificado, productos tecnológicos, entregas en Santo Domingo..."
-                      style={textarea(isLight)}
-                    />
-                  </Field>
-
-                  <div style={actionRow}>
-                    <button onClick={loadProfile} style={outlineButton(isLight)}>
-                      Actualizar
-                    </button>
-
-                    <button onClick={saveProfile} disabled={saving} style={primaryButton(accent)}>
-                      {saving ? "Guardando..." : "Guardar perfil →"}
-                    </button>
+                      <button
+                        type="button"
+                        onClick={logout}
+                        disabled={isBusy}
+                        style={logoutProfileButton}
+                      >
+                        🚪 Cerrar sesión
+                      </button>
+                    </div>
                   </div>
                 </section>
 
-                <aside style={sidePanel}>
-                  <section style={panel(isLight, settings)}>
-                    <p style={label(accent)}>PROGRESO</p>
-                    <h2 style={panelTitle(isLight)}>Perfil QSM</h2>
+                <section
+                  className="profile-stats-grid"
+                  style={statsGrid}
+                >
+                  <ProfileStatCard
+                    icon="📦"
+                    title="Productos"
+                    value={stats.products}
+                    description="Publicaciones registradas"
+                    isLight={isLight}
+                    accent={accent}
+                  />
 
-                    <div style={scoreCircle(accent)}>
-                      <span>{completion}%</span>
+                  <ProfileStatCard
+                    icon="💰"
+                    title="Ventas"
+                    value={stats.sales}
+                    description="Operaciones como vendedor"
+                    isLight={isLight}
+                    accent={accent}
+                  />
+
+                  <ProfileStatCard
+                    icon="🛒"
+                    title="Compras"
+                    value={stats.purchases}
+                    description="Órdenes protegidas"
+                    isLight={isLight}
+                    accent={accent}
+                  />
+
+                  <ProfileStatCard
+                    icon="⚖"
+                    title="Reclamos"
+                    value={stats.disputes}
+                    description="Casos registrados"
+                    isLight={isLight}
+                    accent={accent}
+                  />
+                </section>
+
+                <section
+                  className="profile-content-grid"
+                  style={profileContentGrid}
+                >
+                  <section
+                    style={formPanel(
+                      isLight,
+                      settings
+                    )}
+                  >
+                    <div style={panelHeader}>
+                      <div>
+                        <p style={eyebrow(accent)}>
+                          DATOS PERSONALES
+                        </p>
+
+                        <h2 style={panelTitle(isLight)}>
+                          Información del perfil
+                        </h2>
+
+                        <p style={panelDescription(isLight)}>
+                          Estos datos se utilizan para proteger
+                          tus operaciones, mejorar tu reputación
+                          y facilitar las entregas.
+                        </p>
+                      </div>
+
+                      {hasPendingChanges && (
+                        <span style={pendingChangesBadge}>
+                          Cambios pendientes
+                        </span>
+                      )}
                     </div>
 
-                    <div style={scoreBar(isLight)}>
-                      <div style={{ ...scoreFill(accent), width: `${completion}%` }}></div>
+                    <div
+                      className="profile-form-grid"
+                      style={formGrid}
+                    >
+                      <ProfileField
+                        label="Nombre"
+                        required
+                        isLight={isLight}
+                      >
+                        <input
+                          type="text"
+                          name="firstName"
+                          value={form.firstName}
+                          onChange={handleChange}
+                          maxLength={50}
+                          disabled={isBusy}
+                          autoComplete="given-name"
+                          style={formInput(isLight)}
+                        />
+                      </ProfileField>
+
+                      <ProfileField
+                        label="Apellido"
+                        required
+                        isLight={isLight}
+                      >
+                        <input
+                          type="text"
+                          name="lastName"
+                          value={form.lastName}
+                          onChange={handleChange}
+                          maxLength={50}
+                          disabled={isBusy}
+                          autoComplete="family-name"
+                          style={formInput(isLight)}
+                        />
+                      </ProfileField>
+
+                      <ProfileField
+                        label="Nombre de usuario"
+                        hint="Visible para otros usuarios"
+                        isLight={isLight}
+                      >
+                        <div style={inputPrefixContainer(isLight)}>
+                          <span style={inputPrefix}>
+                            @
+                          </span>
+
+                          <input
+                            type="text"
+                            name="username"
+                            value={form.username}
+                            onChange={handleChange}
+                            placeholder="usuarioqsm"
+                            maxLength={40}
+                            disabled={isBusy}
+                            autoComplete="username"
+                            style={prefixedInput(isLight)}
+                          />
+                        </div>
+                      </ProfileField>
+
+                      <ProfileField
+                        label="Teléfono / WhatsApp"
+                        hint="Solo se compartirá cuando corresponda"
+                        isLight={isLight}
+                      >
+                        <input
+                          type="tel"
+                          name="phone"
+                          value={form.phone}
+                          onChange={handleChange}
+                          placeholder="809-000-0000"
+                          maxLength={30}
+                          disabled={isBusy}
+                          autoComplete="tel"
+                          style={formInput(isLight)}
+                        />
+                      </ProfileField>
+
+                      <ProfileField
+                        label="Documento"
+                        hint="Utilizado para validación interna"
+                        isLight={isLight}
+                      >
+                        <input
+                          type="text"
+                          name="documentId"
+                          value={form.documentId}
+                          onChange={handleChange}
+                          placeholder="Cédula o documento"
+                          maxLength={50}
+                          disabled={isBusy}
+                          style={formInput(isLight)}
+                        />
+                      </ProfileField>
+
+                      <ProfileField
+                        label="Fecha de nacimiento"
+                        isLight={isLight}
+                      >
+                        <input
+                          type="date"
+                          name="dateOfBirth"
+                          value={form.dateOfBirth}
+                          onChange={handleChange}
+                          disabled={isBusy}
+                          style={formInput(isLight)}
+                        />
+                      </ProfileField>
+
+                      <ProfileField
+                        label="Género"
+                        isLight={isLight}
+                      >
+                        <select
+                          name="gender"
+                          value={form.gender}
+                          onChange={handleChange}
+                          disabled={isBusy}
+                          style={formInput(isLight)}
+                        >
+                          <option value="PREFER_NOT_TO_SAY">
+                            Prefiero no indicarlo
+                          </option>
+
+                          <option value="MALE">
+                            Masculino
+                          </option>
+
+                          <option value="FEMALE">
+                            Femenino
+                          </option>
+
+                          <option value="OTHER">
+                            Otro
+                          </option>
+                        </select>
+                      </ProfileField>
+
+                      <ProfileField
+                        label="País"
+                        isLight={isLight}
+                      >
+                        <input
+                          type="text"
+                          name="country"
+                          value={form.country}
+                          onChange={handleChange}
+                          placeholder="República Dominicana"
+                          maxLength={100}
+                          disabled={isBusy}
+                          autoComplete="country-name"
+                          style={formInput(isLight)}
+                        />
+                      </ProfileField>
+
+                      <ProfileField
+                        label="Provincia"
+                        isLight={isLight}
+                      >
+                        <input
+                          type="text"
+                          name="province"
+                          value={form.province}
+                          onChange={handleChange}
+                          placeholder="Distrito Nacional"
+                          maxLength={100}
+                          disabled={isBusy}
+                          autoComplete="address-level1"
+                          style={formInput(isLight)}
+                        />
+                      </ProfileField>
+
+                      <ProfileField
+                        label="Ciudad o municipio"
+                        isLight={isLight}
+                      >
+                        <input
+                          type="text"
+                          name="city"
+                          value={form.city}
+                          onChange={handleChange}
+                          placeholder="Santo Domingo"
+                          maxLength={100}
+                          disabled={isBusy}
+                          autoComplete="address-level2"
+                          style={formInput(isLight)}
+                        />
+                      </ProfileField>
                     </div>
 
-                    <CheckLine done={Boolean(form.firstName && form.lastName)} text="Nombre completo" isLight={isLight} />
-                    <CheckLine done={Boolean(form.phone)} text="Teléfono registrado" isLight={isLight} />
-                    <CheckLine done={Boolean(profilePreview)} text="Foto de perfil" isLight={isLight} />
-                    <CheckLine done={isVerified} text="Verificación QSM" isLight={isLight} />
+                    <ProfileField
+                      label="Dirección general"
+                      hint="No se mostrará públicamente"
+                      isLight={isLight}
+                    >
+                      <input
+                        type="text"
+                        name="address"
+                        value={form.address}
+                        onChange={handleChange}
+                        placeholder="Sector, calle o referencia"
+                        maxLength={500}
+                        disabled={isBusy}
+                        autoComplete="street-address"
+                        style={formInput(isLight)}
+                      />
+                    </ProfileField>
+
+                    <ProfileField
+                      label="Biografía"
+                      hint={`${String(
+                        form.bio || ""
+                      ).length}/500 caracteres`}
+                      isLight={isLight}
+                    >
+                      <textarea
+                        name="bio"
+                        value={form.bio}
+                        onChange={handleChange}
+                        placeholder="Describe qué vendes, tu experiencia o la forma en que trabajas dentro de QSM."
+                        maxLength={500}
+                        disabled={isBusy}
+                        style={formTextarea(isLight)}
+                      />
+                    </ProfileField>
+
+                    <div
+                      className="profile-form-actions"
+                      style={formActions}
+                    >
+                      <button
+                        type="button"
+                        onClick={resetProfileForm}
+                        disabled={
+                          isBusy ||
+                          !hasPendingChanges
+                        }
+                        style={resetButton(isLight)}
+                      >
+                        Restablecer
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={saveProfile}
+                        disabled={
+                          isBusy ||
+                          !hasPendingChanges
+                        }
+                        style={saveButton(accent)}
+                      >
+                        {saving ||
+                        uploadingProfilePhoto ||
+                        uploadingCoverPhoto
+                          ? "Guardando cambios..."
+                          : "Guardar perfil →"}
+                      </button>
+                    </div>
                   </section>
 
-                  <section style={panel(isLight, settings)}>
-                    <p style={label(accent)}>CONFIGURACIÓN APLICADA</p>
-                    <h2 style={panelTitle(isLight)}>Preferencias activas</h2>
+                  <aside
+                    className="profile-side-column"
+                    style={profileSideColumn}
+                  >
+                    <section
+                      style={sideCard(
+                        isLight,
+                        settings
+                      )}
+                    >
+                      <p style={eyebrow(accent)}>
+                        PROGRESO
+                      </p>
 
-                    <InfoLine title="Tema" value={settings.theme === "dark" ? "Oscuro" : "Claro"} isLight={isLight} />
-                    <InfoLine title="Color" value={formatAccent(settings.accentColor)} isLight={isLight} />
-                    <InfoLine title="Idioma" value={settings.language === "es" ? "Español" : "English"} isLight={isLight} />
-                    <InfoLine title="Densidad" value={formatDensity(settings.density)} isLight={isLight} />
+                      <h2 style={sideCardTitle(isLight)}>
+                        Perfil QSM
+                      </h2>
 
-                    <Link to="/settings" style={primaryButton(accent)}>
-                      Cambiar configuración
-                    </Link>
-                  </section>
+                      <div style={completionRing(accent)}>
+                        <div style={completionRingInner(isLight)}>
+                          <strong>
+                            {completion}%
+                          </strong>
 
-                  <section style={securityBox(isLight)}>
-                    <h3>🛡 Seguridad del perfil</h3>
-                    <p>
-                      Mantén tu cuenta verificada, evita compartir datos sensibles por mensajes y conserva tus operaciones dentro de QSM.
-                    </p>
-                  </section>
-                </aside>
-              </section>
-            </>
-          )}
+                          <span>
+                            completado
+                          </span>
+                        </div>
+                      </div>
+
+                      <div style={progressBar(isLight)}>
+                        <div
+                          style={{
+                            ...progressBarFill(
+                              accent
+                            ),
+                            width:
+                              `${completion}%`
+                          }}
+                        />
+                      </div>
+
+                      <ProfileCheck
+                        done={Boolean(
+                          form.firstName &&
+                          form.lastName
+                        )}
+                        text="Nombre completo"
+                        isLight={isLight}
+                      />
+
+                      <ProfileCheck
+                        done={Boolean(
+                          form.phone
+                        )}
+                        text="Teléfono o WhatsApp"
+                        isLight={isLight}
+                      />
+
+                      <ProfileCheck
+                        done={Boolean(
+                          form.city &&
+                          form.province
+                        )}
+                        text="Ubicación registrada"
+                        isLight={isLight}
+                      />
+
+                      <ProfileCheck
+                        done={Boolean(
+                          profilePreview
+                        )}
+                        text="Foto de perfil"
+                        isLight={isLight}
+                      />
+
+                      <ProfileCheck
+                        done={isVerified}
+                        text="Verificación de identidad"
+                        isLight={isLight}
+                      />
+
+                      {!isVerified && (
+                        <Link
+                          to="/complete-profile"
+                          style={sidePrimaryLink(accent)}
+                        >
+                          Completar verificación
+                        </Link>
+                      )}
+                    </section>
+
+                    <section
+                      style={sideCard(
+                        isLight,
+                        settings
+                      )}
+                    >
+                      <p style={eyebrow(accent)}>
+                        ESTADO DE CUENTA
+                      </p>
+
+                      <h2 style={sideCardTitle(isLight)}>
+                        Seguridad y permisos
+                      </h2>
+
+                      <ProfileInfoRow
+                        label="Estado"
+                        value={formatAccountStatus(
+                          user?.status
+                        )}
+                        isLight={isLight}
+                        accent={accent}
+                      />
+
+                      <ProfileInfoRow
+                        label="Compras"
+                        value={
+                          user?.buyerEnabled ===
+                          false
+                            ? "Deshabilitadas"
+                            : "Habilitadas"
+                        }
+                        isLight={isLight}
+                        accent={accent}
+                      />
+
+                      <ProfileInfoRow
+                        label="Ventas"
+                        value={
+                          user?.sellerEnabled ===
+                          false
+                            ? "Deshabilitadas"
+                            : "Habilitadas"
+                        }
+                        isLight={isLight}
+                        accent={accent}
+                      />
+
+                      <ProfileInfoRow
+                        label="Seguridad"
+                        value={formatSecurityLevel(
+                          user?.securityLevel
+                        )}
+                        isLight={isLight}
+                        accent={accent}
+                      />
+
+                      <ProfileInfoRow
+                        label="Rol"
+                        value={formatRole(role)}
+                        isLight={isLight}
+                        accent={accent}
+                      />
+
+                      <Link
+                        to="/settings"
+                        style={sideSecondaryLink(
+                          isLight
+                        )}
+                      >
+                        Administrar seguridad
+                      </Link>
+                    </section>
+
+                    <section
+                      style={sideCard(
+                        isLight,
+                        settings
+                      )}
+                    >
+                      <p style={eyebrow(accent)}>
+                        PREFERENCIAS
+                      </p>
+
+                      <h2 style={sideCardTitle(isLight)}>
+                        Apariencia aplicada
+                      </h2>
+
+                      <ProfileInfoRow
+                        label="Tema"
+                        value={
+                          settings?.theme ===
+                          "light"
+                            ? "Claro"
+                            : "Oscuro"
+                        }
+                        isLight={isLight}
+                        accent={accent}
+                      />
+
+                      <ProfileInfoRow
+                        label="Color"
+                        value={formatAccent(
+                          settings?.accentColor
+                        )}
+                        isLight={isLight}
+                        accent={accent}
+                      />
+
+                      <ProfileInfoRow
+                        label="Idioma"
+                        value={
+                          settings?.language ===
+                          "en"
+                            ? "English"
+                            : "Español"
+                        }
+                        isLight={isLight}
+                        accent={accent}
+                      />
+
+                      <ProfileInfoRow
+                        label="Densidad"
+                        value={formatDensity(
+                          settings?.density
+                        )}
+                        isLight={isLight}
+                        accent={accent}
+                      />
+
+                      <Link
+                        to="/settings"
+                        style={sideSecondaryLink(
+                          isLight
+                        )}
+                      >
+                        Cambiar preferencias
+                      </Link>
+                    </section>
+
+                    <section style={securityNotice(isLight)}>
+                      <div style={securityNoticeIcon}>
+                        🛡
+                      </div>
+
+                      <div>
+                        <h3>
+                          Protege tu información
+                        </h3>
+
+                        <p>
+                          Evita compartir contraseñas,
+                          códigos PIN o información bancaria
+                          mediante el chat.
+                        </p>
+                      </div>
+                    </section>
+                  </aside>
+                </section>
+              </>
+            )}
+          </div>
         </main>
       </div>
 
-      <AiAssistant pageContext="profile" />
+      <AiAssistant
+        pageContext="profile"
+      />
     </div>
   );
 }
+/*
+|--------------------------------------------------------------------------
+| Campo reutilizable del formulario
+|--------------------------------------------------------------------------
+*/
 
-function Field({ label, children, isLight }) {
+function ProfileField({
+  label,
+  hint = "",
+  required = false,
+  isLight,
+  children
+}) {
   return (
-    <label style={fieldWrap}>
-      <span style={fieldLabel(isLight)}>{label}</span>
+    <label style={fieldWrapper}>
+      <div style={fieldHeader}>
+        <span style={fieldLabel(isLight)}>
+          {label}
+
+          {required && (
+            <span style={requiredMark}>
+              *
+            </span>
+          )}
+        </span>
+
+        {hint && (
+          <span style={fieldHint(isLight)}>
+            {hint}
+          </span>
+        )}
+      </div>
+
       {children}
     </label>
   );
 }
 
-function StatCard({ icon, title, value, isLight, accent }) {
+/*
+|--------------------------------------------------------------------------
+| Tarjeta de estadística
+|--------------------------------------------------------------------------
+*/
+
+function ProfileStatCard({
+  icon,
+  title,
+  value,
+  description,
+  isLight,
+  accent
+}) {
   return (
-    <div style={statCard(isLight)}>
-      <div style={statIcon(accent)}>{icon}</div>
-      <div>
-        <span>{title}</span>
-        <strong>{value}</strong>
+    <article style={profileStatCard(isLight)}>
+      <div style={profileStatIcon(accent)}>
+        {icon}
       </div>
-    </div>
+
+      <div style={profileStatContent}>
+        <span style={profileStatTitle(isLight)}>
+          {title}
+        </span>
+
+        <strong style={profileStatValue(isLight)}>
+          {safeNumber(value)}
+        </strong>
+
+        <p style={profileStatDescription(isLight)}>
+          {description}
+        </p>
+      </div>
+    </article>
   );
 }
 
-function CheckLine({ done, text, isLight }) {
+/*
+|--------------------------------------------------------------------------
+| Línea de progreso del perfil
+|--------------------------------------------------------------------------
+*/
+
+function ProfileCheck({
+  done,
+  text,
+  isLight
+}) {
   return (
-    <div style={checkLine(isLight)}>
-      <span style={done ? checkDone : checkPending}>{done ? "✓" : "•"}</span>
-      <p>{text}</p>
+    <div style={profileCheckRow(isLight)}>
+      <span
+        style={
+          done
+            ? profileCheckDone
+            : profileCheckPending
+        }
+      >
+        {done
+          ? "✓"
+          : "•"}
+      </span>
+
+      <span style={profileCheckText(isLight)}>
+        {text}
+      </span>
     </div>
   );
 }
 
-function InfoLine({ title, value, isLight }) {
+/*
+|--------------------------------------------------------------------------
+| Fila informativa
+|--------------------------------------------------------------------------
+*/
+
+function ProfileInfoRow({
+  label,
+  value,
+  isLight,
+  accent
+}) {
   return (
-    <div style={infoLine(isLight)}>
-      <span>{title}</span>
-      <strong>{value}</strong>
+    <div style={profileInfoRow(isLight)}>
+      <span style={profileInfoLabel(isLight)}>
+        {label}
+      </span>
+
+      <strong style={profileInfoValue(accent)}>
+        {value}
+      </strong>
     </div>
   );
 }
 
-function safeJson(value) {
+/*
+|--------------------------------------------------------------------------
+| Crear formulario a partir del usuario
+|--------------------------------------------------------------------------
+*/
+
+function createProfileForm(
+  user = {}
+) {
+  return {
+    firstName:
+      user?.firstName ||
+      "",
+
+    lastName:
+      user?.lastName ||
+      "",
+
+    username:
+      user?.username ||
+      "",
+
+    phone:
+      user?.phone ||
+      "",
+
+    documentId:
+      user?.documentId ||
+      "",
+
+    country:
+      user?.country ||
+      "República Dominicana",
+
+    province:
+      user?.province ||
+      "",
+
+    city:
+      user?.city ||
+      "",
+
+    address:
+      user?.address ||
+      "",
+
+    dateOfBirth:
+      normalizeDateInput(
+        user?.dateOfBirth ||
+        user?.birthDate ||
+        ""
+      ),
+
+    gender:
+      normalizeGender(
+        user?.gender
+      ),
+
+    bio:
+      user?.bio ||
+      ""
+  };
+}
+
+/*
+|--------------------------------------------------------------------------
+| Detectar cambios del formulario
+|--------------------------------------------------------------------------
+*/
+
+function hasProfileFormChanges(
+  form,
+  user
+) {
+  if (
+    !form ||
+    !user
+  ) {
+    return false;
+  }
+
+  const currentForm =
+    createProfileForm(user);
+
+  const normalizedForm = {
+    firstName:
+      String(
+        form?.firstName ||
+        ""
+      ).trim(),
+
+    lastName:
+      String(
+        form?.lastName ||
+        ""
+      ).trim(),
+
+    username:
+      String(
+        form?.username ||
+        ""
+      )
+        .trim()
+        .toLowerCase()
+        .replace(
+          /^@/,
+          ""
+        ),
+
+    phone:
+      String(
+        form?.phone ||
+        ""
+      ).trim(),
+
+    documentId:
+      String(
+        form?.documentId ||
+        ""
+      ).trim(),
+
+    country:
+      String(
+        form?.country ||
+        ""
+      ).trim(),
+
+    province:
+      String(
+        form?.province ||
+        ""
+      ).trim(),
+
+    city:
+      String(
+        form?.city ||
+        ""
+      ).trim(),
+
+    address:
+      String(
+        form?.address ||
+        ""
+      ).trim(),
+
+    dateOfBirth:
+      normalizeDateInput(
+        form?.dateOfBirth
+      ),
+
+    gender:
+      normalizeGender(
+        form?.gender
+      ),
+
+    bio:
+      String(
+        form?.bio ||
+        ""
+      ).trim()
+  };
+
+  const normalizedCurrent = {
+    firstName:
+      String(
+        currentForm?.firstName ||
+        ""
+      ).trim(),
+
+    lastName:
+      String(
+        currentForm?.lastName ||
+        ""
+      ).trim(),
+
+    username:
+      String(
+        currentForm?.username ||
+        ""
+      )
+        .trim()
+        .toLowerCase()
+        .replace(
+          /^@/,
+          ""
+        ),
+
+    phone:
+      String(
+        currentForm?.phone ||
+        ""
+      ).trim(),
+
+    documentId:
+      String(
+        currentForm?.documentId ||
+        ""
+      ).trim(),
+
+    country:
+      String(
+        currentForm?.country ||
+        ""
+      ).trim(),
+
+    province:
+      String(
+        currentForm?.province ||
+        ""
+      ).trim(),
+
+    city:
+      String(
+        currentForm?.city ||
+        ""
+      ).trim(),
+
+    address:
+      String(
+        currentForm?.address ||
+        ""
+      ).trim(),
+
+    dateOfBirth:
+      normalizeDateInput(
+        currentForm?.dateOfBirth
+      ),
+
+    gender:
+      normalizeGender(
+        currentForm?.gender
+      ),
+
+    bio:
+      String(
+        currentForm?.bio ||
+        ""
+      ).trim()
+  };
+
+  return (
+    JSON.stringify(
+      normalizedForm
+    ) !==
+    JSON.stringify(
+      normalizedCurrent
+    )
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Guardar usuario localmente
+|--------------------------------------------------------------------------
+*/
+
+function persistUser(
+  user
+) {
+  if (
+    !user ||
+    typeof user !==
+      "object"
+  ) {
+    return;
+  }
+
+  const safeUser = {
+    ...user
+  };
+
+  delete safeUser.password;
+  delete safeUser.resetPasswordToken;
+  delete safeUser.resetPasswordExpires;
+  delete safeUser.twoFactorSecret;
+
+  /*
+  |--------------------------------------------------------------------------
+  | No persistir enlaces temporales
+  |--------------------------------------------------------------------------
+  */
+
+  if (
+    String(
+      safeUser?.profilePhoto ||
+      ""
+    ).startsWith(
+      "blob:"
+    )
+  ) {
+    safeUser.profilePhoto =
+      "";
+  }
+
+  if (
+    String(
+      safeUser?.coverPhoto ||
+      ""
+    ).startsWith(
+      "blob:"
+    )
+  ) {
+    safeUser.coverPhoto =
+      "";
+  }
+
+  localStorage.setItem(
+    "qsm_user",
+    JSON.stringify(
+      safeUser
+    )
+  );
+
+  localStorage.setItem(
+    "user",
+    JSON.stringify(
+      safeUser
+    )
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
+| JSON seguro
+|--------------------------------------------------------------------------
+*/
+
+function safeJson(
+  value
+) {
   try {
-    return value ? JSON.parse(value) : null;
+    return value
+      ? JSON.parse(value)
+      : null;
   } catch {
     return null;
   }
 }
 
-function toAbsoluteFile(path) {
-  if (!path) return "";
-  if (String(path).startsWith("blob:")) return path;
-  if (String(path).startsWith("http")) return path;
-  if (String(path).startsWith("/uploads")) return `http://localhost:5000${path}`;
-  if (String(path).startsWith("uploads")) return `http://localhost:5000/${path}`;
-  return path;
+/*
+|--------------------------------------------------------------------------
+| Extraer objeto de distintas respuestas
+|--------------------------------------------------------------------------
+*/
+
+function extractObject(
+  source,
+  preferredKeys = []
+) {
+  if (
+    !source ||
+    typeof source !==
+      "object"
+  ) {
+    return null;
+  }
+
+  for (
+    const key of
+    preferredKeys
+  ) {
+    const value =
+      source?.[key];
+
+    if (
+      value &&
+      typeof value ===
+        "object" &&
+      !Array.isArray(value)
+    ) {
+      return value;
+    }
+  }
+
+  if (
+    !Array.isArray(source)
+  ) {
+    return source;
+  }
+
+  return null;
 }
 
-function getAccentColor(color) {
-  const map = {
-    cyan: "#35d0c3",
-    purple: "#8b5cf6",
-    pink: "#ec4899",
-    blue: "#38bdf8",
-    green: "#22c55e",
-    orange: "#f59e0b"
+/*
+|--------------------------------------------------------------------------
+| Extraer arreglo
+|--------------------------------------------------------------------------
+*/
+
+function extractArray(
+  source,
+  preferredKeys = []
+) {
+  if (
+    Array.isArray(source)
+  ) {
+    return source;
+  }
+
+  if (
+    !source ||
+    typeof source !==
+      "object"
+  ) {
+    return [];
+  }
+
+  for (
+    const key of
+    preferredKeys
+  ) {
+    const value =
+      source?.[key];
+
+    if (
+      Array.isArray(value)
+    ) {
+      return value;
+    }
+  }
+
+  return [];
+}
+
+/*
+|--------------------------------------------------------------------------
+| Obtener ID genérico
+|--------------------------------------------------------------------------
+*/
+
+function getEntityId(
+  entity
+) {
+  if (!entity) {
+    return "";
+  }
+
+  if (
+    typeof entity ===
+    "string"
+  ) {
+    return entity;
+  }
+
+  return (
+    entity?._id ||
+    entity?.id ||
+    entity?.userId ||
+    ""
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Número seguro
+|--------------------------------------------------------------------------
+*/
+
+function safeNumber(
+  value,
+  fallback = 0
+) {
+  const parsed =
+    Number(value);
+
+  return Number.isFinite(
+    parsed
+  )
+    ? parsed
+    : fallback;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Limitar número
+|--------------------------------------------------------------------------
+*/
+
+function clampNumber(
+  value,
+  minimum,
+  maximum,
+  fallback = 0
+) {
+  const parsed =
+    Number(value);
+
+  if (
+    !Number.isFinite(
+      parsed
+    )
+  ) {
+    return fallback;
+  }
+
+  return Math.min(
+    maximum,
+    Math.max(
+      minimum,
+      parsed
+    )
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Nombre capitalizado
+|--------------------------------------------------------------------------
+*/
+
+function formatPersonName(
+  value
+) {
+  if (!value) {
+    return "";
+  }
+
+  return String(value)
+    .trim()
+    .replace(
+      /\s+/g,
+      " "
+    )
+    .toLocaleLowerCase(
+      "es-DO"
+    )
+    .replace(
+      /(^|[\s'-])\p{L}/gu,
+      (letter) =>
+        letter.toLocaleUpperCase(
+          "es-DO"
+        )
+    );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Iniciales del usuario
+|--------------------------------------------------------------------------
+*/
+
+function getInitials(
+  value
+) {
+  const words =
+    String(
+      value || ""
+    )
+      .trim()
+      .split(
+        /\s+/
+      )
+      .filter(Boolean);
+
+  if (
+    words.length === 0
+  ) {
+    return "U";
+  }
+
+  if (
+    words.length === 1
+  ) {
+    return words[0]
+      .charAt(0)
+      .toUpperCase();
+  }
+
+  return (
+    words[0]
+      .charAt(0)
+      .toUpperCase() +
+    words[
+      words.length - 1
+    ]
+      .charAt(0)
+      .toUpperCase()
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Normalizar fecha para input date
+|--------------------------------------------------------------------------
+*/
+
+function normalizeDateInput(
+  value
+) {
+  if (!value) {
+    return "";
+  }
+
+  const raw =
+    String(value);
+
+  if (
+    /^\d{4}-\d{2}-\d{2}$/.test(
+      raw
+    )
+  ) {
+    return raw;
+  }
+
+  const date =
+    new Date(value);
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return "";
+  }
+
+  return date
+    .toISOString()
+    .slice(
+      0,
+      10
+    );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Normalizar género
+|--------------------------------------------------------------------------
+*/
+
+function normalizeGender(
+  value
+) {
+  const normalized =
+    String(
+      value || ""
+    ).toUpperCase();
+
+  const aliases = {
+    MASCULINO:
+      "MALE",
+
+    MALE:
+      "MALE",
+
+    FEMENINO:
+      "FEMALE",
+
+    FEMALE:
+      "FEMALE",
+
+    OTRO:
+      "OTHER",
+
+    OTHER:
+      "OTHER",
+
+    PREFER_NOT_TO_SAY:
+      "PREFER_NOT_TO_SAY",
+
+    NO_ESPECIFICADO:
+      "PREFER_NOT_TO_SAY",
+
+    "":
+      "PREFER_NOT_TO_SAY"
   };
 
-  return map[color] || "#35d0c3";
+  return (
+    aliases[normalized] ||
+    "PREFER_NOT_TO_SAY"
+  );
 }
 
-function formatAccent(color) {
+/*
+|--------------------------------------------------------------------------
+| Validar archivo de imagen
+|--------------------------------------------------------------------------
+*/
+
+function validateImageFile(
+  file,
+  {
+    allowedTypes,
+    maxSize,
+    label
+  }
+) {
+  if (!file) {
+    return {
+      valid: false,
+      message:
+        `${label} no fue seleccionada.`
+    };
+  }
+
+  if (
+    !allowedTypes.includes(
+      file.type
+    )
+  ) {
+    return {
+      valid: false,
+      message:
+        `${label} debe ser JPG, PNG o WEBP.`
+    };
+  }
+
+  if (
+    file.size >
+    maxSize
+  ) {
+    return {
+      valid: false,
+      message:
+        `${label} supera el tamaño máximo permitido de ${formatFileSize(
+          maxSize
+        )}.`
+    };
+  }
+
+  return {
+    valid: true,
+    message: ""
+  };
+}
+
+/*
+|--------------------------------------------------------------------------
+| Formato de tamaño
+|--------------------------------------------------------------------------
+*/
+
+function formatFileSize(
+  bytes
+) {
+  const size =
+    Number(bytes || 0);
+
+  if (
+    size < 1024
+  ) {
+    return `${size} bytes`;
+  }
+
+  if (
+    size <
+    1024 * 1024
+  ) {
+    return `${Math.round(
+      size / 1024
+    )} KB`;
+  }
+
+  return `${(
+    size /
+    (1024 * 1024)
+  ).toFixed(1)} MB`;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Liberar URL blob
+|--------------------------------------------------------------------------
+*/
+
+function revokeBlobUrl(
+  value
+) {
+  if (
+    typeof value ===
+      "string" &&
+    value.startsWith(
+      "blob:"
+    )
+  ) {
+    URL.revokeObjectURL(
+      value
+    );
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| URL de foto de perfil
+|--------------------------------------------------------------------------
+*/
+
+function getProfilePhotoUrl(
+  value
+) {
+  return resolveImageUrl(
+    value,
+    "profiles"
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
+| URL de portada
+|--------------------------------------------------------------------------
+*/
+
+function getCoverPhotoUrl(
+  value
+) {
+  return resolveImageUrl(
+    value,
+    "covers"
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Resolver URL de imagen
+|--------------------------------------------------------------------------
+*/
+
+function resolveImageUrl(
+  value,
+  defaultFolder = ""
+) {
+  if (!value) {
+    return "";
+  }
+
+  const rawValue =
+    typeof value ===
+    "string"
+      ? value
+      : value?.url ||
+        value?.path ||
+        value
+          ?.secure_url ||
+        value
+          ?.imageUrl ||
+        value
+          ?.publicUrl ||
+        "";
+
+  if (!rawValue) {
+    return "";
+  }
+
+  const cleanValue =
+    String(
+      rawValue
+    )
+      .trim()
+      .replaceAll(
+        "&#x2F;",
+        "/"
+      )
+      .replaceAll(
+        "&amp;",
+        "&"
+      )
+      .replace(
+        /\\/g,
+        "/"
+      );
+
+  if (
+    cleanValue.startsWith(
+      "http://"
+    ) ||
+    cleanValue.startsWith(
+      "https://"
+    ) ||
+    cleanValue.startsWith(
+      "data:image/"
+    ) ||
+    cleanValue.startsWith(
+      "blob:"
+    )
+  ) {
+    return cleanValue;
+  }
+
+  const apiOrigin =
+    getApiOrigin();
+
+  if (
+    cleanValue.startsWith(
+      "/uploads/"
+    )
+  ) {
+    return `${apiOrigin}${cleanValue}`;
+  }
+
+  if (
+    cleanValue.startsWith(
+      "uploads/"
+    )
+  ) {
+    return `${apiOrigin}/${cleanValue}`;
+  }
+
+  const cleanFolder =
+    String(
+      defaultFolder || ""
+    )
+      .replace(
+        /^\/+|\/+$/g,
+        ""
+      );
+
+  if (
+    cleanFolder
+  ) {
+    return `${apiOrigin}/uploads/${cleanFolder}/${cleanValue}`;
+  }
+
+  return `${apiOrigin}/uploads/${cleanValue}`;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Obtener origen del backend
+|--------------------------------------------------------------------------
+*/
+
+function getApiOrigin() {
+  const configuredUrl =
+    import.meta.env
+      .VITE_API_URL ||
+    "http://localhost:5000/api";
+
+  return String(
+    configuredUrl
+  )
+    .trim()
+    .replace(
+      /\/api\/?$/,
+      ""
+    )
+    .replace(
+      /\/$/,
+      ""
+    );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Color principal
+|--------------------------------------------------------------------------
+*/
+
+function getAccentColor(
+  color
+) {
   const map = {
-    cyan: "Cian",
-    purple: "Morado",
-    pink: "Rosado",
-    blue: "Azul",
-    green: "Verde",
-    orange: "Naranja"
+    cyan:
+      "#35d0c3",
+
+    purple:
+      "#8b5cf6",
+
+    pink:
+      "#ec4899",
+
+    blue:
+      "#38bdf8",
+
+    green:
+      "#22c55e",
+
+    orange:
+      "#f59e0b"
   };
 
-  return map[color] || color || "Cian";
+  return (
+    map[
+      String(
+        color || ""
+      ).toLowerCase()
+    ] ||
+    "#35d0c3"
+  );
 }
 
-function formatDensity(density) {
+/*
+|--------------------------------------------------------------------------
+| Nombre del color
+|--------------------------------------------------------------------------
+*/
+
+function formatAccent(
+  color
+) {
   const map = {
-    comfortable: "Cómodo",
-    compact: "Compacto",
-    spacious: "Espacioso"
+    cyan:
+      "Cian",
+
+    purple:
+      "Morado",
+
+    pink:
+      "Rosado",
+
+    blue:
+      "Azul",
+
+    green:
+      "Verde",
+
+    orange:
+      "Naranja"
   };
 
-  return map[density] || "Cómodo";
+  return (
+    map[
+      String(
+        color || ""
+      ).toLowerCase()
+    ] ||
+    "Cian"
+  );
 }
 
-function applySettings(settings) {
-  const accent = getAccentColor(settings.accentColor || "cyan");
+/*
+|--------------------------------------------------------------------------
+| Densidad
+|--------------------------------------------------------------------------
+*/
 
-  document.documentElement.style.setProperty("--qsm-accent", accent);
-  document.body.dataset.qsmTheme = settings.theme || "dark";
+function formatDensity(
+  density
+) {
+  const map = {
+    comfortable:
+      "Cómodo",
 
-  localStorage.setItem("qsm_theme", settings.theme || "dark");
-  localStorage.setItem("qsm_accent", settings.accentColor || "cyan");
-  localStorage.setItem("qsm_language", settings.language || "es");
-  localStorage.setItem("qsm_settings", JSON.stringify(settings));
+    compact:
+      "Compacto",
+
+    spacious:
+      "Espacioso"
+  };
+
+  return (
+    map[
+      String(
+        density || ""
+      ).toLowerCase()
+    ] ||
+    "Cómodo"
+  );
 }
+
+/*
+|--------------------------------------------------------------------------
+| Rol legible
+|--------------------------------------------------------------------------
+*/
+
+function formatRole(
+  value
+) {
+  const role =
+    String(
+      value || "USER"
+    ).toUpperCase();
+
+  const map = {
+    USER:
+      "Usuario QSM",
+
+    ADMIN:
+      "Administrador",
+
+    SENIOR_ADMIN:
+      "Senior Admin",
+
+    AUDITOR:
+      "Auditor",
+
+    DISPUTE_AGENT:
+      "Agente de disputas",
+
+    VERIFICATION_AGENT:
+      "Agente de verificación",
+
+    WAREHOUSE:
+      "Agente de almacén",
+
+    WAREHOUSE_MANAGER:
+      "Encargado de almacén",
+
+    DELIVERY:
+      "Agente de delivery",
+
+    DELIVERY_MANAGER:
+      "Encargado de delivery",
+
+    FINANCE:
+      "Agente de finanzas",
+
+    FINANCE_MANAGER:
+      "Encargado de finanzas",
+
+    SECURITY:
+      "Seguridad",
+
+    SUPPORT:
+      "Soporte"
+  };
+
+  return (
+    map[role] ||
+    role
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Estado de la cuenta
+|--------------------------------------------------------------------------
+*/
+
+function formatAccountStatus(
+  value
+) {
+  const status =
+    String(
+      value || ""
+    ).toUpperCase();
+
+  const map = {
+    ACTIVE:
+      "Activa",
+
+    PENDING:
+      "Pendiente",
+
+    SUSPENDED:
+      "Suspendida",
+
+    BANNED:
+      "Bloqueada",
+
+    DELETED:
+      "Eliminada"
+  };
+
+  return (
+    map[status] ||
+    "Pendiente"
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Nivel de seguridad
+|--------------------------------------------------------------------------
+*/
+
+function formatSecurityLevel(
+  value
+) {
+  const level =
+    String(
+      value || ""
+    ).toUpperCase();
+
+  const map = {
+    NORMAL:
+      "Normal",
+
+    ELEVATED:
+      "Elevado",
+
+    LOCKED:
+      "Bloqueado",
+
+    CRITICAL:
+      "Crítico"
+  };
+
+  return (
+    map[level] ||
+    "Normal"
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Aplicar preferencias
+|--------------------------------------------------------------------------
+*/
+
+function applySettings(
+  settings
+) {
+  const safeSettings = {
+    ...DEFAULT_SETTINGS,
+    ...(
+      settings || {}
+    )
+  };
+
+  const accent =
+    getAccentColor(
+      safeSettings
+        ?.accentColor
+    );
+
+  document
+    .documentElement
+    .style
+    .setProperty(
+      "--qsm-accent",
+      accent
+    );
+
+  document.body.dataset.qsmTheme =
+    safeSettings?.theme ||
+    "dark";
+
+  localStorage.setItem(
+    "qsm_theme",
+    safeSettings?.theme ||
+    "dark"
+  );
+
+  localStorage.setItem(
+    "qsm_accent",
+    safeSettings
+      ?.accentColor ||
+    "cyan"
+  );
+
+  localStorage.setItem(
+    "qsm_language",
+    safeSettings
+      ?.language ||
+    "es"
+  );
+
+  localStorage.setItem(
+    "qsm_settings",
+    JSON.stringify(
+      safeSettings
+    )
+  );
+}
+/*
+|--------------------------------------------------------------------------
+| Página general
+|--------------------------------------------------------------------------
+*/
 
 const page = (isLight) => ({
-  minHeight: "100vh",
   width: "100%",
-  background: isLight
-    ? "radial-gradient(circle at top right, rgba(53,208,195,.16), transparent 34%), #f8fafc"
-    : "radial-gradient(circle at top right, rgba(139,92,246,.14), transparent 34%), radial-gradient(circle at 18% 15%, rgba(53,208,195,.10), transparent 28%), #020617",
-  color: isLight ? "#0f172a" : "white"
+  minHeight: "100vh",
+
+  color:
+    isLight
+      ? "#0f172a"
+      : "#f8fafc",
+
+  background:
+    isLight
+      ? `
+        radial-gradient(
+          circle at 92% 3%,
+          rgba(53, 208, 195, .14),
+          transparent 30%
+        ),
+        radial-gradient(
+          circle at 8% 18%,
+          rgba(56, 189, 248, .10),
+          transparent 26%
+        ),
+        #f8fafc
+      `
+      : `
+        radial-gradient(
+          circle at 92% 3%,
+          rgba(139, 92, 246, .16),
+          transparent 31%
+        ),
+        radial-gradient(
+          circle at 10% 16%,
+          rgba(53, 208, 195, .10),
+          transparent 27%
+        ),
+        #020617
+      `
 });
 
-const layout = (settings) => ({
+/*
+|--------------------------------------------------------------------------
+| Layout principal
+|--------------------------------------------------------------------------
+*/
+
+const layout = (
+  settings,
+  sidebarCollapsed
+) => ({
   width: "100%",
   minHeight: "100vh",
+
   display: "grid",
-  gridTemplateColumns: settings.compactSidebar ? "230px minmax(0, 1fr)" : "280px minmax(0, 1fr)",
-  overflowX: "hidden"
+
+  gridTemplateColumns:
+    sidebarCollapsed
+      ? "96px minmax(0, 1fr)"
+      : settings?.compactSidebar
+      ? "230px minmax(0, 1fr)"
+      : "300px minmax(0, 1fr)",
+
+  overflowX: "hidden",
+
+  transition:
+    "grid-template-columns .28s ease"
 });
 
 const main = (settings) => ({
   width: "100%",
   minWidth: 0,
+  minHeight: "100vh",
+
   padding:
-    settings.density === "compact"
-      ? "18px 24px 42px"
-      : settings.density === "spacious"
-      ? "34px 44px 70px"
-      : "26px 34px 56px",
+    settings?.density === "compact"
+      ? "18px 24px 44px"
+      : settings?.density === "spacious"
+      ? "34px 44px 72px"
+      : "24px 32px 62px",
+
   overflowX: "hidden"
 });
 
-const profileShell = (isLight, settings) => ({
-  background: isLight ? "rgba(255,255,255,.88)" : "rgba(15,23,42,.72)",
-  border: isLight ? "1px solid rgba(15,23,42,.08)" : "1px solid rgba(56,189,248,.16)",
-  borderRadius: "30px",
-  overflow: "hidden",
-  boxShadow: isLight ? "0 24px 70px rgba(15,23,42,.08)" : "0 24px 90px rgba(0,0,0,.25)",
-  animation: settings.animations === false ? "none" : "fadeUp .35s ease",
-  backdropFilter: settings.glassEffect === false ? "none" : "blur(16px)",
-  marginTop: "22px",
-  marginBottom: "20px"
+const contentContainer = {
+  width: "100%",
+  maxWidth: "1640px",
+
+  margin: "0 auto"
+};
+
+/*
+|--------------------------------------------------------------------------
+| Encabezado de página
+|--------------------------------------------------------------------------
+*/
+
+const pageToolbar = {
+  display: "flex",
+  alignItems: "flex-end",
+  justifyContent: "space-between",
+  gap: "24px",
+
+  margin: "22px 0 18px"
+};
+
+const eyebrow = (accent) => ({
+  margin: 0,
+
+  color: accent,
+
+  fontSize: "10px",
+  fontWeight: "950",
+
+  letterSpacing: "3.4px",
+  textTransform: "uppercase"
 });
 
-const cover = (isLight, accent) => ({
-  height: "260px",
+const pageTitle = (isLight) => ({
+  margin: "8px 0 6px",
+
+  color:
+    isLight
+      ? "#0f172a"
+      : "#f8fafc",
+
+  fontSize:
+    "clamp(25px, 2.2vw, 34px)",
+
+  lineHeight: "1.1",
+  letterSpacing: "-.7px"
+});
+
+const pageDescription = (isLight) => ({
+  maxWidth: "760px",
+
+  margin: 0,
+
+  color:
+    isLight
+      ? "#64748b"
+      : "#94a3b8",
+
+  fontSize: "13px",
+  lineHeight: "21px"
+});
+
+const refreshButton = (
+  isLight,
+  accent
+) => ({
+  minHeight: "46px",
+
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+
+  padding: "11px 17px",
+
+  borderRadius: "14px",
+
+  border:
+    `1px solid ${accent}55`,
+
+  background:
+    isLight
+      ? `${accent}10`
+      : `${accent}16`,
+
+  color: accent,
+
+  fontSize: "11px",
+  fontWeight: "950",
+
+  whiteSpace: "nowrap",
+
+  cursor: "pointer"
+});
+
+/*
+|--------------------------------------------------------------------------
+| Hero del perfil
+|--------------------------------------------------------------------------
+*/
+
+const profileHero = (
+  isLight,
+  settings
+) => ({
+  width: "100%",
+
+  overflow: "hidden",
+
+  marginBottom: "18px",
+
+  borderRadius: "29px",
+
+  border:
+    isLight
+      ? "1px solid rgba(15, 23, 42, .08)"
+      : "1px solid rgba(56, 189, 248, .15)",
+
+  background:
+    isLight
+      ? "rgba(255, 255, 255, .90)"
+      : "rgba(15, 23, 42, .76)",
+
+  boxShadow:
+    isLight
+      ? "0 24px 70px rgba(15, 23, 42, .07)"
+      : "0 26px 85px rgba(0, 0, 0, .24)",
+
+  backdropFilter:
+    settings?.glassEffect === false
+      ? "none"
+      : "blur(16px)",
+
+  animation:
+    settings?.animations === false
+      ? "none"
+      : "profileFadeUp .35s ease"
+});
+
+/*
+|--------------------------------------------------------------------------
+| Portada
+|--------------------------------------------------------------------------
+*/
+
+const coverContainer = (
+  isLight,
+  accent
+) => ({
   position: "relative",
-  background: `linear-gradient(135deg, ${accent}30, rgba(139,92,246,.22), ${isLight ? "#e2e8f0" : "#020617"})`,
-  overflow: "hidden"
+
+  width: "100%",
+  height: "270px",
+
+  overflow: "hidden",
+
+  background:
+    `linear-gradient(
+      135deg,
+      ${accent}34,
+      rgba(139, 92, 246, .28),
+      ${isLight ? "#e2e8f0" : "#020617"}
+    )`
 });
 
 const coverImage = {
   width: "100%",
   height: "100%",
-  objectFit: "cover"
+
+  display: "block",
+
+  objectFit: "cover",
+  objectPosition: "center"
 };
 
-const coverDefault = (accent) => ({
+const defaultCover = (accent) => ({
+  position: "relative",
+
   width: "100%",
   height: "100%",
-  background:
-    `radial-gradient(circle at 20% 25%, ${accent}55, transparent 28%), radial-gradient(circle at 80% 30%, rgba(139,92,246,.45), transparent 28%), linear-gradient(135deg, rgba(2,6,23,.9), rgba(15,23,42,.72))`,
+
   display: "flex",
   alignItems: "center",
-  justifyContent: "center"
+  justifyContent: "center",
+
+  overflow: "hidden",
+
+  background:
+    `
+      radial-gradient(
+        circle at 18% 28%,
+        ${accent}60,
+        transparent 30%
+      ),
+      radial-gradient(
+        circle at 82% 24%,
+        rgba(139, 92, 246, .52),
+        transparent 30%
+      ),
+      radial-gradient(
+        circle at 54% 86%,
+        rgba(56, 189, 248, .24),
+        transparent 28%
+      ),
+      linear-gradient(
+        135deg,
+        rgba(2, 6, 23, .98),
+        rgba(15, 23, 42, .88)
+      )
+    `
 });
 
-const coverGlass = (isLight) => ({
+const coverGridPattern = {
+  position: "absolute",
+  inset: 0,
+
+  opacity: 0.22,
+
+  backgroundImage:
+    `
+      linear-gradient(
+        rgba(255,255,255,.07) 1px,
+        transparent 1px
+      ),
+      linear-gradient(
+        90deg,
+        rgba(255,255,255,.07) 1px,
+        transparent 1px
+      )
+    `,
+
+  backgroundSize: "36px 36px",
+
+  pointerEvents: "none"
+};
+
+const coverIdentityBox = {
+  position: "relative",
+  zIndex: 2,
+
   display: "flex",
   flexWrap: "wrap",
+  justifyContent: "center",
   gap: "12px",
-  padding: "18px",
-  borderRadius: "22px",
-  background: isLight ? "rgba(255,255,255,.72)" : "rgba(2,6,23,.45)",
-  border: "1px solid rgba(255,255,255,.18)",
-  backdropFilter: "blur(18px)",
-  color: "white",
-  fontWeight: "900"
-});
 
-const coverButton = (accent) => ({
-  position: "absolute",
-  right: "22px",
-  bottom: "22px",
-  background: `${accent}22`,
-  border: `1px solid ${accent}66`,
-  color: "white",
-  padding: "12px 15px",
-  borderRadius: "14px",
-  cursor: "pointer",
+  maxWidth: "900px",
+
+  padding: "19px 22px",
+
+  borderRadius: "22px",
+
+  border:
+    "1px solid rgba(255, 255, 255, .17)",
+
+  background:
+    "rgba(2, 6, 23, .42)",
+
+  color: "#ffffff",
+
+  fontSize: "11px",
   fontWeight: "900",
+
+  backdropFilter: "blur(17px)",
+
+  boxShadow:
+    "0 20px 60px rgba(0, 0, 0, .28)"
+};
+
+const coverActions = {
+  position: "absolute",
+
+  right: "20px",
+  bottom: "18px",
+
+  display: "flex",
+  flexWrap: "wrap",
+  justifyContent: "flex-end",
+  gap: "9px"
+};
+
+const coverActionButton = (accent) => ({
+  minHeight: "42px",
+
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+
+  padding: "10px 14px",
+
+  borderRadius: "13px",
+
+  border:
+    `1px solid ${accent}60`,
+
+  background:
+    "rgba(2, 6, 23, .68)",
+
+  color: "#ffffff",
+
+  fontSize: "10px",
+  fontWeight: "950",
+
+  cursor: "pointer",
+
   backdropFilter: "blur(14px)"
 });
 
-const profileHeader = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "flex-end",
-  gap: "22px",
+const coverSecondaryButton = {
+  minHeight: "42px",
+
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+
+  padding: "10px 14px",
+
+  borderRadius: "13px",
+
+  border:
+    "1px solid rgba(148, 163, 184, .23)",
+
+  background:
+    "rgba(15, 23, 42, .72)",
+
+  color: "#cbd5e1",
+
+  fontSize: "10px",
+  fontWeight: "900",
+
+  cursor: "pointer",
+
+  backdropFilter: "blur(14px)"
+};
+
+const coverDangerButton = {
+  minHeight: "42px",
+
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+
+  padding: "10px 14px",
+
+  borderRadius: "13px",
+
+  border:
+    "1px solid rgba(239, 68, 68, .30)",
+
+  background:
+    "rgba(127, 29, 29, .42)",
+
+  color: "#fecaca",
+
+  fontSize: "10px",
+  fontWeight: "900",
+
+  cursor: "pointer",
+
+  backdropFilter: "blur(14px)"
+};
+
+/*
+|--------------------------------------------------------------------------
+| Encabezado inferior del perfil
+|--------------------------------------------------------------------------
+*/
+
+const profileHeaderContent = {
+  position: "relative",
+
+  display: "grid",
+
+  gridTemplateColumns:
+    "minmax(0, 1fr) auto",
+
+  alignItems: "end",
+  gap: "24px",
+
   padding: "0 26px 26px"
 };
 
-const photoRow = {
+const profilePhotoSection = {
+  minWidth: 0,
+
   display: "flex",
   alignItems: "flex-end",
   gap: "20px",
-  marginTop: "-58px"
+
+  marginTop: "-62px"
 };
 
-const photoFrame = (accent) => ({
-  width: "136px",
-  height: "136px",
-  borderRadius: "36px",
-  background: `linear-gradient(135deg, ${accent}, #8b5cf6)`,
-  border: "5px solid rgba(255,255,255,.9)",
+/*
+|--------------------------------------------------------------------------
+| Foto de perfil
+|--------------------------------------------------------------------------
+*/
+
+const profilePhotoFrame = (accent) => ({
+  position: "relative",
+
+  width: "140px",
+  height: "140px",
+  minWidth: "140px",
+
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  color: "white",
-  fontSize: "54px",
+
+  overflow: "visible",
+
+  borderRadius: "37px",
+
+  border:
+    "5px solid rgba(255, 255, 255, .94)",
+
+  background:
+    `linear-gradient(
+      135deg,
+      ${accent},
+      #38bdf8,
+      #8b5cf6
+    )`,
+
+  color: "#ffffff",
+
+  fontSize: "43px",
   fontWeight: "950",
-  position: "relative",
-  overflow: "hidden",
-  boxShadow: `0 0 50px ${accent}33`
+
+  boxShadow:
+    `0 0 0 1px ${accent}42,
+     0 18px 50px ${accent}30`
 });
 
-const photoImage = {
+const profilePhotoImage = {
   width: "100%",
   height: "100%",
-  objectFit: "cover"
+
+  display: "block",
+
+  borderRadius: "32px",
+
+  objectFit: "cover",
+  objectPosition: "center"
 };
 
-const photoButton = (accent) => ({
+const profilePhotoButton = (accent) => ({
   position: "absolute",
-  right: "8px",
-  bottom: "8px",
-  width: "38px",
-  height: "38px",
-  borderRadius: "50%",
-  background: accent,
-  color: "white",
+
+  right: "-5px",
+  bottom: "9px",
+
+  width: "40px",
+  height: "40px",
+
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
+
+  borderRadius: "50%",
+
+  border:
+    "3px solid rgba(255, 255, 255, .94)",
+
+  background: accent,
+
+  color: "#ffffff",
+
+  fontSize: "15px",
+
   cursor: "pointer",
-  border: "2px solid white"
+
+  boxShadow:
+    "0 10px 26px rgba(0, 0, 0, .28)"
 });
 
-const label = (accent) => ({
-  color: accent,
-  letterSpacing: "4px",
-  fontSize: "12px",
-  fontWeight: "950",
-  textTransform: "uppercase",
-  margin: 0
-});
+const profileVerifiedMark = {
+  position: "absolute",
 
-const profileName = (isLight) => ({
-  fontSize: "clamp(34px, 3vw, 52px)",
-  lineHeight: "1",
-  margin: "8px 0",
-  color: isLight ? "#0f172a" : "white"
-});
+  left: "-4px",
+  bottom: "8px",
 
-const muted = (isLight) => ({
-  color: isLight ? "#475569" : "#cbd5e1",
-  lineHeight: "25px"
-});
+  width: "28px",
+  height: "28px",
 
-const badges = {
   display: "flex",
-  flexWrap: "wrap",
-  gap: "10px",
-  marginTop: "14px"
+  alignItems: "center",
+  justifyContent: "center",
+
+  borderRadius: "50%",
+
+  border:
+    "3px solid rgba(255, 255, 255, .94)",
+
+  background: "#35d0c3",
+
+  color: "#020617",
+
+  fontSize: "11px",
+  fontWeight: "950"
 };
 
-const verifiedBadge = (verified) => ({
-  background: verified ? "rgba(34,197,94,.14)" : "rgba(245,158,11,.16)",
-  color: verified ? "#86efac" : "#fde68a",
-  border: verified ? "1px solid rgba(34,197,94,.34)" : "1px solid rgba(245,158,11,.34)",
-  padding: "8px 12px",
+/*
+|--------------------------------------------------------------------------
+| Identidad del usuario
+|--------------------------------------------------------------------------
+*/
+
+const identityInformation = {
+  minWidth: 0,
+
+  paddingBottom: "4px"
+};
+
+const identityName = (isLight) => ({
+  margin: "8px 0 5px",
+
+  color:
+    isLight
+      ? "#0f172a"
+      : "#ffffff",
+
+  fontSize:
+    "clamp(37px, 3vw, 53px)",
+
+  lineHeight: "1",
+  letterSpacing: "-1.5px",
+
+  wordBreak: "break-word"
+});
+
+const identityEmail = (isLight) => ({
+  margin: 0,
+
+  color:
+    isLight
+      ? "#64748b"
+      : "#94a3b8",
+
+  fontSize: "12px",
+  lineHeight: "18px",
+
+  wordBreak: "break-word"
+});
+
+const usernameText = (accent) => ({
+  margin: "5px 0 0",
+
+  color: accent,
+
+  fontSize: "11px",
+  fontWeight: "850"
+});
+
+const identityBadges = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "8px",
+
+  marginTop: "13px"
+};
+
+const verifiedBadge = (
+  verified
+) => ({
+  minHeight: "31px",
+
+  display: "inline-flex",
+  alignItems: "center",
+
+  padding: "7px 11px",
+
   borderRadius: "999px",
+
+  border:
+    verified
+      ? "1px solid rgba(34, 197, 94, .32)"
+      : "1px solid rgba(245, 158, 11, .32)",
+
+  background:
+    verified
+      ? "rgba(34, 197, 94, .13)"
+      : "rgba(245, 158, 11, .13)",
+
+  color:
+    verified
+      ? "#86efac"
+      : "#fde68a",
+
+  fontSize: "9px",
   fontWeight: "900"
 });
 
 const trustBadge = (accent) => ({
-  background: `${accent}22`,
-  color: accent,
-  border: `1px solid ${accent}66`,
-  padding: "8px 12px",
+  minHeight: "31px",
+
+  display: "inline-flex",
+  alignItems: "center",
+
+  padding: "7px 11px",
+
   borderRadius: "999px",
+
+  border:
+    `1px solid ${accent}50`,
+
+  background:
+    `${accent}16`,
+
+  color: accent,
+
+  fontSize: "9px",
   fontWeight: "900"
 });
 
 const roleBadge = {
-  background: "rgba(139,92,246,.18)",
-  color: "#ddd6fe",
-  border: "1px solid rgba(139,92,246,.34)",
-  padding: "8px 12px",
+  minHeight: "31px",
+
+  display: "inline-flex",
+  alignItems: "center",
+
+  padding: "7px 11px",
+
   borderRadius: "999px",
+
+  border:
+    "1px solid rgba(139, 92, 246, .33)",
+
+  background:
+    "rgba(139, 92, 246, .14)",
+
+  color: "#ddd6fe",
+
+  fontSize: "9px",
   fontWeight: "900"
 };
 
-const heroActions = {
+/*
+|--------------------------------------------------------------------------
+| Aviso de imagen pendiente
+|--------------------------------------------------------------------------
+*/
+
+const pendingImageNotice = {
+  maxWidth: "520px",
+
   display: "grid",
-  gridTemplateColumns: "1fr 1fr 1fr",
-  gap: "10px"
+
+  gridTemplateColumns:
+    "34px minmax(0, 1fr) 30px",
+
+  alignItems: "center",
+  gap: "10px",
+
+  marginTop: "13px",
+  padding: "10px 11px",
+
+  borderRadius: "13px",
+
+  border:
+    "1px solid rgba(245, 158, 11, .24)",
+
+  background:
+    "rgba(120, 53, 15, .14)",
+
+  color: "#fde68a",
+
+  fontSize: "9px"
 };
 
-const outlineButton = (isLight) => ({
+const smallCancelButton = {
+  width: "30px",
+  height: "30px",
+
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+
+  borderRadius: "9px",
+
+  border:
+    "1px solid rgba(248, 113, 113, .24)",
+
+  background:
+    "rgba(127, 29, 29, .20)",
+
+  color: "#fca5a5",
+
+  fontSize: "17px",
+
+  cursor: "pointer"
+};
+
+/*
+|--------------------------------------------------------------------------
+| Acciones principales del perfil
+|--------------------------------------------------------------------------
+*/
+
+const profileMainActions = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "flex-end",
+  flexWrap: "wrap",
+  gap: "9px"
+};
+
+const secondaryActionButton = (
+  isLight
+) => ({
+  minHeight: "43px",
+
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  background: isLight ? "rgba(255,255,255,.82)" : "rgba(15,23,42,.64)",
-  border: isLight ? "1px solid rgba(15,23,42,.10)" : "1px solid rgba(148,163,184,.16)",
-  color: isLight ? "#0f172a" : "white",
-  textDecoration: "none",
+
+  padding: "10px 14px",
+
   borderRadius: "13px",
-  padding: "13px 15px",
-  fontWeight: "950",
-  cursor: "pointer"
+
+  border:
+    isLight
+      ? "1px solid rgba(15, 23, 42, .10)"
+      : "1px solid rgba(148, 163, 184, .15)",
+
+  background:
+    isLight
+      ? "rgba(255, 255, 255, .80)"
+      : "rgba(15, 23, 42, .60)",
+
+  color:
+    isLight
+      ? "#0f172a"
+      : "#e2e8f0",
+
+  textDecoration: "none",
+
+  fontSize: "10px",
+  fontWeight: "900"
 });
 
-const dangerButton = {
-  background: "rgba(239,68,68,.16)",
-  border: "1px solid rgba(239,68,68,.32)",
-  color: "#fecaca",
+const removePhotoButton = {
+  minHeight: "43px",
+
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+
+  padding: "10px 14px",
+
   borderRadius: "13px",
-  padding: "13px 15px",
-  fontWeight: "950",
+
+  border:
+    "1px solid rgba(239, 68, 68, .26)",
+
+  background:
+    "rgba(127, 29, 29, .15)",
+
+  color: "#fca5a5",
+
+  fontSize: "10px",
+  fontWeight: "900",
+
   cursor: "pointer"
 };
 
+const logoutProfileButton = {
+  minHeight: "43px",
+
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+
+  padding: "10px 14px",
+
+  borderRadius: "13px",
+
+  border:
+    "1px solid rgba(248, 113, 113, .28)",
+
+  background:
+    "linear-gradient(135deg, rgba(127, 29, 29, .22), rgba(76, 5, 25, .16))",
+
+  color: "#fecaca",
+
+  fontSize: "10px",
+  fontWeight: "900",
+
+  cursor: "pointer"
+};
+/*
+|--------------------------------------------------------------------------
+| Mensajes de estado
+|--------------------------------------------------------------------------
+*/
+
 const successBox = {
-  background: "rgba(34,197,94,.14)",
-  border: "1px solid rgba(34,197,94,.32)",
-  color: "#bbf7d0",
-  padding: "14px 18px",
-  borderRadius: "16px",
+  display: "grid",
+
+  gridTemplateColumns:
+    "38px minmax(0, 1fr)",
+
+  alignItems: "flex-start",
+  gap: "11px",
+
   marginBottom: "16px",
-  fontWeight: "800"
+  padding: "14px 16px",
+
+  borderRadius: "15px",
+
+  border:
+    "1px solid rgba(34, 197, 94, .30)",
+
+  background:
+    "rgba(20, 83, 45, .18)",
+
+  color: "#bbf7d0",
+
+  fontSize: "11px",
+  lineHeight: "18px"
 };
 
 const errorBox = {
-  background: "rgba(127,29,29,.24)",
-  border: "1px solid rgba(248,113,113,.30)",
-  color: "#fecaca",
-  padding: "14px 18px",
-  borderRadius: "16px",
+  display: "grid",
+
+  gridTemplateColumns:
+    "38px minmax(0, 1fr)",
+
+  alignItems: "flex-start",
+  gap: "11px",
+
   marginBottom: "16px",
-  fontWeight: "800"
+  padding: "14px 16px",
+
+  borderRadius: "15px",
+
+  border:
+    "1px solid rgba(248, 113, 113, .30)",
+
+  background:
+    "rgba(127, 29, 29, .22)",
+
+  color: "#fecaca",
+
+  fontSize: "11px",
+  lineHeight: "18px"
 };
+
+const warningBox = (
+  isLight
+) => ({
+  display: "grid",
+
+  gridTemplateColumns:
+    "38px minmax(0, 1fr)",
+
+  alignItems: "flex-start",
+  gap: "11px",
+
+  marginBottom: "16px",
+  padding: "14px 16px",
+
+  borderRadius: "15px",
+
+  border:
+    "1px solid rgba(245, 158, 11, .28)",
+
+  background:
+    isLight
+      ? "rgba(255, 251, 235, .90)"
+      : "rgba(120, 53, 15, .16)",
+
+  color:
+    isLight
+      ? "#92400e"
+      : "#fde68a",
+
+  fontSize: "11px",
+  lineHeight: "18px"
+});
+
+const warningList = {
+  margin: "6px 0 0",
+  paddingLeft: "17px"
+};
+
+const messageIcon = {
+  width: "38px",
+  height: "38px",
+
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+
+  borderRadius: "12px",
+
+  background:
+    "rgba(255, 255, 255, .08)",
+
+  fontSize: "17px",
+  fontWeight: "950"
+};
+
+/*
+|--------------------------------------------------------------------------
+| Estado de carga
+|--------------------------------------------------------------------------
+*/
+
+const loadingCard = (
+  isLight
+) => ({
+  minHeight: "330px",
+
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+
+  padding: "38px",
+
+  borderRadius: "25px",
+
+  border:
+    isLight
+      ? "1px solid rgba(15, 23, 42, .08)"
+      : "1px solid rgba(56, 189, 248, .14)",
+
+  background:
+    isLight
+      ? "rgba(255, 255, 255, .88)"
+      : "rgba(15, 23, 42, .72)",
+
+  color:
+    isLight
+      ? "#475569"
+      : "#cbd5e1",
+
+  textAlign: "center",
+
+  boxShadow:
+    isLight
+      ? "0 20px 60px rgba(15, 23, 42, .06)"
+      : "0 22px 70px rgba(0, 0, 0, .18)"
+});
+
+const loadingSymbol = {
+  width: "64px",
+  height: "64px",
+
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+
+  marginBottom: "13px",
+
+  borderRadius: "19px",
+
+  background:
+    "linear-gradient(135deg, rgba(53,208,195,.16), rgba(139,92,246,.18))",
+
+  fontSize: "30px",
+
+  animation:
+    "profilePulse 1.5s infinite"
+};
+
+/*
+|--------------------------------------------------------------------------
+| Estadísticas
+|--------------------------------------------------------------------------
+*/
 
 const statsGrid = {
   display: "grid",
-  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-  gap: "16px",
-  marginBottom: "20px"
+
+  gridTemplateColumns:
+    "repeat(4, minmax(0, 1fr))",
+
+  gap: "14px",
+
+  marginBottom: "18px"
 };
 
-const statCard = (isLight) => ({
-  display: "flex",
+const profileStatCard = (
+  isLight
+) => ({
+  minWidth: 0,
+  minHeight: "118px",
+
+  display: "grid",
+
+  gridTemplateColumns:
+    "52px minmax(0, 1fr)",
+
   alignItems: "center",
-  gap: "14px",
-  background: isLight ? "rgba(255,255,255,.86)" : "rgba(15,23,42,.72)",
-  border: isLight ? "1px solid rgba(15,23,42,.08)" : "1px solid rgba(56,189,248,.15)",
-  borderRadius: "22px",
-  padding: "20px",
-  boxShadow: isLight ? "0 18px 50px rgba(15,23,42,.06)" : "none"
+  gap: "13px",
+
+  padding: "18px",
+
+  borderRadius: "20px",
+
+  border:
+    isLight
+      ? "1px solid rgba(15, 23, 42, .08)"
+      : "1px solid rgba(56, 189, 248, .13)",
+
+  background:
+    isLight
+      ? "rgba(255, 255, 255, .88)"
+      : "rgba(15, 23, 42, .72)",
+
+  boxShadow:
+    isLight
+      ? "0 17px 46px rgba(15, 23, 42, .05)"
+      : "0 18px 50px rgba(0, 0, 0, .13)"
 });
 
-const statIcon = (accent) => ({
+const profileStatIcon = (
+  accent
+) => ({
   width: "52px",
   height: "52px",
-  borderRadius: "17px",
-  background: `${accent}22`,
+
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  fontSize: "24px"
+
+  borderRadius: "16px",
+
+  border:
+    `1px solid ${accent}35`,
+
+  background:
+    `${accent}17`,
+
+  fontSize: "23px"
 });
 
-const profileLayout = {
-  display: "grid",
-  gridTemplateColumns: "minmax(0, 1.3fr) minmax(340px, .7fr)",
-  gap: "20px"
+const profileStatContent = {
+  minWidth: 0
 };
 
-const panel = (isLight, settings) => ({
-  background: isLight ? "rgba(255,255,255,.86)" : "rgba(15,23,42,.72)",
-  border: isLight ? "1px solid rgba(15,23,42,.08)" : "1px solid rgba(56,189,248,.16)",
-  borderRadius: "26px",
+const profileStatTitle = (
+  isLight
+) => ({
+  display: "block",
+
+  marginBottom: "3px",
+
+  color:
+    isLight
+      ? "#64748b"
+      : "#94a3b8",
+
+  fontSize: "10px",
+  fontWeight: "850"
+});
+
+const profileStatValue = (
+  isLight
+) => ({
+  display: "block",
+
+  color:
+    isLight
+      ? "#0f172a"
+      : "#ffffff",
+
+  fontSize: "27px",
+  lineHeight: "31px"
+});
+
+const profileStatDescription = (
+  isLight
+) => ({
+  margin: "5px 0 0",
+
+  color:
+    isLight
+      ? "#94a3b8"
+      : "#64748b",
+
+  fontSize: "9px",
+  lineHeight: "15px"
+});
+
+/*
+|--------------------------------------------------------------------------
+| Cuadrícula principal
+|--------------------------------------------------------------------------
+*/
+
+const profileContentGrid = {
+  display: "grid",
+
+  gridTemplateColumns:
+    "minmax(0, 1.35fr) minmax(330px, .65fr)",
+
+  alignItems: "start",
+  gap: "18px"
+};
+
+const formPanel = (
+  isLight,
+  settings
+) => ({
+  minWidth: 0,
+
   padding: "24px",
-  boxShadow: isLight ? "0 18px 60px rgba(15,23,42,.07)" : "0 24px 80px rgba(0,0,0,.18)",
-  backdropFilter: settings.glassEffect === false ? "none" : "blur(16px)"
+
+  borderRadius: "25px",
+
+  border:
+    isLight
+      ? "1px solid rgba(15, 23, 42, .08)"
+      : "1px solid rgba(56, 189, 248, .14)",
+
+  background:
+    isLight
+      ? "rgba(255, 255, 255, .88)"
+      : "rgba(15, 23, 42, .72)",
+
+  boxShadow:
+    isLight
+      ? "0 20px 60px rgba(15, 23, 42, .06)"
+      : "0 22px 70px rgba(0, 0, 0, .17)",
+
+  backdropFilter:
+    settings?.glassEffect === false
+      ? "none"
+      : "blur(15px)"
 });
 
-const sectionHeader = {
-  marginBottom: "20px"
+const panelHeader = {
+  display: "flex",
+  alignItems: "flex-start",
+  justifyContent: "space-between",
+  gap: "18px",
+
+  marginBottom: "21px"
 };
 
-const panelTitle = (isLight) => ({
-  color: isLight ? "#0f172a" : "white",
-  margin: "8px 0"
+const panelTitle = (
+  isLight
+) => ({
+  margin: "7px 0 6px",
+
+  color:
+    isLight
+      ? "#0f172a"
+      : "#ffffff",
+
+  fontSize: "21px",
+  lineHeight: "26px"
 });
 
-const twoColumns = {
+const panelDescription = (
+  isLight
+) => ({
+  maxWidth: "760px",
+
+  margin: 0,
+
+  color:
+    isLight
+      ? "#64748b"
+      : "#94a3b8",
+
+  fontSize: "11px",
+  lineHeight: "18px"
+});
+
+const pendingChangesBadge = {
+  flexShrink: 0,
+
+  minHeight: "30px",
+
+  display: "inline-flex",
+  alignItems: "center",
+
+  padding: "6px 10px",
+
+  borderRadius: "999px",
+
+  border:
+    "1px solid rgba(245, 158, 11, .28)",
+
+  background:
+    "rgba(245, 158, 11, .11)",
+
+  color: "#fde68a",
+
+  fontSize: "8px",
+  fontWeight: "950",
+
+  whiteSpace: "nowrap"
+};
+
+/*
+|--------------------------------------------------------------------------
+| Formulario
+|--------------------------------------------------------------------------
+*/
+
+const formGrid = {
   display: "grid",
-  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-  gap: "14px",
-  marginBottom: "14px"
+
+  gridTemplateColumns:
+    "repeat(2, minmax(0, 1fr))",
+
+  gap: "14px"
 };
 
-const fieldWrap = {
+const fieldWrapper = {
+  minWidth: 0,
+
   display: "grid",
   gap: "8px",
+
   marginBottom: "14px"
 };
 
-const fieldLabel = (isLight) => ({
-  fontWeight: "900",
-  color: isLight ? "#1e293b" : "#e2e8f0"
+const fieldHeader = {
+  minWidth: 0,
+
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "12px"
+};
+
+const fieldLabel = (
+  isLight
+) => ({
+  color:
+    isLight
+      ? "#1e293b"
+      : "#e2e8f0",
+
+  fontSize: "10px",
+  fontWeight: "900"
 });
 
-const input = (isLight) => ({
+const requiredMark = {
+  marginLeft: "3px",
+
+  color: "#f87171"
+};
+
+const fieldHint = (
+  isLight
+) => ({
+  color:
+    isLight
+      ? "#94a3b8"
+      : "#64748b",
+
+  fontSize: "8px",
+  textAlign: "right"
+});
+
+const formInput = (
+  isLight
+) => ({
   width: "100%",
-  minHeight: "54px",
-  background: isLight ? "rgba(248,250,252,.95)" : "rgba(2,6,23,.55)",
-  border: isLight ? "1px solid rgba(15,23,42,.12)" : "1px solid rgba(148,163,184,.16)",
-  color: isLight ? "#0f172a" : "white",
-  borderRadius: "15px",
+  minWidth: 0,
+  minHeight: "52px",
+
   padding: "0 14px",
+
+  borderRadius: "14px",
+
+  border:
+    isLight
+      ? "1px solid rgba(15, 23, 42, .11)"
+      : "1px solid rgba(148, 163, 184, .15)",
+
+  background:
+    isLight
+      ? "rgba(248, 250, 252, .94)"
+      : "rgba(2, 6, 23, .52)",
+
+  color:
+    isLight
+      ? "#0f172a"
+      : "#ffffff",
+
+  fontSize: "11px",
+
   outline: "none"
 });
 
-const textarea = (isLight) => ({
-  ...input(isLight),
-  minHeight: "120px",
-  padding: "14px",
+const formTextarea = (
+  isLight
+) => ({
+  ...formInput(isLight),
+
+  minHeight: "132px",
+
+  padding: "13px 14px",
+
   resize: "vertical",
-  lineHeight: "24px"
+
+  lineHeight: "19px"
 });
 
-const actionRow = {
+/*
+|--------------------------------------------------------------------------
+| Campo con prefijo
+|--------------------------------------------------------------------------
+*/
+
+const inputPrefixContainer = (
+  isLight
+) => ({
+  width: "100%",
+  minHeight: "52px",
+
   display: "grid",
-  gridTemplateColumns: "1fr 1.5fr",
+
+  gridTemplateColumns:
+    "38px minmax(0, 1fr)",
+
+  alignItems: "center",
+
+  overflow: "hidden",
+
+  borderRadius: "14px",
+
+  border:
+    isLight
+      ? "1px solid rgba(15, 23, 42, .11)"
+      : "1px solid rgba(148, 163, 184, .15)",
+
+  background:
+    isLight
+      ? "rgba(248, 250, 252, .94)"
+      : "rgba(2, 6, 23, .52)"
+});
+
+const inputPrefix = {
+  height: "100%",
+
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+
+  borderRight:
+    "1px solid rgba(148, 163, 184, .12)",
+
+  color: "#35d0c3",
+
+  fontSize: "13px",
+  fontWeight: "950"
+};
+
+const prefixedInput = (
+  isLight
+) => ({
+  width: "100%",
+  minWidth: 0,
+  height: "50px",
+
+  padding: "0 13px",
+
+  border: "none",
+  outline: "none",
+
+  background:
+    "transparent",
+
+  color:
+    isLight
+      ? "#0f172a"
+      : "#ffffff",
+
+  fontSize: "11px"
+});
+
+/*
+|--------------------------------------------------------------------------
+| Acciones del formulario
+|--------------------------------------------------------------------------
+*/
+
+const formActions = {
+  display: "grid",
+
+  gridTemplateColumns:
+    "minmax(130px, .6fr) minmax(190px, 1.4fr)",
+
   gap: "10px",
+
   marginTop: "18px"
 };
 
-const primaryButton = (accent) => ({
-  display: "inline-flex",
+const resetButton = (
+  isLight
+) => ({
+  minHeight: "48px",
+
+  display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  background: `linear-gradient(135deg, ${accent}, #38bdf8, #8b5cf6)`,
-  color: "white",
-  textDecoration: "none",
-  border: "none",
-  padding: "14px 20px",
+
+  padding: "11px 15px",
+
   borderRadius: "14px",
-  fontWeight: "950",
-  cursor: "pointer",
-  boxShadow: `0 18px 54px ${accent}2e`
+
+  border:
+    isLight
+      ? "1px solid rgba(15, 23, 42, .11)"
+      : "1px solid rgba(148, 163, 184, .15)",
+
+  background:
+    isLight
+      ? "rgba(248, 250, 252, .88)"
+      : "rgba(15, 23, 42, .65)",
+
+  color:
+    isLight
+      ? "#475569"
+      : "#cbd5e1",
+
+  fontSize: "10px",
+  fontWeight: "900",
+
+  cursor: "pointer"
 });
 
-const sidePanel = {
+const saveButton = (
+  accent
+) => ({
+  minHeight: "48px",
+
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+
+  padding: "11px 17px",
+
+  border: "none",
+  borderRadius: "14px",
+
+  background:
+    `linear-gradient(
+      135deg,
+      ${accent},
+      #38bdf8,
+      #8b5cf6
+    )`,
+
+  color: "#ffffff",
+
+  fontSize: "10px",
+  fontWeight: "950",
+
+  cursor: "pointer",
+
+  boxShadow:
+    `0 16px 46px ${accent}2c`
+});
+ /*
+|--------------------------------------------------------------------------
+| Columna lateral
+|--------------------------------------------------------------------------
+*/
+
+const profileSideColumn = {
   display: "grid",
   gap: "18px",
+
   alignSelf: "start"
 };
 
-const scoreCircle = (accent) => ({
-  width: "128px",
-  height: "128px",
-  borderRadius: "50%",
-  border: `10px solid ${accent}33`,
+const sideCard = (
+  isLight,
+  settings
+) => ({
+  minWidth: 0,
+
+  padding: "22px",
+
+  borderRadius: "23px",
+
+  border:
+    isLight
+      ? "1px solid rgba(15, 23, 42, .08)"
+      : "1px solid rgba(56, 189, 248, .14)",
+
+  background:
+    isLight
+      ? "rgba(255, 255, 255, .88)"
+      : "rgba(15, 23, 42, .72)",
+
+  boxShadow:
+    isLight
+      ? "0 18px 52px rgba(15, 23, 42, .06)"
+      : "0 20px 60px rgba(0, 0, 0, .16)",
+
+  backdropFilter:
+    settings?.glassEffect === false
+      ? "none"
+      : "blur(14px)"
+});
+
+const sideCardTitle = (
+  isLight
+) => ({
+  margin: "7px 0 10px",
+
+  color:
+    isLight
+      ? "#0f172a"
+      : "#ffffff",
+
+  fontSize: "19px",
+  lineHeight: "24px"
+});
+
+/*
+|--------------------------------------------------------------------------
+| Círculo de progreso
+|--------------------------------------------------------------------------
+*/
+
+const completionRing = (
+  accent
+) => ({
+  width: "142px",
+  height: "142px",
+
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  margin: "22px auto",
-  color: accent,
-  fontSize: "30px",
-  fontWeight: "950"
+
+  margin: "20px auto 16px",
+
+  borderRadius: "50%",
+
+  background:
+    `
+      conic-gradient(
+        ${accent} 0deg,
+        #38bdf8 145deg,
+        #8b5cf6 250deg,
+        rgba(148, 163, 184, .15) 250deg
+      )
+    `,
+
+  boxShadow:
+    `0 16px 44px ${accent}24`
 });
 
-const scoreBar = (isLight) => ({
-  height: "10px",
-  background: isLight ? "rgba(15,23,42,.10)" : "rgba(148,163,184,.16)",
-  borderRadius: "999px",
+const completionRingInner = (
+  isLight
+) => ({
+  width: "110px",
+  height: "110px",
+
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+
+  borderRadius: "50%",
+
+  background:
+    isLight
+      ? "#ffffff"
+      : "#081325",
+
+  border:
+    isLight
+      ? "1px solid rgba(15, 23, 42, .08)"
+      : "1px solid rgba(148, 163, 184, .10)",
+
+  color:
+    isLight
+      ? "#0f172a"
+      : "#ffffff",
+
+  textAlign: "center"
+});
+
+const progressBar = (
+  isLight
+) => ({
+  width: "100%",
+  height: "9px",
+
   overflow: "hidden",
-  marginBottom: "18px"
+
+  marginBottom: "15px",
+
+  borderRadius: "999px",
+
+  background:
+    isLight
+      ? "rgba(15, 23, 42, .09)"
+      : "rgba(148, 163, 184, .14)"
 });
 
-const scoreFill = (accent) => ({
+const progressBarFill = (
+  accent
+) => ({
   height: "100%",
-  background: `linear-gradient(90deg, ${accent}, #38bdf8, #8b5cf6)`,
-  borderRadius: "999px"
+
+  borderRadius: "999px",
+
+  background:
+    `linear-gradient(
+      90deg,
+      ${accent},
+      #38bdf8,
+      #8b5cf6
+    )`,
+
+  transition:
+    "width .4s ease"
 });
 
-const checkLine = (isLight) => ({
+/*
+|--------------------------------------------------------------------------
+| Checks del perfil
+|--------------------------------------------------------------------------
+*/
+
+const profileCheckRow = (
+  isLight
+) => ({
   display: "flex",
-  gap: "10px",
   alignItems: "center",
+  gap: "10px",
+
   padding: "10px 0",
-  borderBottom: isLight ? "1px solid rgba(15,23,42,.08)" : "1px solid rgba(148,163,184,.10)",
-  color: isLight ? "#0f172a" : "#cbd5e1"
+
+  borderBottom:
+    isLight
+      ? "1px solid rgba(15, 23, 42, .07)"
+      : "1px solid rgba(148, 163, 184, .09)"
 });
 
-const checkDone = {
-  width: "26px",
-  height: "26px",
-  borderRadius: "50%",
-  background: "#35d0c3",
-  color: "#020617",
+const profileCheckDone = {
+  width: "25px",
+  height: "25px",
+  flexShrink: 0,
+
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
+
+  borderRadius: "50%",
+
+  background: "#35d0c3",
+
+  color: "#020617",
+
+  fontSize: "10px",
   fontWeight: "950"
 };
 
-const checkPending = {
-  ...checkDone,
-  background: "rgba(148,163,184,.16)",
-  color: "#94a3b8"
+const profileCheckPending = {
+  ...profileCheckDone,
+
+  background:
+    "rgba(148, 163, 184, .15)",
+
+  color: "#64748b"
 };
 
-const infoLine = (isLight) => ({
+const profileCheckText = (
+  isLight
+) => ({
+  color:
+    isLight
+      ? "#475569"
+      : "#cbd5e1",
+
+  fontSize: "10px"
+});
+
+/*
+|--------------------------------------------------------------------------
+| Enlaces laterales
+|--------------------------------------------------------------------------
+*/
+
+const sidePrimaryLink = (
+  accent
+) => ({
+  minHeight: "44px",
+
   display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+
+  marginTop: "16px",
+  padding: "10px 14px",
+
+  borderRadius: "13px",
+
+  border: "none",
+
+  background:
+    `linear-gradient(
+      135deg,
+      ${accent},
+      #38bdf8,
+      #8b5cf6
+    )`,
+
+  color: "#ffffff",
+
+  textDecoration: "none",
+
+  fontSize: "10px",
+  fontWeight: "950",
+
+  boxShadow:
+    `0 14px 40px ${accent}28`
+});
+
+const sideSecondaryLink = (
+  isLight
+) => ({
+  minHeight: "44px",
+
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+
+  marginTop: "15px",
+  padding: "10px 14px",
+
+  borderRadius: "13px",
+
+  border:
+    isLight
+      ? "1px solid rgba(15, 23, 42, .10)"
+      : "1px solid rgba(148, 163, 184, .15)",
+
+  background:
+    isLight
+      ? "rgba(248, 250, 252, .88)"
+      : "rgba(15, 23, 42, .64)",
+
+  color:
+    isLight
+      ? "#0f172a"
+      : "#e2e8f0",
+
+  textDecoration: "none",
+
+  fontSize: "10px",
+  fontWeight: "900"
+});
+
+/*
+|--------------------------------------------------------------------------
+| Información del perfil
+|--------------------------------------------------------------------------
+*/
+
+const profileInfoRow = (
+  isLight
+) => ({
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "14px",
+
+  padding: "11px 0",
+
+  borderBottom:
+    isLight
+      ? "1px solid rgba(15, 23, 42, .07)"
+      : "1px solid rgba(148, 163, 184, .09)"
+});
+
+const profileInfoLabel = (
+  isLight
+) => ({
+  color:
+    isLight
+      ? "#64748b"
+      : "#94a3b8",
+
+  fontSize: "10px"
+});
+
+const profileInfoValue = (
+  accent
+) => ({
+  color: accent,
+
+  fontSize: "10px",
+  textAlign: "right"
+});
+
+/*
+|--------------------------------------------------------------------------
+| Aviso de seguridad
+|--------------------------------------------------------------------------
+*/
+
+const securityNotice = (
+  isLight
+) => ({
+  display: "grid",
+
+  gridTemplateColumns:
+    "46px minmax(0, 1fr)",
+
+  alignItems: "flex-start",
+  gap: "12px",
+
+  padding: "19px",
+
+  borderRadius: "21px",
+
+  border:
+    isLight
+      ? "1px solid rgba(15, 23, 42, .08)"
+      : "1px solid rgba(53, 208, 195, .22)",
+
+  background:
+    isLight
+      ? "rgba(255, 255, 255, .88)"
+      : "linear-gradient(135deg, rgba(53, 208, 195, .09), rgba(139, 92, 246, .08))",
+
+  color:
+    isLight
+      ? "#475569"
+      : "#cbd5e1",
+
+  boxShadow:
+    isLight
+      ? "0 16px 46px rgba(15, 23, 42, .05)"
+      : "0 18px 52px rgba(0, 0, 0, .14)"
+});
+
+const securityNoticeIcon = {
+  width: "46px",
+  height: "46px",
+
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+
+  borderRadius: "14px",
+
+  border:
+    "1px solid rgba(53, 208, 195, .20)",
+
+  background:
+    "rgba(53, 208, 195, .11)",
+
+  fontSize: "21px"
+};
+ /*
+|--------------------------------------------------------------------------
+| Ajustes complementarios del perfil
+|--------------------------------------------------------------------------
+*/
+
+const profileSectionDivider = (
+  isLight
+) => ({
+  width: "100%",
+  height: "1px",
+
+  margin: "18px 0",
+
+  background:
+    isLight
+      ? "linear-gradient(90deg, transparent, rgba(15, 23, 42, .12), transparent)"
+      : "linear-gradient(90deg, transparent, rgba(148, 163, 184, .14), transparent)"
+});
+
+/*
+|--------------------------------------------------------------------------
+| Texto auxiliar
+|--------------------------------------------------------------------------
+*/
+
+const helperText = (
+  isLight
+) => ({
+  margin: "5px 0 0",
+
+  color:
+    isLight
+      ? "#94a3b8"
+      : "#64748b",
+
+  fontSize: "8px",
+  lineHeight: "14px"
+});
+
+/*
+|--------------------------------------------------------------------------
+| Etiqueta de privacidad
+|--------------------------------------------------------------------------
+*/
+
+const privacyBadge = (
+  accent
+) => ({
+  width: "fit-content",
+
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "5px",
+
+  padding: "5px 8px",
+
+  borderRadius: "999px",
+
+  border:
+    `1px solid ${accent}35`,
+
+  background:
+    `${accent}10`,
+
+  color: accent,
+
+  fontSize: "8px",
+  fontWeight: "850"
+});
+
+/*
+|--------------------------------------------------------------------------
+| Estado deshabilitado
+|--------------------------------------------------------------------------
+*/
+
+const disabledField = {
+  opacity: 0.58,
+  cursor: "not-allowed"
+};
+
+/*
+|--------------------------------------------------------------------------
+| Tarjeta de privacidad
+|--------------------------------------------------------------------------
+*/
+
+const privacyCard = (
+  isLight
+) => ({
+  display: "grid",
+  gap: "9px",
+
+  padding: "15px",
+
+  borderRadius: "16px",
+
+  border:
+    isLight
+      ? "1px solid rgba(15, 23, 42, .08)"
+      : "1px solid rgba(148, 163, 184, .10)",
+
+  background:
+    isLight
+      ? "rgba(248, 250, 252, .82)"
+      : "rgba(2, 6, 23, .28)"
+});
+
+/*
+|--------------------------------------------------------------------------
+| Fila de privacidad
+|--------------------------------------------------------------------------
+*/
+
+const privacyRow = (
+  isLight
+) => ({
+  display: "flex",
+  alignItems: "center",
   justifyContent: "space-between",
   gap: "12px",
-  padding: "12px 0",
-  borderBottom: isLight ? "1px solid rgba(15,23,42,.08)" : "1px solid rgba(148,163,184,.10)",
-  color: isLight ? "#0f172a" : "#cbd5e1"
+
+  padding: "8px 0",
+
+  color:
+    isLight
+      ? "#475569"
+      : "#cbd5e1",
+
+  fontSize: "9px"
 });
 
-const securityBox = (isLight) => ({
-  background: isLight ? "rgba(255,255,255,.86)" : "rgba(53,208,195,.10)",
-  border: isLight ? "1px solid rgba(15,23,42,.08)" : "1px solid rgba(53,208,195,.26)",
-  color: isLight ? "#0f172a" : "#cbd5e1",
-  borderRadius: "26px",
-  padding: "22px"
+/*
+|--------------------------------------------------------------------------
+| Estado destacado
+|--------------------------------------------------------------------------
+*/
+
+const statusPill = (
+  type = "default"
+) => {
+  const variants = {
+    success: {
+      border:
+        "1px solid rgba(34, 197, 94, .30)",
+
+      background:
+        "rgba(34, 197, 94, .12)",
+
+      color:
+        "#86efac"
+    },
+
+    warning: {
+      border:
+        "1px solid rgba(245, 158, 11, .30)",
+
+      background:
+        "rgba(245, 158, 11, .12)",
+
+      color:
+        "#fde68a"
+    },
+
+    danger: {
+      border:
+        "1px solid rgba(239, 68, 68, .30)",
+
+      background:
+        "rgba(239, 68, 68, .12)",
+
+      color:
+        "#fca5a5"
+    },
+
+    default: {
+      border:
+        "1px solid rgba(53, 208, 195, .28)",
+
+      background:
+        "rgba(53, 208, 195, .11)",
+
+      color:
+        "#5eead4"
+    }
+  };
+
+  return {
+    minHeight: "27px",
+
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+
+    padding: "5px 9px",
+
+    borderRadius: "999px",
+
+    fontSize: "8px",
+    fontWeight: "900",
+
+    whiteSpace: "nowrap",
+
+    ...(variants[type] ||
+      variants.default)
+  };
+};
+
+/*
+|--------------------------------------------------------------------------
+| Indicador de campo válido
+|--------------------------------------------------------------------------
+*/
+
+const validFieldIndicator = {
+  width: "20px",
+  height: "20px",
+
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+
+  borderRadius: "50%",
+
+  background:
+    "rgba(34, 197, 94, .14)",
+
+  color: "#86efac",
+
+  fontSize: "8px",
+  fontWeight: "950"
+};
+
+/*
+|--------------------------------------------------------------------------
+| Indicador de campo pendiente
+|--------------------------------------------------------------------------
+*/
+
+const pendingFieldIndicator = {
+  ...validFieldIndicator,
+
+  background:
+    "rgba(245, 158, 11, .14)",
+
+  color: "#fde68a"
+};
+
+/*
+|--------------------------------------------------------------------------
+| Botón pequeño
+|--------------------------------------------------------------------------
+*/
+
+const smallActionButton = (
+  isLight
+) => ({
+  minHeight: "34px",
+
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+
+  padding: "7px 10px",
+
+  borderRadius: "10px",
+
+  border:
+    isLight
+      ? "1px solid rgba(15, 23, 42, .10)"
+      : "1px solid rgba(148, 163, 184, .14)",
+
+  background:
+    isLight
+      ? "rgba(248, 250, 252, .85)"
+      : "rgba(15, 23, 42, .62)",
+
+  color:
+    isLight
+      ? "#475569"
+      : "#cbd5e1",
+
+  fontSize: "8px",
+  fontWeight: "900",
+
+  cursor: "pointer"
 });
 
-const centerCard = (isLight) => ({
-  background: isLight ? "rgba(255,255,255,.86)" : "rgba(15,23,42,.72)",
-  border: isLight ? "1px solid rgba(15,23,42,.08)" : "1px solid rgba(56,189,248,.14)",
-  borderRadius: "24px",
-  padding: "44px",
+/*
+|--------------------------------------------------------------------------
+| Botón pequeño peligroso
+|--------------------------------------------------------------------------
+*/
+
+const smallDangerButton = {
+  minHeight: "34px",
+
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+
+  padding: "7px 10px",
+
+  borderRadius: "10px",
+
+  border:
+    "1px solid rgba(239, 68, 68, .25)",
+
+  background:
+    "rgba(127, 29, 29, .15)",
+
+  color: "#fca5a5",
+
+  fontSize: "8px",
+  fontWeight: "900",
+
+  cursor: "pointer"
+};
+
+/*
+|--------------------------------------------------------------------------
+| Acciones de imágenes
+|--------------------------------------------------------------------------
+*/
+
+const imageActionsRow = {
+  display: "flex",
+  alignItems: "center",
+  flexWrap: "wrap",
+  gap: "8px",
+
+  marginTop: "10px"
+};
+
+/*
+|--------------------------------------------------------------------------
+| Vista previa de archivo
+|--------------------------------------------------------------------------
+*/
+
+const filePreviewInformation = (
+  isLight
+) => ({
+  display: "grid",
+  gap: "3px",
+
+  marginTop: "8px",
+
+  color:
+    isLight
+      ? "#64748b"
+      : "#94a3b8",
+
+  fontSize: "8px",
+  lineHeight: "14px"
+});
+
+/*
+|--------------------------------------------------------------------------
+| Texto del círculo de progreso
+|--------------------------------------------------------------------------
+*/
+
+const completionValue = {
+  display: "block",
+
+  color: "#35d0c3",
+
+  fontSize: "27px",
+  lineHeight: "29px",
+  fontWeight: "950"
+};
+
+const completionLabel = {
+  display: "block",
+
+  marginTop: "3px",
+
+  color: "#94a3b8",
+
+  fontSize: "8px",
+  fontWeight: "800"
+};
+
+/*
+|--------------------------------------------------------------------------
+| Cabecera de tarjeta secundaria
+|--------------------------------------------------------------------------
+*/
+
+const sideCardHeader = {
+  display: "flex",
+  alignItems: "flex-start",
+  justifyContent: "space-between",
+  gap: "12px",
+
+  marginBottom: "10px"
+};
+
+/*
+|--------------------------------------------------------------------------
+| Información del estado de seguridad
+|--------------------------------------------------------------------------
+*/
+
+const securityLevelDescription = (
+  isLight
+) => ({
+  margin: "7px 0 0",
+
+  color:
+    isLight
+      ? "#64748b"
+      : "#94a3b8",
+
+  fontSize: "9px",
+  lineHeight: "16px"
+});
+
+/*
+|--------------------------------------------------------------------------
+| Lista de seguridad
+|--------------------------------------------------------------------------
+*/
+
+const securityList = {
+  display: "grid",
+  gap: "7px",
+
+  margin: "12px 0 0",
+  padding: 0,
+
+  listStyle: "none"
+};
+
+const securityListItem = (
+  isLight
+) => ({
+  display: "grid",
+
+  gridTemplateColumns:
+    "22px minmax(0, 1fr)",
+
+  alignItems: "flex-start",
+  gap: "8px",
+
+  color:
+    isLight
+      ? "#475569"
+      : "#cbd5e1",
+
+  fontSize: "9px",
+  lineHeight: "15px"
+});
+
+/*
+|--------------------------------------------------------------------------
+| Icono pequeño de seguridad
+|--------------------------------------------------------------------------
+*/
+
+const securityListIcon = {
+  width: "22px",
+  height: "22px",
+
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+
+  borderRadius: "7px",
+
+  background:
+    "rgba(53, 208, 195, .10)",
+
+  color: "#5eead4",
+
+  fontSize: "9px"
+};
+
+/*
+|--------------------------------------------------------------------------
+| Mensaje informativo
+|--------------------------------------------------------------------------
+*/
+
+const informationMessage = (
+  isLight
+) => ({
+  display: "grid",
+
+  gridTemplateColumns:
+    "34px minmax(0, 1fr)",
+
+  alignItems: "flex-start",
+  gap: "10px",
+
+  marginTop: "13px",
+  padding: "11px",
+
+  borderRadius: "13px",
+
+  border:
+    isLight
+      ? "1px solid rgba(56, 189, 248, .16)"
+      : "1px solid rgba(56, 189, 248, .18)",
+
+  background:
+    isLight
+      ? "rgba(224, 242, 254, .52)"
+      : "rgba(14, 116, 144, .08)",
+
+  color:
+    isLight
+      ? "#0c4a6e"
+      : "#bae6fd",
+
+  fontSize: "9px",
+  lineHeight: "15px"
+});
+
+/*
+|--------------------------------------------------------------------------
+| Botón de WhatsApp
+|--------------------------------------------------------------------------
+*/
+
+const whatsappButton = {
+  minHeight: "42px",
+
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "7px",
+
+  padding: "10px 14px",
+
+  borderRadius: "13px",
+
+  border:
+    "1px solid rgba(34, 197, 94, .28)",
+
+  background:
+    "rgba(34, 197, 94, .12)",
+
+  color: "#86efac",
+
+  textDecoration: "none",
+
+  fontSize: "9px",
+  fontWeight: "900"
+};
+
+/*
+|--------------------------------------------------------------------------
+| Estado visual de conexión
+|--------------------------------------------------------------------------
+*/
+
+const connectedStatus = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "6px",
+
+  color: "#86efac",
+
+  fontSize: "8px",
+  fontWeight: "900"
+};
+
+const connectedDot = {
+  width: "7px",
+  height: "7px",
+
+  borderRadius: "50%",
+
+  background: "#22c55e",
+
+  boxShadow:
+    "0 0 10px rgba(34, 197, 94, .65)"
+};
+
+/*
+|--------------------------------------------------------------------------
+| Ajustes de selección y foco
+|--------------------------------------------------------------------------
+*/
+
+const focusRing = (
+  accent
+) => ({
+  borderColor: accent,
+
+  boxShadow:
+    `0 0 0 3px ${accent}18`
+});
+
+/*
+|--------------------------------------------------------------------------
+| Compatibilidad de tarjetas vacías
+|--------------------------------------------------------------------------
+*/
+
+const emptyProfileState = (
+  isLight
+) => ({
+  minHeight: "130px",
+
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+
+  gap: "8px",
+
+  padding: "18px",
+
+  borderRadius: "16px",
+
+  border:
+    isLight
+      ? "1px dashed rgba(15, 23, 42, .13)"
+      : "1px dashed rgba(148, 163, 184, .16)",
+
+  color:
+    isLight
+      ? "#64748b"
+      : "#94a3b8",
+
   textAlign: "center",
-  color: isLight ? "#0f172a" : "#cbd5e1"
+
+  fontSize: "9px",
+  lineHeight: "15px"
 });
+
+/*
+|--------------------------------------------------------------------------
+| Ajustes para impresión
+|--------------------------------------------------------------------------
+*/
+
+const printOnlyInformation = {
+  display: "none"
+};
+
+/*
+|--------------------------------------------------------------------------
+| Exportación
+|--------------------------------------------------------------------------
+*/
 
 export default Profile;

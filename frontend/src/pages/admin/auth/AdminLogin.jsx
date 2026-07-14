@@ -5,11 +5,15 @@ import api from "../../../services/api";
 const ADMIN_ROLES = [
   "SUPER_ADMIN",
   "SENIOR_ADMIN",
+  "ADMIN",
+  "SUPERVISOR",
 
   "WAREHOUSE_MANAGER",
+  "WAREHOUSE_SUPERVISOR",
   "WAREHOUSE_STAFF",
 
   "DELIVERY_MANAGER",
+  "DELIVERY_SUPERVISOR",
   "DELIVERY_AGENT",
 
   "DISPUTE_MANAGER",
@@ -23,12 +27,47 @@ const ADMIN_ROLES = [
   "SUPPORT_MANAGER",
   "SUPPORT_AGENT",
 
+  "MODERATION_MANAGER",
   "MODERATOR",
-  "SUPERVISOR",
 
-  "SECURITY_ADMIN",
+  "SECURITY_MANAGER",
   "SECURITY_ANALYST"
 ];
+
+/*
+ * Cuenta temporal de desarrollo.
+ * Se usa mientras MongoDB y el login administrativo real no estén disponibles.
+ * Elimina este bloque cuando POST /api/admin/auth/login esté funcionando.
+ */
+const TEMP_SUPER_ADMIN = {
+  id: "qsm-super-admin-001",
+  firstName: "Engel",
+  lastName: "Feliz",
+  fullName: "Engel Feliz",
+  name: "Engel Feliz",
+  email: "superadmin.qsm@gmail.com",
+  password: "QsmSuperAdmin@2026!",
+  accountType: "INTERNAL",
+  role: "SUPER_ADMIN",
+  roles: ["SUPER_ADMIN"],
+  roleLabel: "Super Administrador",
+  department: "ADMINISTRATION",
+  departments: [
+    "ADMINISTRATION",
+    "WAREHOUSE",
+    "DELIVERY",
+    "FINANCE",
+    "AUDIT",
+    "DISPUTES",
+    "SECURITY",
+    "SUPPORT",
+    "MODERATION"
+  ],
+  permissions: ["*"],
+  status: "ACTIVE",
+  isActive: true,
+  active: true
+};
 
 function AdminLogin() {
   const navigate = useNavigate();
@@ -111,7 +150,6 @@ function AdminLogin() {
       setMessage(
         "Completa tu correo administrativo y contraseña."
       );
-
       return;
     }
 
@@ -119,27 +157,61 @@ function AdminLogin() {
       setMessage(
         "Ingresa un correo electrónico válido."
       );
-
       return;
     }
 
+    setLoading(true);
+
     try {
-      setLoading(true);
+      /*
+       * Acceso temporal para continuar desarrollando el BackOffice
+       * sin depender todavía de MongoDB.
+       */
+      const isTemporarySuperAdmin =
+        email === TEMP_SUPER_ADMIN.email &&
+        password === TEMP_SUPER_ADMIN.password;
+
+      if (isTemporarySuperAdmin) {
+        const {
+          password: removedPassword,
+          ...safeTemporaryAdmin
+        } = TEMP_SUPER_ADMIN;
+
+        const temporaryToken =
+          `qsm-temp-admin-${Date.now()}`;
+
+        saveAdministrativeSession({
+          token: temporaryToken,
+          user: normalizeAdministrativeUser(
+            safeTemporaryAdmin
+          ),
+          remember
+        });
+
+        setMessageType("success");
+        setMessage(
+          "Acceso autorizado. Bienvenido, Engel Feliz."
+        );
+
+        window.setTimeout(() => {
+          navigate("/admin/select-area", {
+            replace: true
+          });
+        }, 450);
+
+        return;
+      }
 
       /*
-       * Actualmente utiliza la misma ruta de autenticación
-       * que tu login normal.
+       * Login real actual.
+       * Cuando el backend administrativo esté listo, cambia:
        *
-       * Cuando creemos una ruta exclusiva en el backend,
-       * cambiaremos:
-       *
-       * /auth/login
+       *   /auth/login
        *
        * por:
        *
-       * /auth/admin/login
+       *   /admin/auth/login
        */
-
       const response = await api.post("/auth/login", {
         email,
         password
@@ -162,7 +234,6 @@ function AdminLogin() {
         setMessage(
           "El servidor no devolvió un token administrativo válido."
         );
-
         return;
       }
 
@@ -170,7 +241,6 @@ function AdminLogin() {
         setMessage(
           "El servidor no devolvió la información del usuario."
         );
-
         return;
       }
 
@@ -180,27 +250,33 @@ function AdminLogin() {
         setMessage(
           "Esta cuenta no tiene autorización para ingresar al BackOffice de QSM."
         );
-
         return;
       }
+
+      const normalizedStatus = String(
+        user.status || "ACTIVE"
+      ).toUpperCase();
 
       if (
         user.isActive === false ||
         user.active === false ||
-        user.status === "SUSPENDED" ||
-        user.status === "BANNED" ||
-        user.status === "DISABLED"
+        [
+          "SUSPENDED",
+          "BANNED",
+          "DISABLED",
+          "INACTIVE"
+        ].includes(normalizedStatus)
       ) {
         clearAdministrativeSession();
 
         setMessage(
           "Esta cuenta administrativa está suspendida o desactivada."
         );
-
         return;
       }
 
-      const normalizedUser = normalizeAdministrativeUser(user);
+      const normalizedUser =
+        normalizeAdministrativeUser(user);
 
       saveAdministrativeSession({
         token,
@@ -209,7 +285,6 @@ function AdminLogin() {
       });
 
       setMessageType("success");
-
       setMessage(
         `Acceso autorizado. Bienvenido, ${
           normalizedUser.name || "administrador"
@@ -960,29 +1035,70 @@ function Stat({ icon, value, label }) {
 function normalizeAdministrativeUser(user) {
   const roles = getUserRoles(user);
 
-  const departments =
-    user.departments ||
-    user.areas ||
-    user.allowedDepartments ||
-    [];
+  const departments = Array.isArray(user.departments)
+    ? user.departments
+    : Array.isArray(user.areas)
+      ? user.areas
+      : Array.isArray(user.allowedDepartments)
+        ? user.allowedDepartments
+        : user.department
+          ? [user.department]
+          : [];
+
+  const firstName =
+    user.firstName ||
+    user.nombre ||
+    "";
+
+  const lastName =
+    user.lastName ||
+    user.apellido ||
+    "";
+
+  const fullName =
+    user.fullName ||
+    user.name ||
+    `${firstName} ${lastName}`.trim() ||
+    user.email ||
+    "Usuario administrativo";
+
+  const initials = fullName
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("");
 
   return {
     ...user,
-
+    firstName,
+    lastName,
+    fullName,
+    name: fullName,
+    initials,
     role:
-      user.role ||
-      roles[0] ||
-      "INTERNAL_USER",
-
+      typeof user.role === "string"
+        ? user.role
+        : user.role?.name ||
+          roles[0] ||
+          "INTERNAL_USER",
     roles,
-
+    department:
+      user.department ||
+      departments[0] ||
+      "ADMINISTRATION",
     departments,
-
+    permissions: Array.isArray(user.permissions)
+      ? user.permissions
+      : [],
     accountType:
       user.accountType ||
       user.userType ||
       user.type ||
-      "INTERNAL"
+      "INTERNAL",
+    status: String(
+      user.status || "ACTIVE"
+    ).toUpperCase()
   };
 }
 
