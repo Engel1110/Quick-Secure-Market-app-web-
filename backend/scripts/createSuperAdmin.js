@@ -2,8 +2,10 @@ const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 require("dotenv").config();
 
+const connectDB = require("../src/config/db");
 const User = require("../src/models/User");
 const Role = require("../src/models/Role");
+const Permission = require("../src/models/Permission");
 
 const normalizeEmail = (value) =>
   String(value || "")
@@ -178,13 +180,7 @@ const run = async () => {
       "🔌 Conectando con MongoDB..."
     );
 
-    await mongoose.connect(
-      process.env.MONGODB_URI
-    );
-
-    console.log(
-      "✅ MongoDB conectado."
-    );
+await connectDB();
 
     const result =
       await createOrUpdateSuperAdmin();

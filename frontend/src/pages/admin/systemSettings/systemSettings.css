@@ -1,0 +1,5216 @@
+/*
+|--------------------------------------------------------------------------
+| QSM — Configuración Global
+|--------------------------------------------------------------------------
+| Parte 1:
+| Variables, estructura principal, sidebar, topbar y hero.
+|--------------------------------------------------------------------------
+*/
+
+:root {
+  --qsm-settings-bg: #030712;
+  --qsm-settings-bg-soft: #07101f;
+  --qsm-settings-surface: rgba(
+    15,
+    23,
+    42,
+    0.82
+  );
+  --qsm-settings-surface-strong: rgba(
+    15,
+    23,
+    42,
+    0.96
+  );
+  --qsm-settings-surface-light: rgba(
+    30,
+    41,
+    59,
+    0.72
+  );
+
+  --qsm-settings-border: rgba(
+    148,
+    163,
+    184,
+    0.14
+  );
+  --qsm-settings-border-hover: rgba(
+    139,
+    92,
+    246,
+    0.42
+  );
+  --qsm-settings-border-active: rgba(
+    139,
+    92,
+    246,
+    0.7
+  );
+
+  --qsm-settings-text: #f8fafc;
+  --qsm-settings-text-soft: #cbd5e1;
+  --qsm-settings-muted: #94a3b8;
+  --qsm-settings-muted-dark: #64748b;
+
+  --qsm-settings-purple: #8b5cf6;
+  --qsm-settings-purple-light: #c4b5fd;
+  --qsm-settings-cyan: #22d3ee;
+  --qsm-settings-blue: #38bdf8;
+  --qsm-settings-green: #22c55e;
+  --qsm-settings-orange: #f59e0b;
+  --qsm-settings-red: #ef4444;
+  --qsm-settings-pink: #ec4899;
+
+  --qsm-settings-shadow: 0 30px 70px
+    rgba(
+      0,
+      0,
+      0,
+      0.35
+    );
+
+  --qsm-settings-shadow-soft: 0 16px 38px
+    rgba(
+      2,
+      6,
+      23,
+      0.28
+    );
+
+  --qsm-settings-radius-sm: 12px;
+  --qsm-settings-radius-md: 18px;
+  --qsm-settings-radius-lg: 24px;
+  --qsm-settings-radius-xl: 30px;
+
+  --qsm-settings-transition: 180ms
+    ease;
+
+  --qsm-settings-sidebar-width: 280px;
+  --qsm-settings-topbar-height: 88px;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Reinicio y base general
+|--------------------------------------------------------------------------
+*/
+
+.qsm-system-settings-page,
+.qsm-system-settings-page * {
+  box-sizing: border-box;
+}
+
+.qsm-system-settings-page {
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  background:
+    radial-gradient(
+      circle at 90% 5%,
+      rgba(
+        124,
+        58,
+        237,
+        0.16
+      ),
+      transparent 30%
+    ),
+    radial-gradient(
+      circle at 8% 92%,
+      rgba(
+        14,
+        165,
+        233,
+        0.1
+      ),
+      transparent 34%
+    ),
+    linear-gradient(
+      180deg,
+      #020617 0%,
+      var(--qsm-settings-bg) 100%
+    );
+  color: var(
+    --qsm-settings-text
+  );
+  overflow-x: hidden;
+}
+
+.qsm-system-settings-page button,
+.qsm-system-settings-page input,
+.qsm-system-settings-page select,
+.qsm-system-settings-page textarea {
+  font: inherit;
+}
+
+.qsm-system-settings-page button {
+  -webkit-tap-highlight-color:
+    transparent;
+}
+
+.qsm-system-settings-page button:focus-visible,
+.qsm-system-settings-page input:focus-visible,
+.qsm-system-settings-page select:focus-visible,
+.qsm-system-settings-page textarea:focus-visible {
+  outline: 2px solid
+    rgba(
+      56,
+      189,
+      248,
+      0.85
+    );
+  outline-offset: 3px;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Sidebar
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-sidebar {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: var(
+    --qsm-settings-sidebar-width
+  );
+  min-height: 100vh;
+  z-index: 40;
+
+  display: flex;
+  flex-direction: column;
+  padding: 24px 18px;
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(
+        2,
+        6,
+        23,
+        0.98
+      ),
+      rgba(
+        7,
+        15,
+        30,
+        0.97
+      )
+    );
+
+  border-right: 1px solid
+    var(
+      --qsm-settings-border
+    );
+
+  box-shadow: 18px 0 50px
+    rgba(
+      0,
+      0,
+      0,
+      0.18
+    );
+
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(
+    24px
+  );
+}
+
+.qsm-settings-sidebar::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+
+  background:
+    radial-gradient(
+      circle at top left,
+      rgba(
+        124,
+        58,
+        237,
+        0.15
+      ),
+      transparent 32%
+    );
+}
+
+.qsm-settings-sidebar > * {
+  position: relative;
+  z-index: 1;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Marca del sidebar
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-sidebar__brand {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: white;
+  cursor: pointer;
+
+  display: flex;
+  align-items: center;
+  gap: 14px;
+
+  padding: 8px 10px 22px;
+  text-align: left;
+
+  transition:
+    transform
+      var(
+        --qsm-settings-transition
+      ),
+    opacity
+      var(
+        --qsm-settings-transition
+      );
+}
+
+.qsm-settings-sidebar__brand:hover {
+  transform: translateX(3px);
+}
+
+.qsm-settings-sidebar__brand > span {
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 16px;
+
+  background:
+    linear-gradient(
+      145deg,
+      #8b5cf6,
+      #6d28d9
+    );
+
+  box-shadow:
+    0 12px 28px
+      rgba(
+        124,
+        58,
+        237,
+        0.35
+      ),
+    inset 0 1px 0
+      rgba(
+        255,
+        255,
+        255,
+        0.24
+      );
+
+  font-size: 23px;
+  font-weight: 950;
+}
+
+.qsm-settings-sidebar__brand > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.qsm-settings-sidebar__brand strong {
+  font-size: 21px;
+  line-height: 1;
+  letter-spacing: 0.4px;
+}
+
+.qsm-settings-sidebar__brand small {
+  color: var(
+    --qsm-settings-muted
+  );
+  font-size: 12px;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Perfil administrativo
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-sidebar__profile {
+  margin-bottom: 24px;
+  padding: 16px;
+
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  border: 1px solid
+    var(
+      --qsm-settings-border
+    );
+
+  border-radius: 18px;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(
+        30,
+        41,
+        59,
+        0.62
+      ),
+      rgba(
+        15,
+        23,
+        42,
+        0.76
+      )
+    );
+
+  box-shadow:
+    inset 0 1px 0
+      rgba(
+        255,
+        255,
+        255,
+        0.04
+      );
+}
+
+.qsm-settings-sidebar__profile > span {
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 50%;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(
+        139,
+        92,
+        246,
+        0.95
+      ),
+      rgba(
+        59,
+        130,
+        246,
+        0.95
+      )
+    );
+
+  color: #ffffff;
+  font-weight: 900;
+  letter-spacing: 0.5px;
+
+  box-shadow: 0 10px 24px
+    rgba(
+      124,
+      58,
+      237,
+      0.24
+    );
+}
+
+.qsm-settings-sidebar__profile > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.qsm-settings-sidebar__profile strong {
+  overflow: hidden;
+  color: #f8fafc;
+  font-size: 14px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.qsm-settings-sidebar__profile small {
+  overflow: hidden;
+  color: var(
+    --qsm-settings-purple-light
+  );
+  font-size: 11px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Navegación principal
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-sidebar__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.qsm-settings-sidebar__nav button {
+  position: relative;
+  width: 100%;
+  min-height: 48px;
+
+  display: flex;
+  align-items: center;
+  gap: 13px;
+
+  border: 1px solid transparent;
+  border-radius: 14px;
+
+  padding: 11px 13px;
+
+  background: transparent;
+  color: var(
+    --qsm-settings-muted
+  );
+
+  cursor: pointer;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 720;
+
+  transition:
+    color
+      var(
+        --qsm-settings-transition
+      ),
+    background
+      var(
+        --qsm-settings-transition
+      ),
+    border-color
+      var(
+        --qsm-settings-transition
+      ),
+    transform
+      var(
+        --qsm-settings-transition
+      );
+}
+
+.qsm-settings-sidebar__nav button > span {
+  width: 30px;
+  height: 30px;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 10px;
+
+  background:
+    rgba(
+      148,
+      163,
+      184,
+      0.08
+    );
+
+  color: var(
+    --qsm-settings-text-soft
+  );
+  font-size: 16px;
+
+  transition:
+    background
+      var(
+        --qsm-settings-transition
+      ),
+    color
+      var(
+        --qsm-settings-transition
+      );
+}
+
+.qsm-settings-sidebar__nav button:hover {
+  color: #ffffff;
+  border-color:
+    rgba(
+      139,
+      92,
+      246,
+      0.2
+    );
+
+  background:
+    rgba(
+      139,
+      92,
+      246,
+      0.08
+    );
+
+  transform: translateX(3px);
+}
+
+.qsm-settings-sidebar__nav button:hover > span {
+  color: #ddd6fe;
+  background:
+    rgba(
+      139,
+      92,
+      246,
+      0.14
+    );
+}
+
+.qsm-settings-sidebar__nav button.is-active {
+  color: #ffffff;
+
+  border-color:
+    rgba(
+      139,
+      92,
+      246,
+      0.32
+    );
+
+  background:
+    linear-gradient(
+      90deg,
+      rgba(
+        124,
+        58,
+        237,
+        0.22
+      ),
+      rgba(
+        59,
+        130,
+        246,
+        0.06
+      )
+    );
+
+  box-shadow:
+    inset 3px 0 0
+      var(
+        --qsm-settings-purple
+      ),
+    0 10px 24px
+      rgba(
+        76,
+        29,
+        149,
+        0.12
+      );
+}
+
+.qsm-settings-sidebar__nav button.is-active > span {
+  color: #ffffff;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(
+        139,
+        92,
+        246,
+        0.95
+      ),
+      rgba(
+        109,
+        40,
+        217,
+        0.95
+      )
+    );
+
+  box-shadow:
+    0 8px 18px
+      rgba(
+        124,
+        58,
+        237,
+        0.28
+      );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Botón inferior del sidebar
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-sidebar__back {
+  margin-top: auto;
+  width: 100%;
+  min-height: 46px;
+
+  border: 1px solid
+    var(
+      --qsm-settings-border
+    );
+
+  border-radius: 14px;
+
+  background:
+    rgba(
+      15,
+      23,
+      42,
+      0.72
+    );
+
+  color: var(
+    --qsm-settings-text-soft
+  );
+
+  cursor: pointer;
+
+  font-size: 13px;
+  font-weight: 800;
+
+  transition:
+    color
+      var(
+        --qsm-settings-transition
+      ),
+    border-color
+      var(
+        --qsm-settings-transition
+      ),
+    background
+      var(
+        --qsm-settings-transition
+      ),
+    transform
+      var(
+        --qsm-settings-transition
+      );
+}
+
+.qsm-settings-sidebar__back:hover {
+  color: white;
+
+  border-color:
+    rgba(
+      139,
+      92,
+      246,
+      0.36
+    );
+
+  background:
+    rgba(
+      139,
+      92,
+      246,
+      0.1
+    );
+
+  transform: translateY(-2px);
+}
+
+/*
+|--------------------------------------------------------------------------
+| Contenedor principal
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-main {
+  width: calc(
+    100% -
+      var(
+        --qsm-settings-sidebar-width
+      )
+  );
+
+  min-width: 0;
+  min-height: 100vh;
+
+  margin-left:
+    var(
+      --qsm-settings-sidebar-width
+    );
+
+  display: flex;
+  flex-direction: column;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Topbar
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+
+  min-height:
+    var(
+      --qsm-settings-topbar-height
+    );
+
+  padding: 18px 30px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+
+  background:
+    rgba(
+      2,
+      6,
+      23,
+      0.8
+    );
+
+  border-bottom: 1px solid
+    var(
+      --qsm-settings-border
+    );
+
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(
+    24px
+  );
+}
+
+.qsm-settings-topbar > div:first-child {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.qsm-settings-topbar > div:first-child > span {
+  color: var(
+    --qsm-settings-blue
+  );
+
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 2.4px;
+}
+
+.qsm-settings-topbar > div:first-child > strong {
+  overflow: hidden;
+
+  color: var(
+    --qsm-settings-text
+  );
+
+  font-size: 18px;
+  font-weight: 850;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.qsm-settings-topbar__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.qsm-settings-topbar__actions .qsm-admin-button {
+  min-height: 42px;
+  padding: 10px 15px;
+  white-space: nowrap;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Importar archivo
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-import-button {
+  position: relative;
+  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.qsm-settings-import-button input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Contenido
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-content {
+  width: 100%;
+  max-width: 1700px;
+
+  margin: 0 auto;
+  padding: 32px;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Hero principal
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-hero {
+  position: relative;
+  overflow: hidden;
+
+  min-height: 230px;
+  margin-bottom: 24px;
+  padding: 36px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 34px;
+
+  border: 1px solid
+    rgba(
+      139,
+      92,
+      246,
+      0.22
+    );
+
+  border-radius:
+    var(
+      --qsm-settings-radius-xl
+    );
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(
+        30,
+        41,
+        59,
+        0.88
+      ),
+      rgba(
+        15,
+        23,
+        42,
+        0.72
+      )
+    );
+
+  box-shadow:
+    var(
+      --qsm-settings-shadow-soft
+    );
+
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(
+    18px
+  );
+}
+
+.qsm-settings-hero::before {
+  content: "";
+  position: absolute;
+  width: 420px;
+  height: 420px;
+  top: -250px;
+  right: -90px;
+
+  border-radius: 50%;
+
+  background:
+    radial-gradient(
+      circle,
+      rgba(
+        139,
+        92,
+        246,
+        0.28
+      ),
+      transparent 68%
+    );
+
+  pointer-events: none;
+}
+
+.qsm-settings-hero::after {
+  content: "";
+  position: absolute;
+  width: 320px;
+  height: 320px;
+  left: 10%;
+  bottom: -260px;
+
+  border-radius: 50%;
+
+  background:
+    radial-gradient(
+      circle,
+      rgba(
+        34,
+        211,
+        238,
+        0.16
+      ),
+      transparent 70%
+    );
+
+  pointer-events: none;
+}
+
+.qsm-settings-hero > * {
+  position: relative;
+  z-index: 1;
+}
+
+.qsm-settings-hero > div:first-child {
+  max-width: 760px;
+}
+
+.qsm-settings-hero > div:first-child > span {
+  display: inline-block;
+  margin-bottom: 12px;
+
+  color: var(
+    --qsm-settings-cyan
+  );
+
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: 3px;
+}
+
+.qsm-settings-hero h1 {
+  margin: 0 0 14px;
+
+  color: #ffffff;
+
+  font-size:
+    clamp(
+      30px,
+      4vw,
+      52px
+    );
+
+  line-height: 1.05;
+  letter-spacing: -1.8px;
+}
+
+.qsm-settings-hero p {
+  max-width: 680px;
+  margin: 0;
+
+  color: var(
+    --qsm-settings-text-soft
+  );
+
+  font-size: 16px;
+  line-height: 1.75;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Estados del hero
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-hero__status {
+  width: min(
+    100%,
+    330px
+  );
+
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.qsm-settings-status {
+  min-height: 48px;
+  padding: 11px 14px;
+
+  display: flex;
+  align-items: center;
+  gap: 11px;
+
+  border-radius: 15px;
+
+  border: 1px solid
+    var(
+      --qsm-settings-border
+    );
+
+  background:
+    rgba(
+      2,
+      6,
+      23,
+      0.42
+    );
+
+  color: var(
+    --qsm-settings-text-soft
+  );
+
+  font-size: 13px;
+  font-weight: 800;
+
+  box-shadow:
+    inset 0 1px 0
+      rgba(
+        255,
+        255,
+        255,
+        0.03
+      );
+}
+
+.qsm-settings-status i {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 10px;
+
+  border-radius: 50%;
+}
+
+.qsm-settings-status.is-active {
+  color: #bbf7d0;
+
+  border-color:
+    rgba(
+      34,
+      197,
+      94,
+      0.24
+    );
+
+  background:
+    rgba(
+      34,
+      197,
+      94,
+      0.07
+    );
+}
+
+.qsm-settings-status.is-active i {
+  background:
+    var(
+      --qsm-settings-green
+    );
+
+  box-shadow:
+    0 0 0 6px
+      rgba(
+        34,
+        197,
+        94,
+        0.1
+      ),
+    0 0 18px
+      rgba(
+        34,
+        197,
+        94,
+        0.65
+      );
+}
+
+.qsm-settings-status.is-inactive {
+  color: #fecaca;
+
+  border-color:
+    rgba(
+      239,
+      68,
+      68,
+      0.26
+    );
+
+  background:
+    rgba(
+      239,
+      68,
+      68,
+      0.07
+    );
+}
+
+.qsm-settings-status.is-inactive i {
+  background:
+    var(
+      --qsm-settings-red
+    );
+
+  box-shadow:
+    0 0 0 6px
+      rgba(
+        239,
+        68,
+        68,
+        0.1
+      ),
+    0 0 18px
+      rgba(
+        239,
+        68,
+        68,
+        0.55
+      );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Ajustes iniciales para pantallas medianas
+|--------------------------------------------------------------------------
+*/
+
+@media (
+  max-width: 1180px
+) {
+  :root {
+    --qsm-settings-sidebar-width:
+      246px;
+  }
+
+  .qsm-settings-content {
+    padding: 26px;
+  }
+
+  .qsm-settings-topbar {
+    align-items: flex-start;
+  }
+
+  .qsm-settings-topbar__actions {
+    max-width: 540px;
+  }
+
+  .qsm-settings-hero {
+    align-items: flex-start;
+  }
+
+  .qsm-settings-hero__status {
+    width: 290px;
+  }
+}
+
+@media (
+  max-width: 980px
+) {
+  .qsm-settings-hero {
+    flex-direction: column;
+  }
+
+  .qsm-settings-hero__status {
+    width: 100%;
+    display: grid;
+    grid-template-columns:
+      repeat(
+        3,
+        minmax(
+          0,
+          1fr
+        )
+      );
+  }
+
+  .qsm-settings-status {
+    align-items: flex-start;
+    line-height: 1.45;
+  }
+}
+/*
+|--------------------------------------------------------------------------
+| Alertas y cambios sin guardar
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-alert {
+  position: relative;
+  margin-bottom: 18px;
+  padding: 16px 18px;
+
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+
+  border: 1px solid
+    var(
+      --qsm-settings-border
+    );
+
+  border-radius:
+    var(
+      --qsm-settings-radius-md
+    );
+
+  background:
+    rgba(
+      15,
+      23,
+      42,
+      0.82
+    );
+
+  box-shadow:
+    var(
+      --qsm-settings-shadow-soft
+    );
+}
+
+.qsm-settings-alert > span {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 12px;
+  font-size: 17px;
+  font-weight: 900;
+}
+
+.qsm-settings-alert > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.qsm-settings-alert strong {
+  display: block;
+  margin-bottom: 4px;
+
+  color: #ffffff;
+  font-size: 14px;
+}
+
+.qsm-settings-alert p {
+  margin: 0;
+
+  color:
+    var(
+      --qsm-settings-text-soft
+    );
+
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.qsm-settings-alert > button {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+
+  border: 0;
+  border-radius: 10px;
+
+  background:
+    rgba(
+      148,
+      163,
+      184,
+      0.08
+    );
+
+  color:
+    var(
+      --qsm-settings-muted
+    );
+
+  cursor: pointer;
+  font-size: 20px;
+
+  transition:
+    background
+      var(
+        --qsm-settings-transition
+      ),
+    color
+      var(
+        --qsm-settings-transition
+      );
+}
+
+.qsm-settings-alert > button:hover {
+  color: #ffffff;
+  background:
+    rgba(
+      148,
+      163,
+      184,
+      0.16
+    );
+}
+
+.qsm-settings-alert--error {
+  border-color:
+    rgba(
+      239,
+      68,
+      68,
+      0.28
+    );
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(
+        127,
+        29,
+        29,
+        0.22
+      ),
+      rgba(
+        15,
+        23,
+        42,
+        0.84
+      )
+    );
+}
+
+.qsm-settings-alert--error > span {
+  color: #fecaca;
+  background:
+    rgba(
+      239,
+      68,
+      68,
+      0.14
+    );
+}
+
+.qsm-settings-alert--success {
+  border-color:
+    rgba(
+      34,
+      197,
+      94,
+      0.28
+    );
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(
+        20,
+        83,
+        45,
+        0.22
+      ),
+      rgba(
+        15,
+        23,
+        42,
+        0.84
+      )
+    );
+}
+
+.qsm-settings-alert--success > span {
+  color: #bbf7d0;
+  background:
+    rgba(
+      34,
+      197,
+      94,
+      0.14
+    );
+}
+
+.qsm-settings-unsaved {
+  margin-bottom: 18px;
+  padding: 12px 15px;
+
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  border: 1px solid
+    rgba(
+      245,
+      158,
+      11,
+      0.24
+    );
+
+  border-radius: 14px;
+
+  background:
+    rgba(
+      245,
+      158,
+      11,
+      0.08
+    );
+
+  color: #fde68a;
+}
+
+.qsm-settings-unsaved > span {
+  font-size: 10px;
+  color:
+    var(
+      --qsm-settings-orange
+    );
+
+  text-shadow:
+    0 0 16px
+      rgba(
+        245,
+        158,
+        11,
+        0.85
+      );
+}
+
+.qsm-settings-unsaved p {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Layout de navegación interna y panel
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-layout {
+  display: grid;
+
+  grid-template-columns:
+    minmax(
+      220px,
+      260px
+    )
+    minmax(
+      0,
+      1fr
+    );
+
+  gap: 24px;
+  align-items: start;
+}
+
+.qsm-settings-section-nav {
+  position: sticky;
+  top: calc(
+    var(
+      --qsm-settings-topbar-height
+    ) + 24px
+  );
+
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  padding: 18px;
+
+  border: 1px solid
+    var(
+      --qsm-settings-border
+    );
+
+  border-radius:
+    var(
+      --qsm-settings-radius-lg
+    );
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(
+        15,
+        23,
+        42,
+        0.9
+      ),
+      rgba(
+        8,
+        15,
+        29,
+        0.86
+      )
+    );
+
+  box-shadow:
+    var(
+      --qsm-settings-shadow-soft
+    );
+
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter:
+    blur(18px);
+}
+
+.qsm-settings-section-nav > span {
+  margin: 2px 8px 8px;
+
+  color:
+    var(
+      --qsm-settings-muted-dark
+    );
+
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 2.4px;
+}
+
+.qsm-settings-section-nav > button {
+  width: 100%;
+  min-height: 46px;
+
+  display: flex;
+  align-items: center;
+  gap: 11px;
+
+  border: 1px solid transparent;
+  border-radius: 13px;
+
+  padding: 10px 12px;
+
+  background: transparent;
+
+  color:
+    var(
+      --qsm-settings-muted
+    );
+
+  cursor: pointer;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 800;
+
+  transition:
+    transform
+      var(
+        --qsm-settings-transition
+      ),
+    color
+      var(
+        --qsm-settings-transition
+      ),
+    background
+      var(
+        --qsm-settings-transition
+      ),
+    border-color
+      var(
+        --qsm-settings-transition
+      );
+}
+
+.qsm-settings-section-nav > button > span {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 9px;
+
+  background:
+    rgba(
+      148,
+      163,
+      184,
+      0.08
+    );
+
+  color:
+    var(
+      --qsm-settings-text-soft
+    );
+}
+
+.qsm-settings-section-nav > button:hover {
+  color: #ffffff;
+
+  border-color:
+    rgba(
+      139,
+      92,
+      246,
+      0.2
+    );
+
+  background:
+    rgba(
+      139,
+      92,
+      246,
+      0.08
+    );
+
+  transform:
+    translateX(2px);
+}
+
+.qsm-settings-section-nav > button.is-active {
+  color: #ffffff;
+
+  border-color:
+    rgba(
+      139,
+      92,
+      246,
+      0.34
+    );
+
+  background:
+    linear-gradient(
+      90deg,
+      rgba(
+        124,
+        58,
+        237,
+        0.22
+      ),
+      rgba(
+        59,
+        130,
+        246,
+        0.06
+      )
+    );
+
+  box-shadow:
+    inset 3px 0 0
+      var(
+        --qsm-settings-purple
+      );
+}
+
+.qsm-settings-section-nav > button.is-active > span {
+  color: #ffffff;
+
+  background:
+    linear-gradient(
+      145deg,
+      #8b5cf6,
+      #6d28d9
+    );
+
+  box-shadow:
+    0 8px 18px
+      rgba(
+        124,
+        58,
+        237,
+        0.24
+      );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Zona crítica
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-section-nav__danger {
+  margin-top: 16px;
+  padding: 15px;
+
+  border: 1px solid
+    rgba(
+      239,
+      68,
+      68,
+      0.22
+    );
+
+  border-radius: 15px;
+
+  background:
+    rgba(
+      127,
+      29,
+      29,
+      0.1
+    );
+}
+
+.qsm-settings-section-nav__danger strong {
+  display: block;
+  margin-bottom: 6px;
+
+  color: #fecaca;
+  font-size: 13px;
+}
+
+.qsm-settings-section-nav__danger p {
+  margin: 0 0 12px;
+
+  color: #fca5a5;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.qsm-settings-section-nav__danger button {
+  width: 100%;
+  min-height: 38px;
+
+  border: 1px solid
+    rgba(
+      239,
+      68,
+      68,
+      0.3
+    );
+
+  border-radius: 11px;
+
+  background:
+    rgba(
+      239,
+      68,
+      68,
+      0.12
+    );
+
+  color: #fecaca;
+
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 850;
+
+  transition:
+    background
+      var(
+        --qsm-settings-transition
+      ),
+    border-color
+      var(
+        --qsm-settings-transition
+      ),
+    transform
+      var(
+        --qsm-settings-transition
+      );
+}
+
+.qsm-settings-section-nav__danger button:hover {
+  border-color:
+    rgba(
+      239,
+      68,
+      68,
+      0.52
+    );
+
+  background:
+    rgba(
+      239,
+      68,
+      68,
+      0.2
+    );
+
+  transform:
+    translateY(-1px);
+}
+
+/*
+|--------------------------------------------------------------------------
+| Panel principal
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-panel {
+  min-width: 0;
+  min-height: 680px;
+
+  border: 1px solid
+    var(
+      --qsm-settings-border
+    );
+
+  border-radius:
+    var(
+      --qsm-settings-radius-xl
+    );
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(
+        15,
+        23,
+        42,
+        0.9
+      ),
+      rgba(
+        8,
+        15,
+        29,
+        0.88
+      )
+    );
+
+  box-shadow:
+    var(
+      --qsm-settings-shadow
+    );
+
+  overflow: hidden;
+}
+
+.qsm-settings-section {
+  padding: 30px;
+}
+
+.qsm-settings-section > header {
+  margin-bottom: 26px;
+  padding-bottom: 22px;
+
+  border-bottom: 1px solid
+    var(
+      --qsm-settings-border
+    );
+}
+
+.qsm-settings-section > header > span {
+  display: inline-block;
+  margin-bottom: 10px;
+
+  color:
+    var(
+      --qsm-settings-cyan
+    );
+
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 2.4px;
+}
+
+.qsm-settings-section > header h2 {
+  margin: 0 0 10px;
+
+  color: #ffffff;
+
+  font-size:
+    clamp(
+      24px,
+      3vw,
+      34px
+    );
+
+  line-height: 1.1;
+  letter-spacing: -0.8px;
+}
+
+.qsm-settings-section > header p {
+  max-width: 760px;
+  margin: 0;
+
+  color:
+    var(
+      --qsm-settings-muted
+    );
+
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Grid de tarjetas
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-grid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(
+      2,
+      minmax(
+        0,
+        1fr
+      )
+    );
+
+  gap: 16px;
+}
+
+.qsm-settings-toggle-card {
+  min-height: 134px;
+  padding: 18px;
+
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+
+  border: 1px solid
+    var(
+      --qsm-settings-border
+    );
+
+  border-radius:
+    var(
+      --qsm-settings-radius-md
+    );
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(
+        30,
+        41,
+        59,
+        0.48
+      ),
+      rgba(
+        15,
+        23,
+        42,
+        0.56
+      )
+    );
+
+  box-shadow:
+    inset 0 1px 0
+      rgba(
+        255,
+        255,
+        255,
+        0.03
+      );
+
+  transition:
+    transform
+      var(
+        --qsm-settings-transition
+      ),
+    border-color
+      var(
+        --qsm-settings-transition
+      ),
+    background
+      var(
+        --qsm-settings-transition
+      ),
+    box-shadow
+      var(
+        --qsm-settings-transition
+      );
+}
+
+.qsm-settings-toggle-card:hover {
+  transform:
+    translateY(-2px);
+
+  border-color:
+    rgba(
+      139,
+      92,
+      246,
+      0.26
+    );
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(
+        30,
+        41,
+        59,
+        0.62
+      ),
+      rgba(
+        15,
+        23,
+        42,
+        0.66
+      )
+    );
+
+  box-shadow:
+    0 14px 30px
+      rgba(
+        2,
+        6,
+        23,
+        0.18
+      ),
+    inset 0 1px 0
+      rgba(
+        255,
+        255,
+        255,
+        0.04
+      );
+}
+
+.qsm-settings-toggle-card > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.qsm-settings-toggle-card strong {
+  display: block;
+  margin-bottom: 7px;
+
+  color: #f8fafc;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.qsm-settings-toggle-card p {
+  margin: 0;
+
+  color:
+    var(
+      --qsm-settings-muted
+    );
+
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.qsm-settings-toggle-card--danger {
+  border-color:
+    rgba(
+      239,
+      68,
+      68,
+      0.2
+    );
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(
+        127,
+        29,
+        29,
+        0.16
+      ),
+      rgba(
+        15,
+        23,
+        42,
+        0.58
+      )
+    );
+}
+
+.qsm-settings-toggle-card--danger:hover {
+  border-color:
+    rgba(
+      239,
+      68,
+      68,
+      0.34
+    );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Switch
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-switch {
+  position: relative;
+
+  width: 52px;
+  height: 29px;
+  flex: 0 0 52px;
+
+  border: 1px solid
+    rgba(
+      148,
+      163,
+      184,
+      0.18
+    );
+
+  border-radius: 999px;
+
+  background:
+    rgba(
+      51,
+      65,
+      85,
+      0.72
+    );
+
+  cursor: pointer;
+
+  box-shadow:
+    inset 0 2px 8px
+      rgba(
+        0,
+        0,
+        0,
+        0.24
+      );
+
+  transition:
+    background
+      var(
+        --qsm-settings-transition
+      ),
+    border-color
+      var(
+        --qsm-settings-transition
+      ),
+    box-shadow
+      var(
+        --qsm-settings-transition
+      );
+}
+
+.qsm-settings-switch > span {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+
+  width: 21px;
+  height: 21px;
+
+  border-radius: 50%;
+
+  background:
+    linear-gradient(
+      145deg,
+      #ffffff,
+      #dbeafe
+    );
+
+  box-shadow:
+    0 4px 12px
+      rgba(
+        0,
+        0,
+        0,
+        0.28
+      );
+
+  transition:
+    transform
+      var(
+        --qsm-settings-transition
+      );
+}
+
+.qsm-settings-switch:hover {
+  border-color:
+    rgba(
+      148,
+      163,
+      184,
+      0.32
+    );
+}
+
+.qsm-settings-switch.is-active {
+  border-color:
+    rgba(
+      139,
+      92,
+      246,
+      0.56
+    );
+
+  background:
+    linear-gradient(
+      90deg,
+      #7c3aed,
+      #8b5cf6
+    );
+
+  box-shadow:
+    0 0 0 4px
+      rgba(
+        139,
+        92,
+        246,
+        0.08
+      ),
+    inset 0 2px 8px
+      rgba(
+        76,
+        29,
+        149,
+        0.28
+      );
+}
+
+.qsm-settings-switch.is-active > span {
+  transform:
+    translateX(23px);
+}
+
+/*
+|--------------------------------------------------------------------------
+| Subsecciones
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-subsection {
+  margin-top: 24px;
+  padding: 22px;
+
+  border: 1px solid
+    var(
+      --qsm-settings-border
+    );
+
+  border-radius:
+    var(
+      --qsm-settings-radius-lg
+    );
+
+  background:
+    rgba(
+      2,
+      6,
+      23,
+      0.24
+    );
+}
+
+.qsm-settings-subsection > div:first-child {
+  margin-bottom: 18px;
+}
+
+.qsm-settings-subsection h3 {
+  margin: 0 0 6px;
+
+  color: #f8fafc;
+  font-size: 16px;
+}
+
+.qsm-settings-subsection p {
+  margin: 0;
+
+  color:
+    var(
+      --qsm-settings-muted
+    );
+
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Campos
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-fields {
+  display: grid;
+
+  grid-template-columns:
+    repeat(
+      2,
+      minmax(
+        0,
+        1fr
+      )
+    );
+
+  gap: 16px;
+}
+
+.qsm-settings-field {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.qsm-settings-field label {
+  color:
+    var(
+      --qsm-settings-text-soft
+    );
+
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.qsm-settings-field input,
+.qsm-settings-field select,
+.qsm-settings-textarea {
+  width: 100%;
+
+  border: 1px solid
+    rgba(
+      148,
+      163,
+      184,
+      0.16
+    );
+
+  border-radius: 13px;
+
+  background:
+    rgba(
+      15,
+      23,
+      42,
+      0.86
+    );
+
+  color: #f8fafc;
+
+  transition:
+    border-color
+      var(
+        --qsm-settings-transition
+      ),
+    background
+      var(
+        --qsm-settings-transition
+      ),
+    box-shadow
+      var(
+        --qsm-settings-transition
+      );
+}
+
+.qsm-settings-field input,
+.qsm-settings-field select {
+  min-height: 46px;
+  padding: 11px 13px;
+}
+
+.qsm-settings-textarea {
+  min-height: 130px;
+  padding: 13px;
+  resize: vertical;
+  line-height: 1.6;
+}
+
+.qsm-settings-field input::placeholder,
+.qsm-settings-textarea::placeholder {
+  color:
+    var(
+      --qsm-settings-muted-dark
+    );
+}
+
+.qsm-settings-field input:hover,
+.qsm-settings-field select:hover,
+.qsm-settings-textarea:hover {
+  border-color:
+    rgba(
+      148,
+      163,
+      184,
+      0.28
+    );
+}
+
+.qsm-settings-field input:focus,
+.qsm-settings-field select:focus,
+.qsm-settings-textarea:focus {
+  border-color:
+    rgba(
+      139,
+      92,
+      246,
+      0.68
+    );
+
+  background:
+    rgba(
+      15,
+      23,
+      42,
+      0.96
+    );
+
+  box-shadow:
+    0 0 0 4px
+      rgba(
+        139,
+        92,
+        246,
+        0.1
+      );
+
+  outline: none;
+}
+
+.qsm-settings-field select {
+  cursor: pointer;
+}
+
+.qsm-settings-field select option {
+  background: #0f172a;
+  color: #f8fafc;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Input con sufijo
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-input-group {
+  position: relative;
+}
+
+.qsm-settings-input-group input {
+  padding-right: 84px;
+}
+
+.qsm-settings-input-group > span {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+
+  transform:
+    translateY(-50%);
+
+  max-width: 68px;
+
+  overflow: hidden;
+
+  color:
+    var(
+      --qsm-settings-muted
+    );
+
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Botones generales del módulo
+|--------------------------------------------------------------------------
+*/
+
+.qsm-system-settings-page
+  .qsm-admin-button {
+  min-height: 42px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+
+  border-radius: 13px;
+
+  padding: 10px 16px;
+
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 850;
+
+  transition:
+    transform
+      var(
+        --qsm-settings-transition
+      ),
+    opacity
+      var(
+        --qsm-settings-transition
+      ),
+    border-color
+      var(
+        --qsm-settings-transition
+      ),
+    background
+      var(
+        --qsm-settings-transition
+      ),
+    box-shadow
+      var(
+        --qsm-settings-transition
+      );
+}
+
+.qsm-system-settings-page
+  .qsm-admin-button:hover:not(
+    :disabled
+  ) {
+  transform:
+    translateY(-1px);
+}
+
+.qsm-system-settings-page
+  .qsm-admin-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+  transform: none;
+}
+
+.qsm-system-settings-page
+  .qsm-admin-button--primary {
+  border: 1px solid
+    rgba(
+      139,
+      92,
+      246,
+      0.72
+    );
+
+  background:
+    linear-gradient(
+      135deg,
+      #8b5cf6,
+      #6d28d9
+    );
+
+  color: #ffffff;
+
+  box-shadow:
+    0 12px 26px
+      rgba(
+        124,
+        58,
+        237,
+        0.24
+      );
+}
+
+.qsm-system-settings-page
+  .qsm-admin-button--primary:hover:not(
+    :disabled
+  ) {
+  box-shadow:
+    0 16px 34px
+      rgba(
+        124,
+        58,
+        237,
+        0.34
+      );
+}
+
+.qsm-system-settings-page
+  .qsm-admin-button--secondary {
+  border: 1px solid
+    var(
+      --qsm-settings-border
+    );
+
+  background:
+    rgba(
+      15,
+      23,
+      42,
+      0.74
+    );
+
+  color:
+    var(
+      --qsm-settings-text-soft
+    );
+}
+
+.qsm-system-settings-page
+  .qsm-admin-button--secondary:hover:not(
+    :disabled
+  ) {
+  color: #ffffff;
+
+  border-color:
+    rgba(
+      139,
+      92,
+      246,
+      0.36
+    );
+
+  background:
+    rgba(
+      139,
+      92,
+      246,
+      0.1
+    );
+}
+
+.qsm-settings-danger-button {
+  border: 1px solid
+    rgba(
+      239,
+      68,
+      68,
+      0.44
+    );
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(
+        220,
+        38,
+        38,
+        0.94
+      ),
+      rgba(
+        153,
+        27,
+        27,
+        0.94
+      )
+    );
+
+  color: #ffffff;
+
+  box-shadow:
+    0 12px 24px
+      rgba(
+        185,
+        28,
+        28,
+        0.24
+      );
+}
+
+.qsm-settings-danger-button:hover:not(
+  :disabled
+) {
+  box-shadow:
+    0 16px 34px
+      rgba(
+        185,
+        28,
+        28,
+        0.34
+      );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Ajustes para pantallas medianas
+|--------------------------------------------------------------------------
+*/
+
+@media (
+  max-width: 1180px
+) {
+  .qsm-settings-layout {
+    grid-template-columns:
+      220px
+      minmax(
+        0,
+        1fr
+      );
+  }
+
+  .qsm-settings-section {
+    padding: 24px;
+  }
+
+  .qsm-settings-grid {
+    grid-template-columns:
+      1fr;
+  }
+}
+
+@media (
+  max-width: 980px
+) {
+  .qsm-settings-layout {
+    grid-template-columns:
+      1fr;
+  }
+
+  .qsm-settings-section-nav {
+    position: static;
+
+    display: grid;
+
+    grid-template-columns:
+      repeat(
+        4,
+        minmax(
+          0,
+          1fr
+        )
+      );
+  }
+
+  .qsm-settings-section-nav > span {
+    grid-column:
+      1 / -1;
+  }
+
+  .qsm-settings-section-nav > button {
+    justify-content: center;
+    text-align: center;
+  }
+
+  .qsm-settings-section-nav__danger {
+    grid-column:
+      1 / -1;
+  }
+
+  .qsm-settings-fields {
+    grid-template-columns:
+      1fr;
+  }
+}
+/*
+|--------------------------------------------------------------------------
+| Modales base
+|--------------------------------------------------------------------------
+*/
+
+.qsm-system-settings-page
+  .qsm-admin-modal-overlay,
+.qsm-admin-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+
+  display: grid;
+  place-items: center;
+
+  padding: 24px;
+
+  background:
+    rgba(
+      2,
+      6,
+      23,
+      0.78
+    );
+
+  backdrop-filter:
+    blur(14px);
+
+  -webkit-backdrop-filter:
+    blur(14px);
+}
+
+.qsm-system-settings-page
+  .qsm-admin-modal,
+.qsm-admin-modal {
+  width: min(
+    100%,
+    720px
+  );
+
+  max-height:
+    calc(
+      100vh - 48px
+    );
+
+  display: flex;
+  flex-direction: column;
+
+  border: 1px solid
+    rgba(
+      148,
+      163,
+      184,
+      0.16
+    );
+
+  border-radius: 24px;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(
+        15,
+        23,
+        42,
+        0.98
+      ),
+      rgba(
+        8,
+        15,
+        29,
+        0.98
+      )
+    );
+
+  box-shadow:
+    0 40px 90px
+      rgba(
+        0,
+        0,
+        0,
+        0.48
+      );
+
+  overflow: hidden;
+}
+
+.qsm-system-settings-page
+  .qsm-admin-modal--small,
+.qsm-admin-modal--small {
+  width: min(
+    100%,
+    560px
+  );
+}
+
+.qsm-system-settings-page
+  .qsm-admin-modal__header,
+.qsm-admin-modal__header {
+  padding: 22px 24px;
+
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+
+  border-bottom: 1px solid
+    rgba(
+      148,
+      163,
+      184,
+      0.12
+    );
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(
+        30,
+        41,
+        59,
+        0.36
+      ),
+      rgba(
+        15,
+        23,
+        42,
+        0.12
+      )
+    );
+}
+
+.qsm-system-settings-page
+  .qsm-admin-modal__header
+  > div,
+.qsm-admin-modal__header
+  > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.qsm-system-settings-page
+  .qsm-admin-modal__header
+  h3,
+.qsm-admin-modal__header
+  h3 {
+  margin: 0 0 8px;
+
+  color: #ffffff;
+
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.qsm-system-settings-page
+  .qsm-admin-modal__header
+  p,
+.qsm-admin-modal__header
+  p {
+  margin: 0;
+
+  color:
+    var(
+      --qsm-settings-muted
+    );
+
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.qsm-system-settings-page
+  .qsm-admin-modal__close,
+.qsm-admin-modal__close {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+
+  display: grid;
+  place-items: center;
+
+  border: 1px solid
+    rgba(
+      148,
+      163,
+      184,
+      0.12
+    );
+
+  border-radius: 12px;
+
+  background:
+    rgba(
+      15,
+      23,
+      42,
+      0.74
+    );
+
+  color:
+    var(
+      --qsm-settings-muted
+    );
+
+  cursor: pointer;
+
+  font-size: 22px;
+  line-height: 1;
+
+  transition:
+    color
+      var(
+        --qsm-settings-transition
+      ),
+    border-color
+      var(
+        --qsm-settings-transition
+      ),
+    background
+      var(
+        --qsm-settings-transition
+      );
+}
+
+.qsm-system-settings-page
+  .qsm-admin-modal__close:hover:not(
+    :disabled
+  ),
+.qsm-admin-modal__close:hover:not(
+  :disabled
+) {
+  color: #ffffff;
+
+  border-color:
+    rgba(
+      139,
+      92,
+      246,
+      0.34
+    );
+
+  background:
+    rgba(
+      139,
+      92,
+      246,
+      0.12
+    );
+}
+
+.qsm-system-settings-page
+  .qsm-admin-modal__close:disabled,
+.qsm-admin-modal__close:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.qsm-system-settings-page
+  .qsm-admin-modal__body,
+.qsm-admin-modal__body {
+  padding: 24px;
+
+  overflow-y: auto;
+}
+
+.qsm-system-settings-page
+  .qsm-admin-modal__footer,
+.qsm-admin-modal__footer {
+  padding: 18px 24px;
+
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+
+  border-top: 1px solid
+    rgba(
+      148,
+      163,
+      184,
+      0.12
+    );
+
+  background:
+    rgba(
+      2,
+      6,
+      23,
+      0.28
+    );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Eyebrow de modales
+|--------------------------------------------------------------------------
+*/
+
+.qsm-internal-modal-eyebrow {
+  display: inline-block;
+  margin-bottom: 9px;
+
+  color:
+    var(
+      --qsm-settings-cyan
+    );
+
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 2.4px;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Advertencia de restauración
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-reset-warning {
+  padding: 18px;
+
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+
+  border: 1px solid
+    rgba(
+      239,
+      68,
+      68,
+      0.26
+    );
+
+  border-radius: 16px;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(
+        127,
+        29,
+        29,
+        0.2
+      ),
+      rgba(
+        15,
+        23,
+        42,
+        0.72
+      )
+    );
+}
+
+.qsm-settings-reset-warning > span {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 12px;
+
+  background:
+    rgba(
+      239,
+      68,
+      68,
+      0.14
+    );
+
+  color: #fecaca;
+  font-size: 18px;
+}
+
+.qsm-settings-reset-warning strong {
+  display: block;
+  margin-bottom: 6px;
+
+  color: #fecaca;
+  font-size: 14px;
+}
+
+.qsm-settings-reset-warning p {
+  margin: 0;
+
+  color: #fca5a5;
+
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Loading global
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-loading {
+  min-height: 100vh;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  padding: 40px;
+
+  text-align: center;
+}
+
+.qsm-settings-loading > span {
+  width: 72px;
+  height: 72px;
+
+  display: grid;
+  place-items: center;
+
+  margin-bottom: 20px;
+
+  border-radius: 24px;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(
+        139,
+        92,
+        246,
+        0.2
+      ),
+      rgba(
+        59,
+        130,
+        246,
+        0.12
+      )
+    );
+
+  border: 1px solid
+    rgba(
+      139,
+      92,
+      246,
+      0.28
+    );
+
+  color:
+    var(
+      --qsm-settings-purple-light
+    );
+
+  font-size: 34px;
+
+  animation:
+    qsmSettingsSpin
+    1.2s
+    linear
+    infinite;
+}
+
+.qsm-settings-loading h2 {
+  margin: 0 0 8px;
+
+  color: #ffffff;
+
+  font-size: 24px;
+}
+
+.qsm-settings-loading p {
+  margin: 0;
+
+  color:
+    var(
+      --qsm-settings-muted
+    );
+
+  font-size: 14px;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Skeleton sidebar
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-skeleton {
+  gap: 18px;
+}
+
+.qsm-settings-skeleton > div {
+  border-radius: 16px;
+
+  background:
+    linear-gradient(
+      90deg,
+      rgba(
+        30,
+        41,
+        59,
+        0.38
+      ),
+      rgba(
+        51,
+        65,
+        85,
+        0.58
+      ),
+      rgba(
+        30,
+        41,
+        59,
+        0.38
+      )
+    );
+
+  background-size:
+    220% 100%;
+
+  animation:
+    qsmSettingsSkeleton
+    1.6s
+    ease
+    infinite;
+}
+
+.qsm-settings-skeleton
+  > div:nth-child(1) {
+  height: 58px;
+}
+
+.qsm-settings-skeleton
+  > div:nth-child(2) {
+  height: 78px;
+}
+
+.qsm-settings-skeleton
+  > div:nth-child(3) {
+  height: 220px;
+}
+
+.qsm-settings-skeleton
+  > div:nth-child(4) {
+  height: 46px;
+  margin-top: auto;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Inputs inválidos y estados deshabilitados
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-field input:disabled,
+.qsm-settings-field select:disabled,
+.qsm-settings-textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.qsm-settings-field input[aria-invalid="true"],
+.qsm-settings-field select[aria-invalid="true"],
+.qsm-settings-textarea[aria-invalid="true"] {
+  border-color:
+    rgba(
+      239,
+      68,
+      68,
+      0.64
+    );
+
+  box-shadow:
+    0 0 0 4px
+      rgba(
+        239,
+        68,
+        68,
+        0.08
+      );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Soporte para textarea en modal
+|--------------------------------------------------------------------------
+*/
+
+.qsm-admin-modal textarea.qsm-admin-input,
+.qsm-admin-modal textarea {
+  width: 100%;
+
+  min-height: 110px;
+
+  padding: 12px 13px;
+
+  border: 1px solid
+    rgba(
+      148,
+      163,
+      184,
+      0.16
+    );
+
+  border-radius: 13px;
+
+  background:
+    rgba(
+      15,
+      23,
+      42,
+      0.88
+    );
+
+  color: #f8fafc;
+
+  resize: vertical;
+
+  line-height: 1.6;
+}
+
+.qsm-admin-modal textarea:focus {
+  outline: none;
+
+  border-color:
+    rgba(
+      139,
+      92,
+      246,
+      0.68
+    );
+
+  box-shadow:
+    0 0 0 4px
+      rgba(
+        139,
+        92,
+        246,
+        0.1
+      );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Scrollbar del panel y modales
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-panel,
+.qsm-admin-modal__body,
+.qsm-settings-content,
+.qsm-settings-sidebar {
+  scrollbar-width: thin;
+  scrollbar-color:
+    rgba(
+      139,
+      92,
+      246,
+      0.42
+    )
+    rgba(
+      15,
+      23,
+      42,
+      0.3
+    );
+}
+
+.qsm-settings-panel::-webkit-scrollbar,
+.qsm-admin-modal__body::-webkit-scrollbar,
+.qsm-settings-content::-webkit-scrollbar,
+.qsm-settings-sidebar::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.qsm-settings-panel::-webkit-scrollbar-track,
+.qsm-admin-modal__body::-webkit-scrollbar-track,
+.qsm-settings-content::-webkit-scrollbar-track,
+.qsm-settings-sidebar::-webkit-scrollbar-track {
+  background:
+    rgba(
+      15,
+      23,
+      42,
+      0.24
+    );
+}
+
+.qsm-settings-panel::-webkit-scrollbar-thumb,
+.qsm-admin-modal__body::-webkit-scrollbar-thumb,
+.qsm-settings-content::-webkit-scrollbar-thumb,
+.qsm-settings-sidebar::-webkit-scrollbar-thumb {
+  border: 2px solid
+    rgba(
+      15,
+      23,
+      42,
+      0.3
+    );
+
+  border-radius: 999px;
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(
+        139,
+        92,
+        246,
+        0.58
+      ),
+      rgba(
+        59,
+        130,
+        246,
+        0.46
+      )
+    );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Animaciones
+|--------------------------------------------------------------------------
+*/
+
+@keyframes qsmSettingsSpin {
+  0% {
+    transform:
+      rotate(0deg);
+  }
+
+  100% {
+    transform:
+      rotate(360deg);
+  }
+}
+
+@keyframes qsmSettingsSkeleton {
+  0% {
+    background-position:
+      200% 0;
+  }
+
+  100% {
+    background-position:
+      -20% 0;
+  }
+}
+
+@keyframes qsmSettingsFadeIn {
+  from {
+    opacity: 0;
+    transform:
+      translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform:
+      translateY(0);
+  }
+}
+
+@keyframes qsmSettingsPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.62;
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Entrada suave de secciones
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-section {
+  animation:
+    qsmSettingsFadeIn
+    220ms
+    ease;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Ajustes de modal para tablets
+|--------------------------------------------------------------------------
+*/
+
+@media (
+  max-width: 760px
+) {
+  .qsm-admin-modal-overlay {
+    padding: 16px;
+  }
+
+  .qsm-admin-modal {
+    max-height:
+      calc(
+        100vh - 32px
+      );
+
+    border-radius: 20px;
+  }
+
+  .qsm-admin-modal__header,
+  .qsm-admin-modal__body,
+  .qsm-admin-modal__footer {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .qsm-admin-modal__footer {
+    flex-wrap: wrap;
+  }
+
+  .qsm-admin-modal__footer
+    .qsm-admin-button {
+    flex:
+      1 1 180px;
+  }
+}
+/*
+|--------------------------------------------------------------------------
+| Responsive principal — laptops y tablets
+|--------------------------------------------------------------------------
+*/
+
+@media (
+  max-width: 900px
+) {
+  :root {
+    --qsm-settings-sidebar-width:
+      220px;
+  }
+
+  .qsm-settings-topbar {
+    padding:
+      16px 20px;
+
+    flex-direction:
+      column;
+
+    align-items:
+      stretch;
+  }
+
+  .qsm-settings-topbar__actions {
+    width: 100%;
+
+    justify-content:
+      flex-start;
+  }
+
+  .qsm-settings-topbar__actions
+    .qsm-admin-button,
+  .qsm-settings-import-button {
+    flex:
+      1 1 160px;
+  }
+
+  .qsm-settings-content {
+    padding:
+      22px;
+  }
+
+  .qsm-settings-hero {
+    padding:
+      28px;
+  }
+
+  .qsm-settings-section-nav {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(
+          0,
+          1fr
+        )
+      );
+  }
+
+  .qsm-settings-section-nav
+    > button {
+    justify-content:
+      flex-start;
+  }
+
+  .qsm-settings-panel {
+    min-height:
+      auto;
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Sidebar móvil
+|--------------------------------------------------------------------------
+*/
+
+@media (
+  max-width: 760px
+) {
+  :root {
+    --qsm-settings-sidebar-width:
+      0px;
+
+    --qsm-settings-topbar-height:
+      auto;
+  }
+
+  .qsm-system-settings-page {
+    display: block;
+  }
+
+  .qsm-settings-sidebar {
+    position: relative;
+    inset: auto;
+
+    width: 100%;
+    min-height: auto;
+
+    padding:
+      14px 16px;
+
+    border-right: 0;
+    border-bottom: 1px solid
+      var(
+        --qsm-settings-border
+      );
+
+    box-shadow:
+      0 14px 30px
+        rgba(
+          0,
+          0,
+          0,
+          0.16
+        );
+  }
+
+  .qsm-settings-sidebar::before {
+    background:
+      radial-gradient(
+        circle at top right,
+        rgba(
+          124,
+          58,
+          237,
+          0.16
+        ),
+        transparent 40%
+      );
+  }
+
+  .qsm-settings-sidebar__brand {
+    padding:
+      4px 4px 14px;
+  }
+
+  .qsm-settings-sidebar__profile {
+    margin-bottom:
+      14px;
+  }
+
+  .qsm-settings-sidebar__nav {
+    display: grid;
+
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(
+          0,
+          1fr
+        )
+      );
+
+    gap:
+      8px;
+  }
+
+  .qsm-settings-sidebar__nav
+    button {
+    justify-content:
+      flex-start;
+
+    min-height:
+      44px;
+  }
+
+  .qsm-settings-sidebar__back {
+    margin-top:
+      12px;
+  }
+
+  .qsm-settings-main {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .qsm-settings-topbar {
+    position: relative;
+    top: auto;
+
+    padding:
+      16px;
+
+    border-bottom:
+      1px solid
+      var(
+        --qsm-settings-border
+      );
+  }
+
+  .qsm-settings-topbar
+    > div:first-child
+    > strong {
+    white-space: normal;
+  }
+
+  .qsm-settings-content {
+    padding:
+      18px 16px 28px;
+  }
+
+  .qsm-settings-hero {
+    min-height:
+      auto;
+
+    padding:
+      24px 20px;
+
+    border-radius:
+      22px;
+  }
+
+  .qsm-settings-hero h1 {
+    font-size:
+      clamp(
+        28px,
+        10vw,
+        40px
+      );
+
+    letter-spacing:
+      -1.2px;
+  }
+
+  .qsm-settings-hero p {
+    font-size:
+      14px;
+  }
+
+  .qsm-settings-hero__status {
+    grid-template-columns:
+      1fr;
+  }
+
+  .qsm-settings-layout {
+    gap:
+      18px;
+  }
+
+  .qsm-settings-section-nav {
+    padding:
+      14px;
+
+    grid-template-columns:
+      1fr;
+  }
+
+  .qsm-settings-section-nav
+    > button {
+    justify-content:
+      flex-start;
+  }
+
+  .qsm-settings-section {
+    padding:
+      20px;
+  }
+
+  .qsm-settings-section
+    > header h2 {
+    font-size:
+      26px;
+  }
+
+  .qsm-settings-grid {
+    grid-template-columns:
+      1fr;
+  }
+
+  .qsm-settings-fields {
+    grid-template-columns:
+      1fr;
+  }
+
+  .qsm-settings-toggle-card {
+    min-height:
+      auto;
+  }
+
+  .qsm-settings-subsection {
+    padding:
+      18px;
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Móviles pequeños
+|--------------------------------------------------------------------------
+*/
+
+@media (
+  max-width: 520px
+) {
+  .qsm-settings-sidebar__nav {
+    grid-template-columns:
+      1fr;
+  }
+
+  .qsm-settings-topbar__actions {
+    display: grid;
+
+    grid-template-columns:
+      1fr;
+  }
+
+  .qsm-settings-topbar__actions
+    .qsm-admin-button,
+  .qsm-settings-import-button {
+    width: 100%;
+  }
+
+  .qsm-settings-hero {
+    padding:
+      22px 18px;
+  }
+
+  .qsm-settings-hero h1 {
+    font-size:
+      30px;
+  }
+
+  .qsm-settings-section {
+    padding:
+      18px;
+  }
+
+  .qsm-settings-section
+    > header {
+    margin-bottom:
+      20px;
+
+    padding-bottom:
+      18px;
+  }
+
+  .qsm-settings-toggle-card {
+    flex-direction:
+      column;
+
+    align-items:
+      stretch;
+  }
+
+  .qsm-settings-switch {
+    align-self:
+      flex-end;
+  }
+
+  .qsm-settings-alert {
+    padding:
+      14px;
+  }
+
+  .qsm-settings-alert
+    > button {
+    align-self:
+      center;
+  }
+
+  .qsm-settings-unsaved {
+    align-items:
+      flex-start;
+  }
+
+  .qsm-admin-modal-overlay {
+    padding:
+      10px;
+  }
+
+  .qsm-admin-modal {
+    max-height:
+      calc(
+        100vh - 20px
+      );
+
+    border-radius:
+      18px;
+  }
+
+  .qsm-admin-modal__header {
+    padding:
+      18px 16px;
+  }
+
+  .qsm-admin-modal__body {
+    padding:
+      18px 16px;
+  }
+
+  .qsm-admin-modal__footer {
+    padding:
+      14px 16px;
+
+    flex-direction:
+      column-reverse;
+  }
+
+  .qsm-admin-modal__footer
+    .qsm-admin-button {
+    width: 100%;
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Pantallas muy pequeñas
+|--------------------------------------------------------------------------
+*/
+
+@media (
+  max-width: 380px
+) {
+  .qsm-settings-content {
+    padding-left:
+      12px;
+
+    padding-right:
+      12px;
+  }
+
+  .qsm-settings-hero {
+    border-radius:
+      18px;
+  }
+
+  .qsm-settings-panel {
+    border-radius:
+      20px;
+  }
+
+  .qsm-settings-section-nav {
+    border-radius:
+      18px;
+  }
+
+  .qsm-settings-section {
+    padding:
+      16px;
+  }
+
+  .qsm-settings-subsection {
+    padding:
+      15px;
+  }
+
+  .qsm-settings-toggle-card {
+    padding:
+      15px;
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Pantallas grandes
+|--------------------------------------------------------------------------
+*/
+
+@media (
+  min-width: 1600px
+) {
+  :root {
+    --qsm-settings-sidebar-width:
+      300px;
+  }
+
+  .qsm-settings-content {
+    padding:
+      38px;
+  }
+
+  .qsm-settings-hero {
+    padding:
+      42px;
+
+    min-height:
+      260px;
+  }
+
+  .qsm-settings-panel {
+    min-height:
+      760px;
+  }
+
+  .qsm-settings-section {
+    padding:
+      36px;
+  }
+
+  .qsm-settings-grid {
+    gap:
+      18px;
+  }
+
+  .qsm-settings-toggle-card {
+    min-height:
+      146px;
+
+    padding:
+      21px;
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Preferencia de menos movimiento
+|--------------------------------------------------------------------------
+*/
+
+@media (
+  prefers-reduced-motion:
+    reduce
+) {
+  .qsm-system-settings-page *,
+  .qsm-system-settings-page
+    *::before,
+  .qsm-system-settings-page
+    *::after {
+    scroll-behavior:
+      auto !important;
+
+    animation-duration:
+      0.001ms !important;
+
+    animation-iteration-count:
+      1 !important;
+
+    transition-duration:
+      0.001ms !important;
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Modo de alto contraste
+|--------------------------------------------------------------------------
+*/
+
+@media (
+  prefers-contrast:
+    more
+) {
+  .qsm-settings-sidebar,
+  .qsm-settings-panel,
+  .qsm-settings-section-nav,
+  .qsm-settings-hero,
+  .qsm-settings-toggle-card,
+  .qsm-settings-subsection {
+    border-color:
+      rgba(
+        226,
+        232,
+        240,
+        0.34
+      );
+  }
+
+  .qsm-settings-muted,
+  .qsm-settings-section p,
+  .qsm-settings-toggle-card p {
+    color:
+      #cbd5e1;
+  }
+
+  .qsm-settings-switch {
+    border-width:
+      2px;
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Soporte para orientación horizontal móvil
+|--------------------------------------------------------------------------
+*/
+
+@media (
+  max-height: 620px
+)
+and
+(
+  orientation:
+    landscape
+)
+and
+(
+  max-width: 900px
+) {
+  .qsm-settings-sidebar {
+    min-height:
+      auto;
+  }
+
+  .qsm-settings-content {
+    padding-top:
+      14px;
+  }
+
+  .qsm-settings-hero {
+    min-height:
+      auto;
+  }
+
+  .qsm-admin-modal {
+    max-height:
+      calc(
+        100vh - 18px
+      );
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Impresión
+|--------------------------------------------------------------------------
+*/
+
+@media print {
+  .qsm-settings-sidebar,
+  .qsm-settings-topbar,
+  .qsm-settings-section-nav,
+  .qsm-settings-alert,
+  .qsm-settings-unsaved,
+  .qsm-admin-modal-overlay {
+    display:
+      none !important;
+  }
+
+  .qsm-system-settings-page {
+    display:
+      block;
+
+    background:
+      #ffffff;
+
+    color:
+      #111827;
+  }
+
+  .qsm-settings-main {
+    width:
+      100%;
+
+    margin:
+      0;
+  }
+
+  .qsm-settings-content {
+    max-width:
+      none;
+
+    padding:
+      0;
+  }
+
+  .qsm-settings-hero,
+  .qsm-settings-panel,
+  .qsm-settings-subsection,
+  .qsm-settings-toggle-card {
+    border:
+      1px solid
+      #d1d5db;
+
+    background:
+      #ffffff;
+
+    color:
+      #111827;
+
+    box-shadow:
+      none;
+  }
+
+  .qsm-settings-hero h1,
+  .qsm-settings-section
+    > header h2,
+  .qsm-settings-toggle-card strong,
+  .qsm-settings-subsection h3 {
+    color:
+      #111827;
+  }
+
+  .qsm-settings-hero p,
+  .qsm-settings-section p,
+  .qsm-settings-toggle-card p,
+  .qsm-settings-subsection p {
+    color:
+      #4b5563;
+  }
+
+  .qsm-settings-switch {
+    border-color:
+      #9ca3af;
+
+    background:
+      #e5e7eb;
+  }
+
+  .qsm-settings-switch.is-active {
+    background:
+      #7c3aed;
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Ajustes de selección de texto
+|--------------------------------------------------------------------------
+*/
+
+.qsm-system-settings-page
+  ::selection {
+  background:
+    rgba(
+      139,
+      92,
+      246,
+      0.34
+    );
+
+  color:
+    #ffffff;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Utilidades visuales
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-hidden {
+  display:
+    none !important;
+}
+
+.qsm-settings-full-width {
+  grid-column:
+    1 / -1;
+}
+
+.qsm-settings-no-margin {
+  margin:
+    0 !important;
+}
+
+.qsm-settings-text-danger {
+  color:
+    #fca5a5 !important;
+}
+
+.qsm-settings-text-success {
+  color:
+    #86efac !important;
+}
+
+.qsm-settings-text-warning {
+  color:
+    #fde68a !important;
+}
+
+.qsm-settings-text-muted {
+  color:
+    var(
+      --qsm-settings-muted
+    ) !important;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Estados de hover en dispositivos con puntero
+|--------------------------------------------------------------------------
+*/
+
+@media (
+  hover: hover
+)
+and
+(
+  pointer: fine
+) {
+  .qsm-settings-toggle-card:hover
+    .qsm-settings-switch:not(
+      .is-active
+    ) {
+    background:
+      rgba(
+        71,
+        85,
+        105,
+        0.82
+      );
+  }
+
+  .qsm-settings-section-nav
+    > button:hover
+    > span {
+    transform:
+      scale(1.04);
+  }
+
+  .qsm-settings-status:hover {
+    transform:
+      translateX(2px);
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Estados táctiles
+|--------------------------------------------------------------------------
+*/
+
+@media (
+  hover: none
+) {
+  .qsm-settings-sidebar__nav
+    button,
+  .qsm-settings-section-nav
+    > button,
+  .qsm-settings-toggle-card,
+  .qsm-admin-button {
+    transition-duration:
+      80ms;
+  }
+
+  .qsm-settings-toggle-card:hover,
+  .qsm-settings-sidebar__nav
+    button:hover,
+  .qsm-settings-section-nav
+    > button:hover {
+    transform:
+      none;
+  }
+}
+/*
+|--------------------------------------------------------------------------
+| Cierre visual del módulo
+|--------------------------------------------------------------------------
+*/
+
+/*
+|--------------------------------------------------------------------------
+| Mejora de transición entre secciones
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-panel {
+  position: relative;
+}
+
+.qsm-settings-section {
+  transform-origin: top center;
+}
+
+.qsm-settings-section > * {
+  animation:
+    qsmSettingsFadeIn
+    220ms
+    ease;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Mejora de botones activos
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-section-nav
+  > button.is-active {
+  position: relative;
+}
+
+.qsm-settings-section-nav
+  > button.is-active::after {
+  content: "";
+
+  position: absolute;
+
+  right: 10px;
+  top: 50%;
+
+  width: 7px;
+  height: 7px;
+
+  transform:
+    translateY(-50%);
+
+  border-radius: 50%;
+
+  background:
+    var(
+      --qsm-settings-cyan
+    );
+
+  box-shadow:
+    0 0 0 5px
+      rgba(
+        34,
+        211,
+        238,
+        0.08
+      ),
+    0 0 16px
+      rgba(
+        34,
+        211,
+        238,
+        0.55
+      );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Mejoras de topbar al hacer scroll
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-topbar {
+  box-shadow:
+    0 10px 30px
+      rgba(
+        0,
+        0,
+        0,
+        0.1
+      );
+}
+
+.qsm-settings-topbar::after {
+  content: "";
+
+  position: absolute;
+
+  left: 0;
+  right: 0;
+  bottom: -1px;
+
+  height: 1px;
+
+  background:
+    linear-gradient(
+      90deg,
+      transparent,
+      rgba(
+        139,
+        92,
+        246,
+        0.45
+      ),
+      rgba(
+        34,
+        211,
+        238,
+        0.22
+      ),
+      transparent
+    );
+
+  pointer-events: none;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Mejoras del hero
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-hero {
+  isolation: isolate;
+}
+
+.qsm-settings-hero > div:first-child {
+  position: relative;
+}
+
+.qsm-settings-hero > div:first-child::after {
+  content: "";
+
+  display: block;
+
+  width: 110px;
+  height: 4px;
+
+  margin-top: 20px;
+
+  border-radius: 999px;
+
+  background:
+    linear-gradient(
+      90deg,
+      var(
+        --qsm-settings-purple
+      ),
+      var(
+        --qsm-settings-cyan
+      )
+    );
+
+  box-shadow:
+    0 0 18px
+      rgba(
+        139,
+        92,
+        246,
+        0.38
+      );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Mejoras de las tarjetas
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-toggle-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.qsm-settings-toggle-card::before {
+  content: "";
+
+  position: absolute;
+
+  inset: 0;
+
+  pointer-events: none;
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(
+        255,
+        255,
+        255,
+        0.035
+      ),
+      transparent 38%
+    );
+
+  opacity: 0;
+
+  transition:
+    opacity
+      var(
+        --qsm-settings-transition
+      );
+}
+
+.qsm-settings-toggle-card:hover::before {
+  opacity: 1;
+}
+
+.qsm-settings-toggle-card
+  > div,
+.qsm-settings-toggle-card
+  > button {
+  position: relative;
+  z-index: 1;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Estado visual cuando el switch está activo
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-toggle-card:has(
+  .qsm-settings-switch.is-active
+) {
+  border-color:
+    rgba(
+      139,
+      92,
+      246,
+      0.26
+    );
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(
+        76,
+        29,
+        149,
+        0.12
+      ),
+      rgba(
+        15,
+        23,
+        42,
+        0.62
+      )
+    );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Mejora del switch
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-switch {
+  overflow: hidden;
+}
+
+.qsm-settings-switch::before {
+  content: "";
+
+  position: absolute;
+
+  inset: 0;
+
+  border-radius: inherit;
+
+  background:
+    linear-gradient(
+      120deg,
+      transparent 30%,
+      rgba(
+        255,
+        255,
+        255,
+        0.16
+      ) 50%,
+      transparent 70%
+    );
+
+  transform:
+    translateX(-100%);
+
+  transition:
+    transform
+      320ms
+      ease;
+}
+
+.qsm-settings-switch.is-active::before {
+  transform:
+    translateX(100%);
+}
+
+/*
+|--------------------------------------------------------------------------
+| Mejora de inputs
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-field input,
+.qsm-settings-field select,
+.qsm-settings-textarea {
+  box-shadow:
+    inset 0 1px 0
+      rgba(
+        255,
+        255,
+        255,
+        0.02
+      );
+}
+
+.qsm-settings-field input:focus,
+.qsm-settings-field select:focus,
+.qsm-settings-textarea:focus {
+  transform:
+    translateY(-1px);
+}
+
+/*
+|--------------------------------------------------------------------------
+| Corrección de input number
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-field input[
+  type="number"
+] {
+  appearance:
+    textfield;
+
+  -moz-appearance:
+    textfield;
+}
+
+.qsm-settings-field input[
+  type="number"
+]::-webkit-inner-spin-button,
+.qsm-settings-field input[
+  type="number"
+]::-webkit-outer-spin-button {
+  margin: 0;
+
+  opacity: 0.55;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Mejora de select
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-field select {
+  appearance: none;
+
+  -webkit-appearance: none;
+
+  background-image:
+    linear-gradient(
+      45deg,
+      transparent 50%,
+      #94a3b8 50%
+    ),
+    linear-gradient(
+      135deg,
+      #94a3b8 50%,
+      transparent 50%
+    );
+
+  background-position:
+    calc(100% - 18px)
+      calc(50% - 2px),
+    calc(100% - 13px)
+      calc(50% - 2px);
+
+  background-size:
+    5px 5px,
+    5px 5px;
+
+  background-repeat:
+    no-repeat;
+
+  padding-right:
+    38px;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Estado guardando
+|--------------------------------------------------------------------------
+*/
+
+.qsm-admin-button:disabled {
+  position: relative;
+}
+
+.qsm-admin-button--primary:disabled {
+  box-shadow: none;
+}
+
+.qsm-admin-button--primary:disabled::after {
+  content: "";
+
+  position: absolute;
+
+  width: 13px;
+  height: 13px;
+
+  right: 10px;
+
+  border: 2px solid
+    rgba(
+      255,
+      255,
+      255,
+      0.32
+    );
+
+  border-top-color:
+    #ffffff;
+
+  border-radius: 50%;
+
+  animation:
+    qsmSettingsButtonSpin
+    0.8s
+    linear
+    infinite;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Mejoras de alertas
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-alert {
+  animation:
+    qsmSettingsAlertIn
+    220ms
+    ease;
+}
+
+.qsm-settings-alert--success {
+  box-shadow:
+    0 18px 34px
+      rgba(
+        22,
+        101,
+        52,
+        0.12
+      );
+}
+
+.qsm-settings-alert--error {
+  box-shadow:
+    0 18px 34px
+      rgba(
+        127,
+        29,
+        29,
+        0.14
+      );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Cambio sin guardar
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-unsaved {
+  position: relative;
+  overflow: hidden;
+}
+
+.qsm-settings-unsaved::after {
+  content: "";
+
+  position: absolute;
+
+  left: 0;
+  bottom: 0;
+
+  width: 100%;
+  height: 2px;
+
+  background:
+    linear-gradient(
+      90deg,
+      transparent,
+      var(
+        --qsm-settings-orange
+      ),
+      transparent
+    );
+
+  animation:
+    qsmSettingsUnsavedBar
+    1.8s
+    ease-in-out
+    infinite;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Modales refinados
+|--------------------------------------------------------------------------
+*/
+
+.qsm-admin-modal-overlay {
+  animation:
+    qsmSettingsOverlayIn
+    180ms
+    ease;
+}
+
+.qsm-admin-modal {
+  animation:
+    qsmSettingsModalIn
+    220ms
+    cubic-bezier(
+      0.16,
+      1,
+      0.3,
+      1
+    );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Focus accesible
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-section-nav
+  > button:focus-visible,
+.qsm-settings-sidebar__nav
+  button:focus-visible,
+.qsm-settings-switch:focus-visible,
+.qsm-admin-button:focus-visible {
+  outline: 2px solid
+    var(
+      --qsm-settings-cyan
+    );
+
+  outline-offset: 3px;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Estado activo de navegación
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-sidebar__nav
+  button.is-active::after {
+  content: "";
+
+  position: absolute;
+
+  right: 12px;
+  top: 50%;
+
+  width: 7px;
+  height: 7px;
+
+  transform:
+    translateY(-50%);
+
+  border-radius: 50%;
+
+  background:
+    var(
+      --qsm-settings-purple-light
+    );
+
+  box-shadow:
+    0 0 12px
+      rgba(
+        196,
+        181,
+        253,
+        0.65
+      );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Import button
+|--------------------------------------------------------------------------
+*/
+
+.qsm-settings-import-button:hover {
+  border-color:
+    rgba(
+      139,
+      92,
+      246,
+      0.36
+    );
+
+  background:
+    rgba(
+      139,
+      92,
+      246,
+      0.1
+    );
+
+  color: #ffffff;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Animaciones finales
+|--------------------------------------------------------------------------
+*/
+
+@keyframes qsmSettingsButtonSpin {
+  from {
+    transform:
+      rotate(0deg);
+  }
+
+  to {
+    transform:
+      rotate(360deg);
+  }
+}
+
+@keyframes qsmSettingsAlertIn {
+  from {
+    opacity: 0;
+    transform:
+      translateY(-6px);
+  }
+
+  to {
+    opacity: 1;
+    transform:
+      translateY(0);
+  }
+}
+
+@keyframes qsmSettingsUnsavedBar {
+  0% {
+    transform:
+      translateX(-100%);
+  }
+
+  50% {
+    transform:
+      translateX(0%);
+  }
+
+  100% {
+    transform:
+      translateX(100%);
+  }
+}
+
+@keyframes qsmSettingsOverlayIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes qsmSettingsModalIn {
+  from {
+    opacity: 0;
+
+    transform:
+      translateY(14px)
+      scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+
+    transform:
+      translateY(0)
+      scale(1);
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Compatibilidad si :has no está disponible
+|--------------------------------------------------------------------------
+*/
+
+@supports not selector(
+  :has(*)
+) {
+  .qsm-settings-toggle-card {
+    border-color:
+      var(
+        --qsm-settings-border
+      );
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Ajustes finales responsive
+|--------------------------------------------------------------------------
+*/
+
+@media (
+  max-width: 760px
+) {
+  .qsm-settings-section-nav
+    > button.is-active::after,
+  .qsm-settings-sidebar__nav
+    button.is-active::after {
+    display: none;
+  }
+
+  .qsm-settings-hero
+    > div:first-child::after {
+    width: 80px;
+  }
+
+  .qsm-settings-field input:focus,
+  .qsm-settings-field select:focus,
+  .qsm-settings-textarea:focus {
+    transform: none;
+  }
+}
+
+@media (
+  max-width: 520px
+) {
+  .qsm-settings-toggle-card:has(
+    .qsm-settings-switch.is-active
+  ) {
+    border-color:
+      rgba(
+        139,
+        92,
+        246,
+        0.22
+      );
+  }
+
+  .qsm-settings-topbar::after {
+    opacity: 0.65;
+  }
+}
+
+/*
+|--------------------------------------------------------------------------
+| Fin del archivo
+|--------------------------------------------------------------------------
+*/

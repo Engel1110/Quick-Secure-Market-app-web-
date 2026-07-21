@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 require("dotenv").config();
 
+const connectDB = require("../src/config/db");
 const Permission = require("../src/models/Permission");
 
 const definitions = [
@@ -240,6 +241,33 @@ const definitions = [
   ],
 
   /*
+|--------------------------------------------------------------------------
+| Configuración global
+|--------------------------------------------------------------------------
+*/
+
+[
+  "SYSTEM_SETTINGS_VIEW",
+  "Ver configuración global",
+  "ADMIN",
+  "Permite consultar la configuración global de QSM."
+],
+
+[
+  "SYSTEM_SETTINGS_UPDATE",
+  "Editar configuración global",
+  "ADMIN",
+  "Permite modificar la configuración operativa y empresarial de QSM."
+],
+
+[
+  "SYSTEM_SETTINGS_RESET",
+  "Restaurar configuración global",
+  "ADMIN",
+  "Permite restaurar la configuración global a sus valores predeterminados."
+],
+
+  /*
   |--------------------------------------------------------------------------
   | Seguridad
   |--------------------------------------------------------------------------
@@ -346,12 +374,9 @@ async function seedPermissions() {
       "No se encontró MONGODB_URI en el archivo backend/.env."
     );
   }
+console.log("🔌 Conectando a MongoDB...");
 
-  console.log("🔌 Conectando a MongoDB...");
-
-  await mongoose.connect(process.env.MONGODB_URI);
-
-  console.log("✅ MongoDB conectado.");
+await connectDB();
 
   for (const [code, name, module, description] of definitions) {
     await Permission.findOneAndUpdate(

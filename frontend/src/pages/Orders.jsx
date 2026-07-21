@@ -676,12 +676,6 @@ function Orders() {
         @media (
           max-width: 1280px
         ) {
-          .orders-layout {
-            grid-template-columns:
-              240px minmax(0, 1fr)
-              !important;
-          }
-
           .stats-grid {
             grid-template-columns:
               repeat(2, minmax(0, 1fr))
@@ -774,6 +768,7 @@ function Orders() {
       >
         <div
           className="sidebar-wrapper"
+          style={sidebarWrapper}
         >
           <Sidebar />
         </div>
@@ -1691,6 +1686,11 @@ function PurchaseCard({
           onClick={() =>
             onConfirmReceipt(order)
           }
+          title={
+            canConfirmReceipt
+              ? "Confirmar que recibiste el producto"
+              : "Disponible cuando la compra esté esperando PIN o figure como entregada"
+          }
           disabled={
             !canConfirmReceipt ||
             isActionBusy
@@ -1710,6 +1710,11 @@ function PurchaseCard({
           type="button"
           onClick={() =>
             onDispute(order)
+          }
+          title={
+            canDispute
+              ? "Abrir un reclamo para esta compra"
+              : "Disponible después de que el pago sea confirmado"
           }
           disabled={
             !canDispute ||
@@ -2620,8 +2625,20 @@ const layout = {
   minHeight: "100vh",
   display: "grid",
   gridTemplateColumns:
-    "280px minmax(0, 1fr)",
-  overflowX: "hidden"
+    "var(--qsm-sidebar-width, 96px) minmax(0, 1fr)",
+  overflowX: "hidden",
+  transition:
+    "grid-template-columns var(--qsm-transition, .28s ease)",
+  alignItems: "stretch"
+};
+
+const sidebarWrapper = {
+  width:
+    "var(--qsm-sidebar-width, 96px)",
+  minWidth:
+    "var(--qsm-sidebar-width, 96px)",
+  transition:
+    "width var(--qsm-transition, .28s ease), min-width var(--qsm-transition, .28s ease)"
 };
 
 const main = {

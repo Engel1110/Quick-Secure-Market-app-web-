@@ -302,14 +302,6 @@ function Disputes() {
         }
 
         @media (max-width: 1240px) {
-          .disputes-page {
-            grid-template-columns: 1fr !important;
-          }
-
-          .sidebar-wrapper {
-            display: none !important;
-          }
-
           .stats-grid,
           .disputes-layout,
           .filters-row,
@@ -320,6 +312,16 @@ function Disputes() {
           .hero-row {
             flex-direction: column !important;
             align-items: flex-start !important;
+          }
+        }
+
+        @media (max-width: 1100px) {
+          .disputes-page {
+            grid-template-columns: 1fr !important;
+          }
+
+          .sidebar-wrapper {
+            display: none !important;
           }
         }
 
@@ -336,7 +338,10 @@ function Disputes() {
       `}</style>
 
       <div className="disputes-page" style={layout}>
-        <div className="sidebar-wrapper">
+        <div
+          className="sidebar-wrapper"
+          style={sidebarWrapper}
+        >
           <Sidebar />
         </div>
 
@@ -900,8 +905,21 @@ const layout = {
   width: "100%",
   minHeight: "100vh",
   display: "grid",
-  gridTemplateColumns: "280px minmax(0, 1fr)",
-  overflowX: "hidden"
+  gridTemplateColumns:
+    "var(--qsm-sidebar-width, 96px) minmax(0, 1fr)",
+  overflowX: "hidden",
+  transition:
+    "grid-template-columns var(--qsm-transition, .28s ease)",
+  alignItems: "stretch"
+};
+
+const sidebarWrapper = {
+  width:
+    "var(--qsm-sidebar-width, 96px)",
+  minWidth:
+    "var(--qsm-sidebar-width, 96px)",
+  transition:
+    "width var(--qsm-transition, .28s ease), min-width var(--qsm-transition, .28s ease)"
 };
 
 const main = {

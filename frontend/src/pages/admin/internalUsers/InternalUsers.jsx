@@ -1,4 +1,6 @@
 import {
+  useCallback,
+  useEffect,
   useMemo,
   useState
 } from "react";
@@ -7,174 +9,14 @@ import {
   useNavigate
 } from "react-router-dom";
 
+import {
+  getInternalUsers,
+  getAdminApiErrorMessage
+} from "../../../services/adminUsers.service";
+
 import "../dashboard/adminDashboard.css";
 import "./internalUsers.css";
 
-/*
-|--------------------------------------------------------------------------
-| Datos temporales
-|--------------------------------------------------------------------------
-| Más adelante estos usuarios vendrán del backend:
-|
-| GET  /api/admin/internal-users
-| POST /api/admin/internal-users
-|--------------------------------------------------------------------------
-*/
-
-const INITIAL_INTERNAL_USERS = [
-  {
-    id: "qsm-admin-0001",
-    firstName: "Engel",
-    lastName: "Feliz",
-    fullName: "Engel Feliz",
-    email: "superadmin.qsm@gmail.com",
-    employeeCode: "QSM-SA-0001",
-    department: "ADMINISTRATION",
-    departmentLabel: "Administración",
-    role: "SUPER_ADMIN",
-    roleLabel: "Super Administrador",
-    status: "ACTIVE",
-    lastAccess: "Ahora",
-    securityLevel: "ELEVATED",
-    mustChangePassword: false
-  },
-
-  {
-    id: "qsm-admin-0002",
-    firstName: "Ana",
-    lastName: "Cordero",
-    fullName: "Ana Cordero",
-    email: "ana.admin@qsm.com",
-    employeeCode: "QSM-AD-0001",
-    department: "ADMINISTRATION",
-    departmentLabel: "Administración",
-    role: "SENIOR_ADMIN",
-    roleLabel: "Senior Administrator",
-    status: "ACTIVE",
-    lastAccess: "Hoy, 9:24 AM",
-    securityLevel: "HIGH",
-    mustChangePassword: false
-  },
-
-  {
-    id: "qsm-warehouse-0012",
-    firstName: "Juan",
-    lastName: "Rivera",
-    fullName: "Juan Rivera",
-    email: "juan.rivera@qsm.com",
-    employeeCode: "QSM-WH-0012",
-    department: "WAREHOUSE",
-    departmentLabel: "Almacén",
-    role: "WAREHOUSE_MANAGER",
-    roleLabel: "Gerente de Almacén",
-    status: "ACTIVE",
-    lastAccess: "Hoy, 8:15 AM",
-    securityLevel: "STANDARD",
-    mustChangePassword: false
-  },
-
-  {
-    id: "qsm-delivery-0021",
-    firstName: "Luis",
-    lastName: "Martínez",
-    fullName: "Luis Martínez",
-    email: "luis.martinez@qsm.com",
-    employeeCode: "QSM-DL-0021",
-    department: "DELIVERY",
-    departmentLabel: "Delivery",
-    role: "DELIVERY_MANAGER",
-    roleLabel: "Gerente de Delivery",
-    status: "ACTIVE",
-    lastAccess: "Ayer, 4:45 PM",
-    securityLevel: "STANDARD",
-    mustChangePassword: false
-  },
-
-  {
-    id: "qsm-finance-0033",
-    firstName: "Natalia",
-    lastName: "Cruz",
-    fullName: "Natalia Cruz",
-    email: "natalia.cruz@qsm.com",
-    employeeCode: "QSM-FN-0033",
-    department: "FINANCE",
-    departmentLabel: "Finanzas",
-    role: "FINANCE_AGENT",
-    roleLabel: "Agente Financiero",
-    status: "ACTIVE",
-    lastAccess: "Ayer, 11:20 AM",
-    securityLevel: "HIGH",
-    mustChangePassword: false
-  },
-
-  {
-    id: "qsm-audit-0041",
-    firstName: "Roberto",
-    lastName: "Castillo",
-    fullName: "Roberto Castillo",
-    email: "roberto.castillo@qsm.com",
-    employeeCode: "QSM-AU-0041",
-    department: "AUDIT",
-    departmentLabel: "Auditoría",
-    role: "AUDITOR",
-    roleLabel: "Auditor",
-    status: "ACTIVE",
-    lastAccess: "12/07/2026",
-    securityLevel: "READ_ONLY",
-    mustChangePassword: false
-  },
-
-  {
-    id: "qsm-security-0055",
-    firstName: "Yadira",
-    lastName: "Méndez",
-    fullName: "Yadira Méndez",
-    email: "yadira.mendez@qsm.com",
-    employeeCode: "QSM-SC-0055",
-    department: "SECURITY",
-    departmentLabel: "Seguridad",
-    role: "SECURITY_ANALYST",
-    roleLabel: "Analista de Seguridad",
-    status: "ACTIVE",
-    lastAccess: "12/07/2026",
-    securityLevel: "HIGH",
-    mustChangePassword: false
-  },
-
-  {
-    id: "qsm-support-0062",
-    firstName: "Daniel",
-    lastName: "Pérez",
-    fullName: "Daniel Pérez",
-    email: "daniel.perez@qsm.com",
-    employeeCode: "QSM-SP-0062",
-    department: "SUPPORT",
-    departmentLabel: "Soporte",
-    role: "SUPPORT_AGENT",
-    roleLabel: "Agente de Soporte",
-    status: "SUSPENDED",
-    lastAccess: "10/07/2026",
-    securityLevel: "STANDARD",
-    mustChangePassword: false
-  },
-
-  {
-    id: "qsm-moderation-0071",
-    firstName: "María",
-    lastName: "Sánchez",
-    fullName: "María Sánchez",
-    email: "maria.sanchez@qsm.com",
-    employeeCode: "QSM-MD-0071",
-    department: "MODERATION",
-    departmentLabel: "Moderación",
-    role: "MODERATOR",
-    roleLabel: "Moderador",
-    status: "INACTIVE",
-    lastAccess: "08/07/2026",
-    securityLevel: "STANDARD",
-    mustChangePassword: true
-  }
-];
 
 const DEPARTMENTS = [
   {
@@ -339,12 +181,98 @@ const INITIAL_FORM = {
   sendCredentials: true
 };
 
+const normalizeInternalUser = (
+  user
+) => {
+  const department =
+    String(
+      user.department || ""
+    ).toUpperCase();
+
+  const role =
+    String(
+      user.role || ""
+    ).toUpperCase();
+
+  const status =
+    String(
+      user.status || "PENDING"
+    ).toUpperCase();
+
+  const firstName =
+    user.firstName || "";
+
+  const lastName =
+    user.lastName || "";
+
+  return {
+    ...user,
+
+    id:
+      user.id ||
+      user._id,
+
+    firstName,
+    lastName,
+
+    fullName:
+      user.fullName ||
+      `${firstName} ${lastName}`.trim(),
+
+    department,
+    departmentLabel:
+      getDepartmentLabel(
+        department
+      ),
+
+    role,
+    roleLabel:
+      getRoleLabel(role),
+
+    status,
+
+    lastAccess:
+      formatLastAccess(
+        user.lastLoginAt
+      ),
+
+    securityLevel:
+      user.securityLevel ||
+      "NORMAL"
+  };
+};
+
 function InternalUsers() {
   const navigate = useNavigate();
 
-  const [users, setUsers] = useState(
-    INITIAL_INTERNAL_USERS
-  );
+const [users, setUsers] =
+  useState([]);
+
+const [statistics, setStatistics] =
+  useState({
+    total: 0,
+    active: 0,
+    suspended: 0,
+    inactive: 0,
+    pending: 0,
+    banned: 0
+  });
+
+const [pagination, setPagination] =
+  useState({
+    page: 1,
+    limit: 20,
+    total: 0,
+    totalPages: 1,
+    hasNextPage: false,
+    hasPreviousPage: false
+  });
+
+const [loading, setLoading] =
+  useState(true);
+
+const [pageError, setPageError] =
+  useState("");
 
   const [searchTerm, setSearchTerm] =
     useState("");
@@ -381,29 +309,166 @@ function InternalUsers() {
     []
   );
 
-  const statistics = useMemo(() => {
-    const active = users.filter(
-      (user) =>
-        user.status === "ACTIVE"
-    ).length;
+  const loadInternalUsers =
+  useCallback(
+    async ({
+      page =
+        pagination.page
+    } = {}) => {
+      try {
+        setLoading(true);
+        setPageError("");
 
-    const suspended = users.filter(
-      (user) =>
-        user.status === "SUSPENDED"
-    ).length;
+        const response =
+          await getInternalUsers({
+            page,
+            limit:
+              pagination.limit,
+            search:
+              searchTerm,
+            department:
+              departmentFilter,
+            role:
+              roleFilter,
+            status:
+              statusFilter,
+            sortBy:
+              "createdAt",
+            sortOrder:
+              "desc"
+          });
 
-    const inactive = users.filter(
-      (user) =>
-        user.status === "INACTIVE"
-    ).length;
+        const receivedUsers =
+          Array.isArray(
+            response.users
+          )
+            ? response.users.map(
+                normalizeInternalUser
+              )
+            : [];
 
-    return {
-      total: users.length,
-      active,
-      suspended,
-      inactive
-    };
-  }, [users]);
+        setUsers(
+          receivedUsers
+        );
+
+        setStatistics({
+          total:
+            Number(
+              response.statistics
+                ?.total || 0
+            ),
+
+          active:
+            Number(
+              response.statistics
+                ?.active || 0
+            ),
+
+          suspended:
+            Number(
+              response.statistics
+                ?.suspended || 0
+            ),
+
+          inactive:
+            Number(
+              response.statistics
+                ?.inactive ||
+                response.statistics
+                  ?.pending ||
+                0
+            ),
+
+          pending:
+            Number(
+              response.statistics
+                ?.pending || 0
+            ),
+
+          banned:
+            Number(
+              response.statistics
+                ?.banned || 0
+            )
+        });
+
+        setPagination(
+          (current) => ({
+            ...current,
+            ...response.pagination,
+            page:
+              response.pagination
+                ?.page || page,
+            limit:
+              response.pagination
+                ?.limit ||
+              current.limit,
+            total:
+              response.pagination
+                ?.total || 0,
+            totalPages:
+              Math.max(
+                Number(
+                  response.pagination
+                    ?.totalPages ||
+                    1
+                ),
+                1
+              ),
+            hasNextPage:
+              Boolean(
+                response.pagination
+                  ?.hasNextPage
+              ),
+            hasPreviousPage:
+              Boolean(
+                response.pagination
+                  ?.hasPreviousPage
+              )
+          })
+        );
+      } catch (error) {
+        setUsers([]);
+
+        setPageError(
+          getAdminApiErrorMessage(
+            error,
+            "No se pudieron cargar los usuarios internos."
+          )
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [
+      searchTerm,
+      departmentFilter,
+      roleFilter,
+      statusFilter,
+      pagination.limit
+    ]
+  );
+
+useEffect(() => {
+  const timeoutId =
+    window.setTimeout(() => {
+      loadInternalUsers({
+        page: 1
+      });
+    }, 350);
+
+  return () => {
+    window.clearTimeout(
+      timeoutId
+    );
+  };
+}, [
+  searchTerm,
+  departmentFilter,
+  roleFilter,
+  statusFilter,
+  loadInternalUsers
+]);
 
   const availableRoles = useMemo(() => {
     if (!form.department) {
@@ -417,53 +482,8 @@ function InternalUsers() {
     );
   }, [form.department]);
 
-  const visibleUsers = useMemo(() => {
-    const normalizedSearch =
-      searchTerm
-        .trim()
-        .toLowerCase();
 
-    return users.filter((user) => {
-      const matchesSearch =
-        !normalizedSearch ||
-        [
-          user.fullName,
-          user.email,
-          user.employeeCode,
-          user.departmentLabel,
-          user.roleLabel
-        ]
-          .join(" ")
-          .toLowerCase()
-          .includes(normalizedSearch);
 
-      const matchesDepartment =
-        departmentFilter === "ALL" ||
-        user.department ===
-          departmentFilter;
-
-      const matchesRole =
-        roleFilter === "ALL" ||
-        user.role === roleFilter;
-
-      const matchesStatus =
-        statusFilter === "ALL" ||
-        user.status === statusFilter;
-
-      return (
-        matchesSearch &&
-        matchesDepartment &&
-        matchesRole &&
-        matchesStatus
-      );
-    });
-  }, [
-    users,
-    searchTerm,
-    departmentFilter,
-    roleFilter,
-    statusFilter
-  ]);
 
   const resetForm = () => {
     setForm(INITIAL_FORM);
@@ -917,6 +937,23 @@ function InternalUsers() {
               type="gray"
             />
           </section>
+          {pageError && (
+  <div className="qsm-internal-form-error">
+    ⚠ {pageError}
+
+    <button
+      type="button"
+      onClick={() =>
+        loadInternalUsers({
+          page:
+            pagination.page
+        })
+      }
+    >
+      Reintentar
+    </button>
+  </div>
+)}
 
           <section className="qsm-internal-panel">
             <div className="qsm-internal-filters">
@@ -1005,8 +1042,16 @@ function InternalUsers() {
                   Suspendidos
                 </option>
 
-                <option value="INACTIVE">
+                <option value="PENDING">
                   Inactivos
+                </option>
+
+                <option value="BANNED">
+                  Bloqueados
+                </option>
+
+                <option value="DELETED">
+                  Desactivados
                 </option>
               </select>
 
@@ -1035,7 +1080,7 @@ function InternalUsers() {
                 </thead>
 
                 <tbody>
-                  {visibleUsers.map(
+                  {users.map(
                     (user) => (
                       <tr key={user.id}>
                         <td>
@@ -1221,7 +1266,21 @@ function InternalUsers() {
                 </tbody>
               </table>
 
-              {visibleUsers.length === 0 && (
+              {loading && (
+                <div className="qsm-internal-empty">
+                  <span>◌</span>
+
+                  <h3>
+                    Cargando usuarios
+                  </h3>
+
+                  <p>
+                    Consultando información real del BackOffice.
+                  </p>
+                </div>
+              )}
+
+              {!loading && !pageError && users.length === 0 && (
                 <div className="qsm-internal-empty">
                   <span>⌕</span>
 
@@ -1249,15 +1308,21 @@ function InternalUsers() {
 
             <div className="qsm-internal-pagination">
               <span>
-                Mostrando{" "}
-                {visibleUsers.length} de{" "}
-                {users.length} usuarios
+                Mostrando {users.length} de {pagination.total} usuarios
               </span>
 
               <div>
                 <button
                   type="button"
-                  disabled
+                  disabled={
+                    loading ||
+                    !pagination.hasPreviousPage
+                  }
+                  onClick={() =>
+                    loadInternalUsers({
+                      page: pagination.page - 1
+                    })
+                  }
                 >
                   ←
                 </button>
@@ -1265,13 +1330,22 @@ function InternalUsers() {
                 <button
                   type="button"
                   className="is-active"
+                  disabled
                 >
-                  1
+                  {pagination.page} / {pagination.totalPages}
                 </button>
 
                 <button
                   type="button"
-                  disabled
+                  disabled={
+                    loading ||
+                    !pagination.hasNextPage
+                  }
+                  onClick={() =>
+                    loadInternalUsers({
+                      page: pagination.page + 1
+                    })
+                  }
                 >
                   →
                 </button>
@@ -1626,9 +1700,17 @@ function CreateInternalUserModal({
                   Activo
                 </option>
 
-                <option value="INACTIVE">
-                  Inactivo
-                </option>
+                <option value="PENDING">
+  Inactivos
+</option>
+
+<option value="BANNED">
+  Bloqueados
+</option>
+
+<option value="DELETED">
+  Desactivados
+</option>
               </select>
             </div>
 
@@ -1890,8 +1972,10 @@ function getInitials(user) {
 function formatStatus(status) {
   const statuses = {
     ACTIVE: "Activo",
+    PENDING: "Inactivo",
     SUSPENDED: "Suspendido",
-    INACTIVE: "Inactivo"
+    BANNED: "Bloqueado",
+    DELETED: "Desactivado"
   };
 
   return statuses[status] || status;
@@ -1901,8 +1985,10 @@ function formatSecurityLevel(level) {
   const levels = {
     ELEVATED: "Elevado",
     HIGH: "Alto",
+    NORMAL: "Normal",
     STANDARD: "Estándar",
-    READ_ONLY: "Solo lectura"
+    READ_ONLY: "Solo lectura",
+    LOCKED: "Bloqueado"
   };
 
   return levels[level] || level;
@@ -1982,6 +2068,50 @@ function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
     email
   );
+}
+
+function getDepartmentLabel(department) {
+  return (
+    DEPARTMENTS.find(
+      (item) => item.value === department
+    )?.label ||
+    department ||
+    "Sin departamento"
+  );
+}
+
+function getRoleLabel(role) {
+  if (role === "SUPER_ADMIN") {
+    return "Super Administrador";
+  }
+
+  return (
+    ROLES.find(
+      (item) => item.value === role
+    )?.label ||
+    role ||
+    "Sin rol"
+  );
+}
+
+function formatLastAccess(value) {
+  if (!value) {
+    return "Nunca ha iniciado sesión";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "Sin registro";
+  }
+
+  return new Intl.DateTimeFormat(
+    "es-DO",
+    {
+      dateStyle: "medium",
+      timeStyle: "short"
+    }
+  ).format(date);
 }
 
 export default InternalUsers;

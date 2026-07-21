@@ -64,11 +64,426 @@ const DEFAULT_FORM = {
   category: "",
   condition: "",
   quality: "UNKNOWN",
+
+  brand: "",
+  model: "",
+  serialNumber: "",
+  imei: "",
+  storageCapacity: "",
+  ramMemory: "",
+  batteryHealth: "",
+
+  vehicleYear: "",
+  vin: "",
+  mileage: "",
+  transmission: "",
+  fuelType: "",
+
+  clothingSize: "",
+  material: "",
+  authenticityStatus: "NOT_SPECIFIED",
+
+  dimensions: "",
+  accessoriesIncluded: "",
+
+  hasInvoice: false,
+  hasOriginalBox: false,
+  acceptsPhysicalInspection: false,
+
   specialPriceReason: "NONE",
   specialPriceExplanation: "",
+
   location: "",
   warranty: "",
   deliveryMethod: ""
+};
+
+/*
+|--------------------------------------------------------------------------
+| Configuración inteligente por categoría
+|--------------------------------------------------------------------------
+*/
+
+const CATEGORY_RISK_CONFIG = {
+  Moda: {
+    level: "LOW",
+    label: "Riesgo bajo",
+    shortLabel: "Bajo",
+    icon: "🟢",
+    type: "success",
+    baseRiskScore: 15,
+
+    explanation:
+      "Producto de uso cotidiano y menor impacto económico. Normalmente requiere verificación básica.",
+
+    buyerAdvice:
+      "Revisa las fotografías, medidas, condición y descripción antes de comprar.",
+
+    recommendedEvidence: [
+      "Fotografías reales",
+      "Medidas o talla",
+      "Estado del producto"
+    ],
+
+    verificationMode: "BASIC"
+  },
+
+  Hogar: {
+    level: "LOW",
+    label: "Riesgo bajo",
+    shortLabel: "Bajo",
+    icon: "🟢",
+    type: "success",
+    baseRiskScore: 20,
+
+    explanation:
+      "Artículo doméstico de riesgo generalmente bajo, salvo que tenga un precio elevado.",
+
+    buyerAdvice:
+      "Confirma dimensiones, condición, funcionamiento y método de entrega.",
+
+    recommendedEvidence: [
+      "Fotografías reales",
+      "Dimensiones",
+      "Detalles del estado"
+    ],
+
+    verificationMode: "BASIC"
+  },
+
+  Gaming: {
+    level: "MEDIUM",
+    label: "Riesgo medio",
+    shortLabel: "Medio",
+    icon: "🟡",
+    type: "warning",
+    baseRiskScore: 45,
+
+    explanation:
+      "Consolas y equipos gaming tienen valor comercial considerable y pueden requerir evidencia de funcionamiento.",
+
+    buyerAdvice:
+      "Solicita video de funcionamiento, fotografías del serial y utiliza Pago Protegido.",
+
+    recommendedEvidence: [
+      "Video de funcionamiento",
+      "Número de serie",
+      "Fotografía de puertos y controles",
+      "Factura o caja, si están disponibles"
+    ],
+
+    verificationMode: "RECOMMENDED"
+  },
+
+  Tecnología: {
+    level: "MEDIUM",
+    label: "Riesgo medio",
+    shortLabel: "Medio",
+    icon: "🟡",
+    type: "warning",
+    baseRiskScore: 50,
+
+    explanation:
+      "Los equipos tecnológicos pueden presentar daños internos o información difícil de comprobar únicamente con fotografías.",
+
+    buyerAdvice:
+      "Solicita video, especificaciones reales y evidencia del funcionamiento.",
+
+    recommendedEvidence: [
+      "Video de funcionamiento",
+      "Modelo exacto",
+      "Número de serie",
+      "Estado físico"
+    ],
+
+    verificationMode: "RECOMMENDED"
+  },
+
+  Laptops: {
+    level: "HIGH",
+    label: "Riesgo alto",
+    shortLabel: "Alto",
+    icon: "🟠",
+    type: "high",
+    baseRiskScore: 68,
+
+    explanation:
+      "Producto electrónico de valor elevado que puede contener daños internos, bloqueo o información técnica incorrecta.",
+
+    buyerAdvice:
+      "Solicita serial, video encendido, especificaciones, estado de batería y prueba de propiedad.",
+
+    recommendedEvidence: [
+      "Número de serie",
+      "Video encendida",
+      "Estado de batería",
+      "Especificaciones del sistema",
+      "Factura, si está disponible"
+    ],
+
+    verificationMode: "ENHANCED"
+  },
+
+  Celulares: {
+    level: "HIGH",
+    label: "Riesgo alto",
+    shortLabel: "Alto",
+    icon: "🟠",
+    type: "high",
+    baseRiskScore: 75,
+
+    explanation:
+      "Los celulares tienen alto riesgo de bloqueo, IMEI reportado, duplicación, financiamiento pendiente o suplantación.",
+
+    buyerAdvice:
+      "Comprueba el IMEI, solicita prueba de propiedad y utiliza Pago Protegido o verificación QSM.",
+
+    recommendedEvidence: [
+      "IMEI o serial",
+      "Video de funcionamiento",
+      "Captura de información del dispositivo",
+      "Factura o caja",
+      "Estado de batería"
+    ],
+
+    verificationMode: "ENHANCED"
+  },
+
+  Vehículos: {
+    level: "CRITICAL",
+    label: "Riesgo crítico",
+    shortLabel: "Crítico",
+    icon: "🔴",
+    type: "critical",
+    baseRiskScore: 92,
+
+    explanation:
+      "Los vehículos implican identidad legal, matrícula, chasis, condición mecánica y una operación económica de alto valor.",
+
+    buyerAdvice:
+      "La publicación requiere revisión presencial, validación documental y asistencia profesional antes de completar la operación.",
+
+    recommendedEvidence: [
+      "VIN o número de chasis",
+      "Matrícula",
+      "Fotografías completas",
+      "Kilometraje",
+      "Video del vehículo encendido",
+      "Inspección presencial"
+    ],
+
+    verificationMode: "PHYSICAL"
+  },
+
+  Otros: {
+    level: "UNCLASSIFIED",
+    label: "Riesgo por determinar",
+    shortLabel: "Pendiente",
+    icon: "⚪",
+    type: "pending",
+    baseRiskScore: 40,
+
+    explanation:
+      "QSM todavía no puede determinar el nivel de riesgo hasta analizar mejor la información del producto.",
+
+    buyerAdvice:
+      "Revisa cuidadosamente la descripción, fotografías, vendedor y condiciones de entrega.",
+
+    recommendedEvidence: [
+      "Fotografías reales",
+      "Descripción completa",
+      "Prueba de propiedad"
+    ],
+
+    verificationMode: "REVIEW"
+  }
+};
+
+const DEFAULT_RISK_CONFIG = {
+  level: "PENDING",
+  label: "Análisis pendiente",
+  shortLabel: "Pendiente",
+  icon: "⚪",
+  type: "pending",
+  baseRiskScore: 0,
+
+  explanation:
+    "Selecciona una categoría para que QSM pueda analizar el nivel de riesgo.",
+
+  buyerAdvice:
+    "La recomendación aparecerá después de seleccionar la categoría.",
+
+  recommendedEvidence: [],
+
+  verificationMode: "PENDING"
+};
+
+/*
+|--------------------------------------------------------------------------
+| Campos dinámicos por categoría
+|--------------------------------------------------------------------------
+*/
+
+const CATEGORY_TECHNICAL_CONFIG = {
+  Celulares: {
+    title:
+      "Identidad del dispositivo",
+
+    description:
+      "Estos datos permiten reducir bloqueos, duplicaciones y publicaciones sospechosas.",
+
+    requiredFields: [
+      "brand",
+      "model"
+    ],
+
+    recommendedFields: [
+      "imei",
+      "serialNumber",
+      "batteryHealth"
+    ]
+  },
+
+  Laptops: {
+    title:
+      "Especificaciones de la laptop",
+
+    description:
+      "Registra las características técnicas reales y el estado del equipo.",
+
+    requiredFields: [
+      "brand",
+      "model"
+    ],
+
+    recommendedFields: [
+      "serialNumber",
+      "ramMemory",
+      "storageCapacity",
+      "batteryHealth"
+    ]
+  },
+
+  Gaming: {
+    title:
+      "Datos del equipo gaming",
+
+    description:
+      "La información ayuda a verificar modelo, funcionamiento y accesorios incluidos.",
+
+    requiredFields: [
+      "brand",
+      "model"
+    ],
+
+    recommendedFields: [
+      "serialNumber",
+      "storageCapacity",
+      "accessoriesIncluded"
+    ]
+  },
+
+  Tecnología: {
+    title:
+      "Especificaciones técnicas",
+
+    description:
+      "Completa la identidad y las características principales del producto.",
+
+    requiredFields: [
+      "brand",
+      "model"
+    ],
+
+    recommendedFields: [
+      "serialNumber",
+      "dimensions",
+      "accessoriesIncluded"
+    ]
+  },
+
+  Vehículos: {
+    title:
+      "Identidad del vehículo",
+
+    description:
+      "Los datos del vehículo serán utilizados para revisión documental y física.",
+
+    requiredFields: [
+      "brand",
+      "model",
+      "vehicleYear",
+      "mileage"
+    ],
+
+    recommendedFields: [
+      "vin",
+      "transmission",
+      "fuelType"
+    ]
+  },
+
+  Moda: {
+    title:
+      "Detalles de la prenda",
+
+    description:
+      "Agrega talla, marca, material y datos de autenticidad cuando corresponda.",
+
+    requiredFields: [
+      "clothingSize"
+    ],
+
+    recommendedFields: [
+      "brand",
+      "material",
+      "authenticityStatus"
+    ]
+  },
+
+  Hogar: {
+    title:
+      "Características del artículo",
+
+    description:
+      "Indica dimensiones, marca y accesorios incluidos para evitar confusiones.",
+
+    requiredFields: [],
+
+    recommendedFields: [
+      "brand",
+      "model",
+      "dimensions"
+    ]
+  },
+
+  Otros: {
+    title:
+      "Información adicional",
+
+    description:
+      "Agrega detalles que permitan identificar correctamente el producto.",
+
+    requiredFields: [],
+
+    recommendedFields: [
+      "brand",
+      "model",
+      "serialNumber"
+    ]
+  }
+};
+
+const DEFAULT_TECHNICAL_CONFIG = {
+  title:
+    "Información técnica",
+
+  description:
+    "Selecciona una categoría para mostrar las preguntas correspondientes.",
+
+  requiredFields: [],
+
+  recommendedFields: []
 };
 
 /*
@@ -304,83 +719,886 @@ function NewProduct() {
       ""
     );
 
-  /*
-  |--------------------------------------------------------------------------
-  | Progreso de publicación
-  |--------------------------------------------------------------------------
-  */
+    /*
+|--------------------------------------------------------------------------
+| Progreso de publicación
+|--------------------------------------------------------------------------
+*/
 
-  const completion =
-    useMemo(() => {
-      const checks = [
-        form.title.trim().length >= 5,
-        form.description.trim().length >= 40,
-        Number(form.price) > 0,
-        Boolean(form.category),
-        Boolean(form.condition),
-        Boolean(form.location.trim()),
-        imageFiles.length >= 1,
-        Boolean(form.deliveryMethod)
-      ];
+const completion =
+  useMemo(() => {
+    const checks = [
+      form.title.trim().length >= 5,
+      form.description.trim().length >= 40,
+      Number(form.price) > 0,
+      Boolean(form.category),
+      Boolean(form.condition),
+      Boolean(form.location.trim()),
+      imageFiles.length >= 1,
+      Boolean(form.deliveryMethod)
+    ];
 
-      return Math.round(
-        (
-          checks.filter(
-            Boolean
-          ).length /
-          checks.length
-        ) * 100
+    const completedChecks =
+      checks.filter(Boolean).length;
+
+    return Math.round(
+      (
+        completedChecks /
+        checks.length
+      ) * 100
+    );
+  }, [
+    form.title,
+    form.description,
+    form.price,
+    form.category,
+    form.condition,
+    form.location,
+    form.deliveryMethod,
+    imageFiles.length
+  ]);
+
+/*
+|--------------------------------------------------------------------------
+| Nivel de riesgo real según categoría y precio
+|--------------------------------------------------------------------------
+*/
+
+const riskLevel =
+  useMemo(() => {
+    const categoryConfig =
+      CATEGORY_RISK_CONFIG[
+        form.category
+      ] ||
+      DEFAULT_RISK_CONFIG;
+
+    const price =
+      Number(form.price) ||
+      0;
+
+    let adjustedRiskScore =
+      categoryConfig.baseRiskScore;
+
+    if (
+      price >= 250000
+    ) {
+      adjustedRiskScore += 12;
+    } else if (
+      price >= 100000
+    ) {
+      adjustedRiskScore += 8;
+    } else if (
+      price >= 50000
+    ) {
+      adjustedRiskScore += 4;
+    }
+
+    adjustedRiskScore =
+      clampNumber(
+        adjustedRiskScore,
+        0,
+        100,
+        categoryConfig.baseRiskScore
       );
-    }, [
-      form,
-      imageFiles
-    ]);
 
-  /*
-  |--------------------------------------------------------------------------
-  | Nivel de riesgo visual
-  |--------------------------------------------------------------------------
-  */
+    let finalLevel =
+      categoryConfig.level;
 
-  const riskLevel =
-    useMemo(() => {
-      if (
-        completion >= 90 &&
-        imageFiles.length >= 3 &&
-        form.description
-          .trim()
-          .length >= 100
-      ) {
-        return {
-          label:
-            "Riesgo bajo",
-          type:
-            "success"
-        };
-      }
+    let finalLabel =
+      categoryConfig.label;
 
-      if (
-        completion >= 65
-      ) {
-        return {
-          label:
-            "Riesgo medio",
-          type:
-            "warning"
-        };
-      }
+    let finalType =
+      categoryConfig.type;
 
-      return {
-        label:
-          "Análisis pendiente",
-        type:
-          "pending"
-      };
-    }, [
-      completion,
-      imageFiles.length,
+    let finalIcon =
+      categoryConfig.icon;
+
+    if (
+      categoryConfig.level ===
+        "LOW" &&
+      price >= 100000
+    ) {
+      finalLevel =
+        "MEDIUM";
+
+      finalLabel =
+        "Riesgo medio";
+
+      finalType =
+        "warning";
+
+      finalIcon =
+        "🟡";
+    }
+
+    if (
+      categoryConfig.level ===
+        "MEDIUM" &&
+      price >= 250000
+    ) {
+      finalLevel =
+        "HIGH";
+
+      finalLabel =
+        "Riesgo alto";
+
+      finalType =
+        "high";
+
+      finalIcon =
+        "🟠";
+    }
+
+    return {
+      ...categoryConfig,
+
+      level:
+        finalLevel,
+
+      label:
+        finalLabel,
+
+      type:
+        finalType,
+
+      icon:
+        finalIcon,
+
+      score:
+        adjustedRiskScore
+    };
+  }, [
+    form.category,
+    form.price
+  ]);
+
+/*
+|--------------------------------------------------------------------------
+| Configuración técnica activa
+|--------------------------------------------------------------------------
+*/
+
+const technicalConfig =
+  useMemo(() => {
+    return (
+      CATEGORY_TECHNICAL_CONFIG[
+        form.category
+      ] ||
+      DEFAULT_TECHNICAL_CONFIG
+    );
+  }, [
+    form.category
+  ]);
+
+/*
+|--------------------------------------------------------------------------
+| Puntuación de evidencia técnica
+|--------------------------------------------------------------------------
+*/
+
+const evidenceScore =
+  useMemo(() => {
+    let score = 0;
+
+    const technicalValues = [
+      form.brand,
+      form.model,
+      form.serialNumber,
+      form.imei,
+      form.storageCapacity,
+      form.ramMemory,
+      form.batteryHealth,
+      form.vehicleYear,
+      form.vin,
+      form.mileage,
+      form.transmission,
+      form.fuelType,
+      form.clothingSize,
+      form.material,
+      form.dimensions,
+      form.accessoriesIncluded
+    ];
+
+    const completedTechnicalFields =
+      technicalValues.filter(
+        value =>
+          String(
+            value || ""
+          ).trim().length > 0
+      ).length;
+
+    score += Math.min(
+      completedTechnicalFields * 5,
+      45
+    );
+
+    if (
+      form.hasInvoice
+    ) {
+      score += 20;
+    }
+
+    if (
+      form.hasOriginalBox
+    ) {
+      score += 10;
+    }
+
+    if (
+      form.acceptsPhysicalInspection
+    ) {
+      score += 15;
+    }
+
+    if (
+      form.authenticityStatus ===
+      "VERIFIED"
+    ) {
+      score += 10;
+    }
+
+    return clampNumber(
+      score,
+      0,
+      100,
+      0
+    );
+  }, [
+    form.brand,
+    form.model,
+    form.serialNumber,
+    form.imei,
+    form.storageCapacity,
+    form.ramMemory,
+    form.batteryHealth,
+    form.vehicleYear,
+    form.vin,
+    form.mileage,
+    form.transmission,
+    form.fuelType,
+    form.clothingSize,
+    form.material,
+    form.dimensions,
+    form.accessoriesIncluded,
+    form.hasInvoice,
+    form.hasOriginalBox,
+    form.acceptsPhysicalInspection,
+    form.authenticityStatus
+  ]);
+
+/*
+|--------------------------------------------------------------------------
+| Puntuación inteligente de calidad
+|--------------------------------------------------------------------------
+*/
+
+const publicationScore =
+  useMemo(() => {
+    let score = 0;
+
+    /*
+    |--------------------------------------------------------------------------
+    | Información básica: máximo 42 puntos
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      form.title
+        .trim()
+        .length >= 5
+    ) {
+      score += 6;
+    }
+
+    if (
+      form.title
+        .trim()
+        .length >= 18
+    ) {
+      score += 3;
+    }
+
+    if (
       form.description
-    ]);
+        .trim()
+        .length >= 40
+    ) {
+      score += 8;
+    }
+
+    if (
+      form.description
+        .trim()
+        .length >= 120
+    ) {
+      score += 6;
+    }
+
+    if (
+      Number(form.price) > 0
+    ) {
+      score += 5;
+    }
+
+    if (form.category) {
+      score += 4;
+    }
+
+    if (form.condition) {
+      score += 4;
+    }
+
+    if (
+      form.location.trim()
+    ) {
+      score += 3;
+    }
+
+    if (
+      form.deliveryMethod
+    ) {
+      score += 3;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Evidencia visual: máximo 31 puntos
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      imageFiles.length >= 1
+    ) {
+      score += 10;
+    }
+
+    if (
+      imageFiles.length >= 3
+    ) {
+      score += 7;
+    }
+
+    if (
+      imageFiles.length >= 5
+    ) {
+      score += 4;
+    }
+
+    if (videoFile) {
+      score += 10;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Confianza del vendedor: máximo 17 puntos
+    |--------------------------------------------------------------------------
+    */
+
+    if (isVerified) {
+      score += 10;
+    }
+
+    if (
+      trustScore >= 70
+    ) {
+      score += 4;
+    }
+
+    if (
+      trustScore >= 90
+    ) {
+      score += 3;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Información adicional: máximo 10 puntos
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      form.warranty.trim()
+    ) {
+      score += 4;
+    }
+
+    if (
+      form.specialPriceReason !==
+      "NONE"
+    ) {
+      score += 2;
+    }
+
+    if (
+      form.specialPriceReason !==
+        "NONE" &&
+      form.specialPriceExplanation
+        .trim()
+        .length >= 20
+    ) {
+      score += 4;
+    }
+
+    return clampNumber(
+      score,
+      0,
+      100,
+      0
+    );
+  }, [
+    form,
+    imageFiles.length,
+    videoFile,
+    isVerified,
+    trustScore
+  ]);
+  /*
+|--------------------------------------------------------------------------
+| Clasificación QSM
+|--------------------------------------------------------------------------
+*/
+
+const publicationLevel =
+  useMemo(() => {
+    if (
+      publicationScore >= 90
+    ) {
+      return {
+        name:
+          "QSM Platinum",
+        icon:
+          "💎",
+        label:
+          "Confianza excelente",
+        color:
+          "#22c55e"
+      };
+    }
+
+    if (
+      publicationScore >= 75
+    ) {
+      return {
+        name:
+          "QSM Gold",
+        icon:
+          "🏆",
+        label:
+          "Confianza muy alta",
+        color:
+          "#35d0c3"
+      };
+    }
+
+    if (
+      publicationScore >= 60
+    ) {
+      return {
+        name:
+          "QSM Silver",
+        icon:
+          "🥈",
+        label:
+          "Confianza alta",
+        color:
+          "#60a5fa"
+      };
+    }
+
+    if (
+      publicationScore >= 40
+    ) {
+      return {
+        name:
+          "QSM Bronze",
+        icon:
+          "🥉",
+        label:
+          "Confianza media",
+        color:
+          "#facc15"
+      };
+    }
+
+    return {
+      name:
+        "Sin clasificar",
+      icon:
+        "⚪",
+      label:
+        "Publicación incompleta",
+      color:
+        "#f87171"
+    };
+  }, [
+    publicationScore
+  ]);
+  /*
+|--------------------------------------------------------------------------
+| Probabilidad estimada de venta
+|--------------------------------------------------------------------------
+*/
+
+const saleProbability =
+  useMemo(() => {
+    let probability =
+      publicationScore * 0.72;
+
+    if (
+      imageFiles.length >= 3
+    ) {
+      probability += 5;
+    }
+
+    if (videoFile) {
+      probability += 4;
+    }
+
+    if (isVerified) {
+      probability += 5;
+    }
+
+    if (
+      trustScore >= 80
+    ) {
+      probability += 4;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Las publicaciones de alto riesgo tienen más fricción
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      riskLevel.level ===
+      "HIGH"
+    ) {
+      probability -= 5;
+    }
+
+    if (
+      riskLevel.level ===
+      "CRITICAL"
+    ) {
+      probability -= 12;
+    }
+
+    return Math.round(
+      clampNumber(
+        probability,
+        5,
+        96,
+        5
+      )
+    );
+  }, [
+    publicationScore,
+    imageFiles.length,
+    videoFile,
+    isVerified,
+    trustScore,
+    riskLevel.level
+  ]);
+  /*
+|--------------------------------------------------------------------------
+| Tiempo estimado de venta
+|--------------------------------------------------------------------------
+*/
+
+const estimatedSaleTime =
+  useMemo(() => {
+    if (
+      publicationScore >= 90
+    ) {
+      return {
+        days:
+          "1–3 días",
+        message:
+          "La publicación presenta un nivel de confianza excelente."
+      };
+    }
+
+    if (
+      publicationScore >= 75
+    ) {
+      return {
+        days:
+          "3–7 días",
+        message:
+          "La publicación tiene buena calidad y evidencia suficiente."
+      };
+    }
+
+    if (
+      publicationScore >= 60
+    ) {
+      return {
+        days:
+          "1–2 semanas",
+        message:
+          "Puede mejorar agregando evidencia y más detalles."
+      };
+    }
+
+    if (
+      publicationScore >= 40
+    ) {
+      return {
+        days:
+          "2–4 semanas",
+        message:
+          "La publicación todavía genera confianza limitada."
+      };
+    }
+
+    return {
+      days:
+        "No estimado",
+      message:
+        "Completa la publicación para generar una estimación."
+    };
+  }, [
+    publicationScore
+  ]);
+  /*
+|--------------------------------------------------------------------------
+| Recomendaciones inteligentes
+|--------------------------------------------------------------------------
+*/
+
+const aiSuggestions =
+  useMemo(() => {
+    const suggestions = [];
+
+    if (
+      form.title
+        .trim()
+        .length < 18
+    ) {
+      suggestions.push({
+        type:
+          "INFO",
+        icon:
+          "📝",
+        title:
+          "Mejora el título",
+        description:
+          "Incluye marca, modelo, capacidad o característica principal.",
+        points:
+          3
+      });
+    }
+
+    if (
+      form.description
+        .trim()
+        .length < 120
+    ) {
+      suggestions.push({
+        type:
+          "INFO",
+        icon:
+          "📄",
+        title:
+          "Amplía la descripción",
+        description:
+          "Explica funcionamiento, detalles, accesorios y motivo de venta.",
+        points:
+          6
+      });
+    }
+
+    if (
+      imageFiles.length < 3
+    ) {
+      suggestions.push({
+        type:
+          "IMPORTANT",
+        icon:
+          "📷",
+        title:
+          "Agrega más fotografías",
+        description:
+          "Tres o más imágenes permiten evaluar mejor el estado real.",
+        points:
+          7
+      });
+    }
+
+    if (!videoFile) {
+      suggestions.push({
+        type:
+          "OPTIONAL",
+        icon:
+          "🎥",
+        title:
+          "Agrega un video",
+        description:
+          "Un video de funcionamiento puede aumentar considerablemente la confianza.",
+        points:
+          10
+      });
+    }
+
+    if (!isVerified) {
+      suggestions.push({
+        type:
+          "IMPORTANT",
+        icon:
+          "🛡️",
+        title:
+          "Verifica tu identidad",
+        description:
+          "Los vendedores verificados obtienen una insignia de confianza.",
+        points:
+          10
+      });
+    }
+
+    if (
+      !form.warranty.trim()
+    ) {
+      suggestions.push({
+        type:
+          "OPTIONAL",
+        icon:
+          "📋",
+        title:
+          "Aclara la garantía",
+        description:
+          "Indica si tiene garantía, cuánto tiempo o si no aplica.",
+        points:
+          4
+      });
+    }
+
+    if (
+      [
+        "HIGH",
+        "CRITICAL"
+      ].includes(
+        riskLevel.level
+      )
+    ) {
+      suggestions.push({
+        type:
+          "SECURITY",
+        icon:
+          "🔐",
+        title:
+          "Agrega evidencia de propiedad",
+        description:
+          riskLevel
+            .recommendedEvidence
+            .join(", "),
+        points:
+          0
+      });
+    }
+
+    return suggestions.slice(
+      0,
+      6
+    );
+  }, [
+    form,
+    imageFiles.length,
+    videoFile,
+    isVerified,
+    riskLevel
+  ]);
+  /*
+|--------------------------------------------------------------------------
+| Alertas preventivas
+|--------------------------------------------------------------------------
+*/
+
+const suspiciousAlerts =
+  useMemo(() => {
+    const alerts = [];
+
+    const normalizedTitle =
+      form.title
+        .trim()
+        .toLowerCase();
+
+    const normalizedDescription =
+      form.description
+        .trim()
+        .toLowerCase();
+
+    const price =
+      Number(form.price) || 0;
+
+    if (
+      price > 0 &&
+      price < 500 &&
+      [
+        "Celulares",
+        "Laptops",
+        "Gaming",
+        "Vehículos"
+      ].includes(
+        form.category
+      )
+    ) {
+      alerts.push(
+        "El precio parece demasiado bajo para esta categoría."
+      );
+    }
+
+    if (
+      form.category ===
+        "Moda" &&
+      (
+        normalizedTitle.includes(
+          "carro"
+        ) ||
+        normalizedTitle.includes(
+          "vehículo"
+        ) ||
+        normalizedDescription.includes(
+          "motor"
+        )
+      )
+    ) {
+      alerts.push(
+        "La categoría seleccionada podría no coincidir con la descripción."
+      );
+    }
+
+    if (
+      form.category ===
+        "Vehículos" &&
+      imageFiles.length > 0 &&
+      imageFiles.length < 4
+    ) {
+      alerts.push(
+        "Los vehículos deben mostrar varios ángulos para generar confianza."
+      );
+    }
+
+    if (
+      form.specialPriceReason ===
+        "NONE" &&
+      price > 0 &&
+      price < 1000 &&
+      riskLevel.level !==
+        "LOW"
+    ) {
+      alerts.push(
+        "Explica por qué el precio es inusualmente bajo."
+      );
+    }
+
+    return alerts;
+  }, [
+    form,
+    imageFiles.length,
+    riskLevel.level
+  ]);
+
 
   /*
   |--------------------------------------------------------------------------
@@ -398,37 +1616,44 @@ function NewProduct() {
   |--------------------------------------------------------------------------
   */
 
-  const handleChange = (
-    event
-  ) => {
-    const {
-      name,
-      value
-    } = event.target;
+const handleChange = (
+  event
+) => {
+  const {
+    name,
+    value,
+    type,
+    checked
+  } = event.target;
 
-    setForm(
-      (
-        currentForm
-      ) => ({
-        ...currentForm,
-        [name]:
-          value
-      })
-    );
+  const normalizedValue =
+    type === "checkbox"
+      ? checked
+      : value;
 
-    setSuccess("");
-    setError("");
+  setForm(
+    (
+      currentForm
+    ) => ({
+      ...currentForm,
+      [name]:
+        normalizedValue
+    })
+  );
 
-    setFieldErrors(
-      (
-        currentErrors
-      ) => ({
-        ...currentErrors,
-        [name]:
-          ""
-      })
-    );
-  };
+  setSuccess("");
+  setError("");
+
+  setFieldErrors(
+    (
+      currentErrors
+    ) => ({
+      ...currentErrors,
+      [name]:
+        ""
+    })
+  );
+};
 
   /*
   |--------------------------------------------------------------------------
@@ -533,6 +1758,111 @@ function NewProduct() {
         errors.specialPriceExplanation =
           "Explica brevemente el motivo del precio especial.";
       }
+      /*
+|--------------------------------------------------------------------------
+| Validaciones por categoría
+|--------------------------------------------------------------------------
+*/
+
+if (
+  [
+    "Celulares",
+    "Laptops",
+    "Gaming",
+    "Tecnología",
+    "Vehículos"
+  ].includes(
+    form.category
+  )
+) {
+  if (
+    !String(
+      form.brand || ""
+    ).trim()
+  ) {
+    errors.brand =
+      "Indica la marca del producto.";
+  }
+
+  if (
+    !String(
+      form.model || ""
+    ).trim()
+  ) {
+    errors.model =
+      "Indica el modelo del producto.";
+  }
+}
+
+if (
+  form.category ===
+  "Vehículos"
+) {
+  const year =
+    Number(
+      form.vehicleYear
+    );
+
+  const currentYear =
+    new Date()
+      .getFullYear();
+
+  if (
+    !Number.isFinite(year) ||
+    year < 1950 ||
+    year >
+      currentYear + 1
+  ) {
+    errors.vehicleYear =
+      "Introduce un año válido para el vehículo.";
+  }
+
+  if (
+    !String(
+      form.mileage || ""
+    ).trim()
+  ) {
+    errors.mileage =
+      "Indica el kilometraje del vehículo.";
+  }
+}
+
+if (
+  form.category ===
+    "Moda" &&
+  !String(
+    form.clothingSize ||
+    ""
+  ).trim()
+) {
+  errors.clothingSize =
+    "Indica la talla del producto.";
+}
+
+if (
+  form.imei &&
+  !/^[0-9]{14,17}$/.test(
+    String(form.imei)
+      .replace(
+        /\s/g,
+        ""
+      )
+  )
+) {
+  errors.imei =
+    "El IMEI debe contener entre 14 y 17 dígitos.";
+}
+
+if (
+  form.vin &&
+  !/^[A-HJ-NPR-Z0-9]{17}$/i.test(
+    String(form.vin)
+      .trim()
+  )
+) {
+  errors.vin =
+    "El VIN debe contener 17 caracteres válidos.";
+}
 
       setFieldErrors(
         errors
@@ -2121,6 +3451,105 @@ function NewProduct() {
         form.quality ||
         "UNKNOWN",
 
+        brand:
+  String(
+    form.brand || ""
+  ).trim(),
+
+model:
+  String(
+    form.model || ""
+  ).trim(),
+
+serialNumber:
+  String(
+    form.serialNumber || ""
+  ).trim(),
+
+imei:
+  String(
+    form.imei || ""
+  ).trim(),
+
+storageCapacity:
+  String(
+    form.storageCapacity || ""
+  ).trim(),
+
+ramMemory:
+  String(
+    form.ramMemory || ""
+  ).trim(),
+
+batteryHealth:
+  String(
+    form.batteryHealth || ""
+  ).trim(),
+
+vehicleDetails: {
+  year:
+    form.vehicleYear
+      ? Number(form.vehicleYear)
+      : null,
+
+  vin:
+    String(
+      form.vin || ""
+    ).trim(),
+
+  mileage:
+    String(
+      form.mileage || ""
+    ).trim(),
+
+  transmission:
+    form.transmission || "",
+
+  fuelType:
+    form.fuelType || ""
+},
+
+clothingDetails: {
+  size:
+    String(
+      form.clothingSize || ""
+    ).trim(),
+
+  material:
+    String(
+      form.material || ""
+    ).trim(),
+
+  authenticityStatus:
+    form.authenticityStatus ||
+    "NOT_SPECIFIED"
+},
+
+dimensions:
+  String(
+    form.dimensions || ""
+  ).trim(),
+
+accessoriesIncluded:
+  String(
+    form.accessoriesIncluded || ""
+  ).trim(),
+
+evidence: {
+  hasInvoice:
+    Boolean(form.hasInvoice),
+
+  hasOriginalBox:
+    Boolean(form.hasOriginalBox),
+
+  acceptsPhysicalInspection:
+    Boolean(
+      form.acceptsPhysicalInspection
+    ),
+
+  evidenceScore
+},
+
       location:
         String(
           form.location || ""
@@ -2133,6 +3562,28 @@ function NewProduct() {
 
       deliveryMethod:
         form.deliveryMethod,
+
+       riskLevel:
+  riskLevel.level,
+
+riskLabel:
+  riskLevel.label,
+
+riskScore:
+  riskLevel.score,
+
+verificationMode:
+  riskLevel.verificationMode,
+
+publicationScore,
+
+publicationLevel:
+  publicationLevel.name,
+
+saleProbability,
+
+estimatedSaleTime:
+  estimatedSaleTime.days, 
 
       specialPriceReason:
         form.specialPriceReason ||
@@ -2664,6 +4115,10 @@ function NewProduct() {
             padding:
               80px 18px 118px !important;
           }
+              .evidence-options-grid {
+  grid-template-columns:
+    1fr !important;
+}
 
           .new-product-hero {
             grid-template-columns:
@@ -2748,6 +4203,11 @@ function NewProduct() {
           }
         }
       `}</style>
+      
+      <div
+  className="evidence-options-grid"
+  style={evidenceOptionsGrid}
+></div>
 
       <div
         className="new-product-page-layout"
@@ -2895,6 +4355,7 @@ function NewProduct() {
             style={contentLayout}
           >
             <form
+            id="new-product-form"
               onSubmit={handleSubmit}
               style={formCard}
             >
@@ -3162,6 +4623,566 @@ function NewProduct() {
                   </select>
                 </ProductField>
               </div>
+
+              {form.category && (
+  <>
+    <div style={formSectionDivider} />
+
+    <div style={formSectionHeader}>
+      <div>
+        <p style={sectionEyebrow}>
+          IDENTIDAD DEL PRODUCTO
+        </p>
+
+        <h2 style={sectionHeading}>
+          {technicalConfig.title}
+        </h2>
+
+        <p style={sectionDescription}>
+          {technicalConfig.description}
+        </p>
+      </div>
+
+      <span style={technicalScoreBadge}>
+        Evidencia {evidenceScore}/100
+      </span>
+    </div>
+
+    {[
+      "Celulares",
+      "Laptops",
+      "Gaming",
+      "Tecnología",
+      "Vehículos",
+      "Hogar",
+      "Otros"
+    ].includes(
+      form.category
+    ) && (
+      <div
+        className="new-product-form-grid"
+        style={twoColumns}
+      >
+        <ProductField
+          label="Marca"
+          required={
+            technicalConfig
+              .requiredFields
+              .includes("brand")
+          }
+          error={fieldErrors.brand}
+        >
+          <input
+            name="brand"
+            value={form.brand}
+            onChange={handleChange}
+            placeholder="Ej: Apple, Sony, Toyota"
+            maxLength={80}
+            disabled={isBusy}
+            style={fieldInput(
+              Boolean(
+                fieldErrors.brand
+              )
+            )}
+          />
+        </ProductField>
+
+        <ProductField
+          label="Modelo"
+          required={
+            technicalConfig
+              .requiredFields
+              .includes("model")
+          }
+          error={fieldErrors.model}
+        >
+          <input
+            name="model"
+            value={form.model}
+            onChange={handleChange}
+            placeholder="Ej: iPhone 15 Pro"
+            maxLength={100}
+            disabled={isBusy}
+            style={fieldInput(
+              Boolean(
+                fieldErrors.model
+              )
+            )}
+          />
+        </ProductField>
+      </div>
+    )}
+
+    {form.category ===
+      "Celulares" && (
+      <>
+        <div
+          className="new-product-form-grid"
+          style={twoColumns}
+        >
+          <ProductField
+            label="IMEI"
+            error={fieldErrors.imei}
+            hint="Recomendado"
+          >
+            <input
+              name="imei"
+              value={form.imei}
+              onChange={handleChange}
+              placeholder="15 dígitos"
+              maxLength={17}
+              disabled={isBusy}
+              style={fieldInput(
+                Boolean(
+                  fieldErrors.imei
+                )
+              )}
+            />
+          </ProductField>
+
+          <ProductField
+            label="Número de serie"
+            hint="Recomendado"
+          >
+            <input
+              name="serialNumber"
+              value={form.serialNumber}
+              onChange={handleChange}
+              placeholder="Serial del fabricante"
+              maxLength={100}
+              disabled={isBusy}
+              style={fieldInput(false)}
+            />
+          </ProductField>
+        </div>
+
+        <div
+          className="new-product-form-grid"
+          style={twoColumns}
+        >
+          <ProductField
+            label="Capacidad"
+          >
+            <input
+              name="storageCapacity"
+              value={form.storageCapacity}
+              onChange={handleChange}
+              placeholder="Ej: 256 GB"
+              maxLength={60}
+              disabled={isBusy}
+              style={fieldInput(false)}
+            />
+          </ProductField>
+
+          <ProductField
+            label="Salud de batería"
+          >
+            <input
+              name="batteryHealth"
+              value={form.batteryHealth}
+              onChange={handleChange}
+              placeholder="Ej: 89%"
+              maxLength={20}
+              disabled={isBusy}
+              style={fieldInput(false)}
+            />
+          </ProductField>
+        </div>
+      </>
+    )}
+
+    {form.category ===
+      "Laptops" && (
+      <>
+        <div
+          className="new-product-form-grid"
+          style={twoColumns}
+        >
+          <ProductField
+            label="Memoria RAM"
+          >
+            <input
+              name="ramMemory"
+              value={form.ramMemory}
+              onChange={handleChange}
+              placeholder="Ej: 16 GB"
+              maxLength={60}
+              disabled={isBusy}
+              style={fieldInput(false)}
+            />
+          </ProductField>
+
+          <ProductField
+            label="Almacenamiento"
+          >
+            <input
+              name="storageCapacity"
+              value={form.storageCapacity}
+              onChange={handleChange}
+              placeholder="Ej: SSD 512 GB"
+              maxLength={80}
+              disabled={isBusy}
+              style={fieldInput(false)}
+            />
+          </ProductField>
+        </div>
+
+        <div
+          className="new-product-form-grid"
+          style={twoColumns}
+        >
+          <ProductField
+            label="Número de serie"
+          >
+            <input
+              name="serialNumber"
+              value={form.serialNumber}
+              onChange={handleChange}
+              placeholder="Serial del equipo"
+              maxLength={100}
+              disabled={isBusy}
+              style={fieldInput(false)}
+            />
+          </ProductField>
+
+          <ProductField
+            label="Estado de batería"
+          >
+            <input
+              name="batteryHealth"
+              value={form.batteryHealth}
+              onChange={handleChange}
+              placeholder="Ej: Buena / 82%"
+              maxLength={60}
+              disabled={isBusy}
+              style={fieldInput(false)}
+            />
+          </ProductField>
+        </div>
+      </>
+    )}
+
+    {form.category ===
+      "Vehículos" && (
+      <>
+        <div
+          className="new-product-form-grid"
+          style={twoColumns}
+        >
+          <ProductField
+            label="Año"
+            required
+            error={
+              fieldErrors.vehicleYear
+            }
+          >
+            <input
+              name="vehicleYear"
+              type="number"
+              min="1950"
+              max={
+                new Date()
+                  .getFullYear() + 1
+              }
+              value={form.vehicleYear}
+              onChange={handleChange}
+              placeholder="2022"
+              disabled={isBusy}
+              style={fieldInput(
+                Boolean(
+                  fieldErrors.vehicleYear
+                )
+              )}
+            />
+          </ProductField>
+
+          <ProductField
+            label="Kilometraje"
+            required
+            error={fieldErrors.mileage}
+          >
+            <input
+              name="mileage"
+              value={form.mileage}
+              onChange={handleChange}
+              placeholder="Ej: 45,000 km"
+              maxLength={40}
+              disabled={isBusy}
+              style={fieldInput(
+                Boolean(
+                  fieldErrors.mileage
+                )
+              )}
+            />
+          </ProductField>
+        </div>
+
+        <ProductField
+          label="VIN o chasis"
+          error={fieldErrors.vin}
+          hint="Recomendado"
+        >
+          <input
+            name="vin"
+            value={form.vin}
+            onChange={handleChange}
+            placeholder="17 caracteres"
+            maxLength={17}
+            disabled={isBusy}
+            style={fieldInput(
+              Boolean(
+                fieldErrors.vin
+              )
+            )}
+          />
+        </ProductField>
+
+        <div
+          className="new-product-form-grid"
+          style={twoColumns}
+        >
+          <ProductField
+            label="Transmisión"
+          >
+            <select
+              name="transmission"
+              value={form.transmission}
+              onChange={handleChange}
+              disabled={isBusy}
+              style={fieldInput(false)}
+            >
+              <option value="">
+                Seleccionar
+              </option>
+
+              <option value="AUTOMATIC">
+                Automática
+              </option>
+
+              <option value="MANUAL">
+                Mecánica
+              </option>
+
+              <option value="CVT">
+                CVT
+              </option>
+            </select>
+          </ProductField>
+
+          <ProductField
+            label="Combustible"
+          >
+            <select
+              name="fuelType"
+              value={form.fuelType}
+              onChange={handleChange}
+              disabled={isBusy}
+              style={fieldInput(false)}
+            >
+              <option value="">
+                Seleccionar
+              </option>
+
+              <option value="GASOLINE">
+                Gasolina
+              </option>
+
+              <option value="DIESEL">
+                Diésel
+              </option>
+
+              <option value="HYBRID">
+                Híbrido
+              </option>
+
+              <option value="ELECTRIC">
+                Eléctrico
+              </option>
+
+              <option value="LPG">
+                GLP
+              </option>
+            </select>
+          </ProductField>
+        </div>
+      </>
+    )}
+
+    {form.category ===
+      "Moda" && (
+      <>
+        <div
+          className="new-product-form-grid"
+          style={twoColumns}
+        >
+          <ProductField
+            label="Talla"
+            required
+            error={
+              fieldErrors.clothingSize
+            }
+          >
+            <input
+              name="clothingSize"
+              value={form.clothingSize}
+              onChange={handleChange}
+              placeholder="Ej: M, L, 38"
+              maxLength={30}
+              disabled={isBusy}
+              style={fieldInput(
+                Boolean(
+                  fieldErrors.clothingSize
+                )
+              )}
+            />
+          </ProductField>
+
+          <ProductField
+            label="Material"
+          >
+            <input
+              name="material"
+              value={form.material}
+              onChange={handleChange}
+              placeholder="Ej: Algodón"
+              maxLength={80}
+              disabled={isBusy}
+              style={fieldInput(false)}
+            />
+          </ProductField>
+        </div>
+
+        <ProductField
+          label="Autenticidad"
+        >
+          <select
+            name="authenticityStatus"
+            value={
+              form.authenticityStatus
+            }
+            onChange={handleChange}
+            disabled={isBusy}
+            style={fieldInput(false)}
+          >
+            <option value="NOT_SPECIFIED">
+              No especificada
+            </option>
+
+            <option value="ORIGINAL_NO_INVOICE">
+              Original, sin factura
+            </option>
+
+            <option value="ORIGINAL_WITH_INVOICE">
+              Original, con factura
+            </option>
+
+            <option value="VERIFIED">
+              Autenticidad verificada
+            </option>
+
+            <option value="REPLICA">
+              Réplica
+            </option>
+          </select>
+        </ProductField>
+      </>
+    )}
+
+    {[
+      "Gaming",
+      "Tecnología",
+      "Hogar",
+      "Otros"
+    ].includes(
+      form.category
+    ) && (
+      <>
+        <div
+          className="new-product-form-grid"
+          style={twoColumns}
+        >
+          <ProductField
+            label="Número de serie"
+          >
+            <input
+              name="serialNumber"
+              value={form.serialNumber}
+              onChange={handleChange}
+              placeholder="Si está disponible"
+              maxLength={100}
+              disabled={isBusy}
+              style={fieldInput(false)}
+            />
+          </ProductField>
+
+          <ProductField
+            label="Dimensiones"
+          >
+            <input
+              name="dimensions"
+              value={form.dimensions}
+              onChange={handleChange}
+              placeholder="Ej: 120 x 60 x 75 cm"
+              maxLength={100}
+              disabled={isBusy}
+              style={fieldInput(false)}
+            />
+          </ProductField>
+        </div>
+
+        <ProductField
+          label="Accesorios incluidos"
+        >
+          <input
+            name="accessoriesIncluded"
+            value={
+              form.accessoriesIncluded
+            }
+            onChange={handleChange}
+            placeholder="Ej: Cargador, caja, control y cables"
+            maxLength={300}
+            disabled={isBusy}
+            style={fieldInput(false)}
+          />
+        </ProductField>
+      </>
+    )}
+
+    <div style={evidenceOptionsGrid}>
+      <EvidenceOption
+        name="hasInvoice"
+        checked={form.hasInvoice}
+        onChange={handleChange}
+        icon="🧾"
+        title="Tengo factura"
+        description="Permite justificar compra y procedencia."
+        disabled={isBusy}
+      />
+
+      <EvidenceOption
+        name="hasOriginalBox"
+        checked={form.hasOriginalBox}
+        onChange={handleChange}
+        icon="📦"
+        title="Tengo caja original"
+        description="Ayuda a relacionar serial y producto."
+        disabled={isBusy}
+      />
+
+      <EvidenceOption
+        name="acceptsPhysicalInspection"
+        checked={
+          form.acceptsPhysicalInspection
+        }
+        onChange={handleChange}
+        icon="🔍"
+        title="Acepto inspección"
+        description="QSM podrá revisar físicamente el producto."
+        disabled={isBusy}
+      />
+    </div>
+  </>
+)}
 
               <div style={formSectionDivider} />
 
@@ -3675,132 +5696,370 @@ function NewProduct() {
               className="new-product-right-column"
               style={rightColumn}
             >
-              <section style={aiCard}>
-                <div style={aiHeader}>
-                  <div style={aiBrain}>
-                    🧠
-                  </div>
+<section style={aiCard}>
+  <div style={aiHeader}>
+    <div style={aiBrain}>
+      🧠
+    </div>
 
-                  <div>
-                    <h2>
-                      QSM AI
-                    </h2>
+    <div style={{ minWidth: 0 }}>
+      <p style={sectionEyebrow}>
+        QSM INTELLIGENCE
+      </p>
 
-                    <p>
-                      Análisis en tiempo real
-                    </p>
-                  </div>
-                </div>
+      <h2 style={aiTitle}>
+        Análisis de publicación
+      </h2>
 
-                <div style={scoreCircle}>
-                  <strong>
-                    {completion}%
-                  </strong>
+      <p style={aiSubtitle}>
+        Evaluación dinámica de calidad, riesgo y confianza.
+      </p>
+    </div>
 
-                  <span>
-                    completado
-                  </span>
-                </div>
+    <span
+      style={{
+        ...aiLevelBadge,
+        borderColor:
+          `${publicationLevel.color}55`,
+        background:
+          `${publicationLevel.color}18`,
+        color:
+          publicationLevel.color
+      }}
+    >
+      {publicationLevel.icon}
+      {" "}
+      {publicationLevel.name}
+    </span>
+  </div>
 
-                <div style={scoreBar}>
-                  <div
-                    style={{
-                      ...scoreFill,
-                      width:
-                        `${completion}%`
-                    }}
-                  />
-                </div>
+  <div style={intelligenceHero}>
+    <div
+      style={{
+        ...scoreCircle,
+        color:
+          publicationLevel.color,
+        borderColor:
+          `${publicationLevel.color}35`,
+        boxShadow:
+          `0 18px 54px ${publicationLevel.color}20`
+      }}
+    >
+      <strong style={scoreNumber}>
+        {publicationScore}
+      </strong>
 
-                <AnalysisLine
-                  icon="📷"
-                  title="Fotos"
-                  value={`${imageFiles.length}/${MAX_IMAGES}`}
-                  done={imageFiles.length > 0}
-                />
+      <span style={scoreTotal}>
+        /100
+      </span>
 
-                <AnalysisLine
-                  icon="🎥"
-                  title="Video"
-                  value={
-                    videoFile
-                      ? "Agregado"
-                      : "Opcional"
-                  }
-                  done={Boolean(videoFile)}
-                  optional
-                />
+      <small style={scoreCaption}>
+        QSM AI Score
+      </small>
+    </div>
 
-                <AnalysisLine
-                  icon="💰"
-                  title="Precio"
-                  value={
-                    Number(form.price) > 0
-                      ? `RD$ ${Number(
-                          form.price
-                        ).toLocaleString(
-                          "es-DO"
-                        )}`
-                      : "Pendiente"
-                  }
-                  done={
-                    Number(form.price) > 0
-                  }
-                />
+    <div style={intelligenceSummary}>
+      <span
+        style={{
+          ...trustLevelPill,
+          color:
+            publicationLevel.color,
+          borderColor:
+            `${publicationLevel.color}45`,
+          background:
+            `${publicationLevel.color}14`
+        }}
+      >
+        {publicationLevel.label}
+      </span>
 
-                <AnalysisLine
-                  icon="📝"
-                  title="Descripción"
-                  value={
-                    form.description
-                      .trim()
-                      .length >= 40
-                      ? "Aceptable"
-                      : "Muy corta"
-                  }
-                  done={
-                    form.description
-                      .trim()
-                      .length >= 40
-                  }
-                />
+      <p>
+        Esta puntuación mide la calidad y transparencia
+        de la publicación. No reemplaza el nivel de
+        riesgo del producto.
+      </p>
+    </div>
+  </div>
 
-                <AnalysisLine
-                  icon="👤"
-                  title="Vendedor"
-                  value={`Confianza ${trustScore}/100`}
-                  done
-                />
+  <div style={scoreBar}>
+    <div
+      style={{
+        ...scoreFill,
+        width:
+          `${publicationScore}%`,
+        background:
+          `linear-gradient(
+            90deg,
+            #35d0c3,
+            ${publicationLevel.color}
+          )`
+      }}
+    />
+  </div>
 
-                <AnalysisLine
-                  icon="🛡"
-                  title="Riesgo QSM"
-                  value={riskLevel.label}
-                  done={
-                    completion >= 65
-                  }
-                />
+  <div style={intelligenceStatsGrid}>
+    <IntelligenceStat
+      icon="🛡️"
+      label="Riesgo"
+      value={riskLevel.label}
+      helper={`${riskLevel.score}/100`}
+      color={getRiskColor(
+        riskLevel.type
+      )}
+    />
 
-                <div style={aiRecommendationBox}>
-                  <strong>
-                    Recomendación QSM
-                  </strong>
+    <IntelligenceStat
+      icon="📈"
+      label="Probabilidad"
+      value={`${saleProbability}%`}
+      helper="Estimación de venta"
+      color="#35d0c3"
+    />
 
-                  <p>
-                    {getPublicationRecommendation({
-                      completion,
-                      imageCount:
-                        imageFiles.length,
-                      descriptionLength:
-                        form.description
-                          .trim()
-                          .length,
-                      hasVideo:
-                        Boolean(videoFile)
-                    })}
-                  </p>
-                </div>
-              </section>
+    <IntelligenceStat
+      icon="⏱️"
+      label="Tiempo estimado"
+      value={estimatedSaleTime.days}
+      helper="Según calidad actual"
+      color="#60a5fa"
+    />
+
+    <IntelligenceStat
+      icon="✅"
+      label="Formulario"
+      value={`${completion}%`}
+      helper="Campos completados"
+      color="#8b5cf6"
+    />
+  </div>
+
+  <div style={riskIntelligenceCard}>
+    <div style={riskCardHeader}>
+      <div
+        style={{
+          ...riskCardIcon,
+          background:
+            `${getRiskColor(
+              riskLevel.type
+            )}18`,
+          color:
+            getRiskColor(
+              riskLevel.type
+            )
+        }}
+      >
+        {riskLevel.icon}
+      </div>
+
+      <div>
+        <span style={riskSmallLabel}>
+          NIVEL DEL PRODUCTO
+        </span>
+
+        <strong style={riskCardTitle}>
+          {riskLevel.label}
+        </strong>
+      </div>
+    </div>
+
+    <p style={riskExplanation}>
+      {riskLevel.explanation}
+    </p>
+
+    <div style={riskAdviceBox}>
+      <strong>
+        Recomendación para el comprador
+      </strong>
+
+      <p>
+        {riskLevel.buyerAdvice}
+      </p>
+    </div>
+  </div>
+
+  <div style={analysisList}>
+    <AnalysisLine
+      icon="📷"
+      title="Fotografías"
+      value={`${imageFiles.length}/${MAX_IMAGES}`}
+      done={
+        imageFiles.length >= 3
+      }
+    />
+
+    <AnalysisLine
+      icon="🎥"
+      title="Video"
+      value={
+        videoFile
+          ? "Agregado"
+          : "Recomendado"
+      }
+      done={Boolean(videoFile)}
+      optional
+    />
+
+    <AnalysisLine
+      icon="📝"
+      title="Descripción"
+      value={
+        form.description
+          .trim()
+          .length >= 120
+          ? "Completa"
+          : form.description
+              .trim()
+              .length >= 40
+          ? "Aceptable"
+          : "Insuficiente"
+      }
+      done={
+        form.description
+          .trim()
+          .length >= 120
+      }
+    />
+
+    <AnalysisLine
+      icon="👤"
+      title="Vendedor"
+      value={
+        isVerified
+          ? `Verificado · ${trustScore}/100`
+          : `Pendiente · ${trustScore}/100`
+      }
+      done={isVerified}
+    />
+  </div>
+
+  {suspiciousAlerts.length > 0 && (
+    <div style={fraudAlertsBox}>
+      <div style={fraudAlertHeader}>
+        <span>
+          ⚠️
+        </span>
+
+        <div>
+          <strong>
+            Alertas preventivas
+          </strong>
+
+          <p>
+            Revisa estos puntos antes de publicar.
+          </p>
+        </div>
+      </div>
+
+      <div style={fraudAlertList}>
+        {suspiciousAlerts.map(
+          (
+            alert,
+            index
+          ) => (
+            <div
+              key={`${alert}-${index}`}
+              style={fraudAlertItem}
+            >
+              <span>
+                !
+              </span>
+
+              <p>
+                {alert}
+              </p>
+            </div>
+          )
+        )}
+      </div>
+    </div>
+  )}
+
+  <div style={suggestionsHeader}>
+    <div>
+      <p style={sectionEyebrow}>
+        RECOMENDACIONES
+      </p>
+
+      <h3 style={suggestionsTitle}>
+        Cómo aumentar tu puntuación
+      </h3>
+    </div>
+
+    <span style={suggestionCount}>
+      {aiSuggestions.length}
+    </span>
+  </div>
+
+  <div style={suggestionsList}>
+    {aiSuggestions.length > 0 ? (
+      aiSuggestions.map(
+        (
+          suggestion,
+          index
+        ) => (
+          <div
+            key={`${suggestion.title}-${index}`}
+            style={suggestionCard(
+              suggestion.type
+            )}
+          >
+            <div style={suggestionIcon}>
+              {suggestion.icon}
+            </div>
+
+            <div style={suggestionContent}>
+              <strong>
+                {suggestion.title}
+              </strong>
+
+              <p>
+                {suggestion.description}
+              </p>
+            </div>
+
+            {suggestion.points > 0 && (
+              <span style={suggestionPoints}>
+                +{suggestion.points}
+              </span>
+            )}
+          </div>
+        )
+      )
+    ) : (
+      <div style={allCompletedBox}>
+        <span>
+          ✨
+        </span>
+
+        <div>
+          <strong>
+            Publicación optimizada
+          </strong>
+
+          <p>
+            Completaste todas las recomendaciones
+            principales de QSM.
+          </p>
+        </div>
+      </div>
+    )}
+  </div>
+
+  <div style={aiRecommendationBox}>
+    <strong>
+      Diagnóstico QSM
+    </strong>
+
+    <p>
+      {estimatedSaleTime.message}
+    </p>
+
+    <small>
+      Las estimaciones son orientativas y no garantizan
+      que el producto se venderá dentro de ese periodo.
+    </small>
+  </div>
+</section>
 
               <section style={previewCard}>
                 <div style={previewHeader}>
@@ -4056,19 +6315,18 @@ function NewProduct() {
           </button>
         )}
 
-        <button
-          type="submit"
-          form="new-product-form"
-          onClick={handleSubmit}
-          disabled={!canPublish}
-          style={submitButton(
-            canPublish
-          )}
-        >
-          {submitting
-            ? "Publicando..."
-            : "Publicar producto seguro →"}
-        </button>
+<button
+  type="submit"
+  form="new-product-form"
+  disabled={!canPublish}
+  style={submitButton(
+    canPublish
+  )}
+>
+  {submitting
+    ? "Publicando..."
+    : "Publicar producto seguro →"}
+</button>
       </div>
 
       <AiAssistant
@@ -4118,6 +6376,60 @@ function ProductField({
         </span>
       )}
     </div>
+  );
+}
+
+function EvidenceOption({
+  name,
+  checked,
+  onChange,
+  icon,
+  title,
+  description,
+  disabled
+}) {
+  return (
+    <label
+      style={evidenceOptionCard(
+        checked
+      )}
+    >
+      <input
+        type="checkbox"
+        name={name}
+        checked={checked}
+        onChange={onChange}
+        disabled={disabled}
+        style={{
+          display:
+            "none"
+        }}
+      />
+
+      <div style={evidenceOptionIcon}>
+        {icon}
+      </div>
+
+      <div style={{ minWidth: 0 }}>
+        <strong>
+          {title}
+        </strong>
+
+        <p>
+          {description}
+        </p>
+      </div>
+
+      <span
+        style={evidenceCheck(
+          checked
+        )}
+      >
+        {checked
+          ? "✓"
+          : ""}
+      </span>
+    </label>
   );
 }
 
@@ -4235,6 +6547,53 @@ function AnalysisLine({
     </div>
   );
 }
+/*
+|--------------------------------------------------------------------------
+*/
+function IntelligenceStat({
+  icon,
+  label,
+  value,
+  helper,
+  color
+}) {
+  return (
+    <article style={intelligenceStatCard}>
+      <div
+        style={{
+          ...intelligenceStatIcon,
+          color,
+          borderColor:
+            `${color}35`,
+          background:
+            `${color}12`
+        }}
+      >
+        {icon}
+      </div>
+
+      <div style={{ minWidth: 0 }}>
+        <span style={intelligenceStatLabel}>
+          {label}
+        </span>
+
+        <strong
+          style={{
+            ...intelligenceStatValue,
+            color
+          }}
+        >
+          {value}
+        </strong>
+
+        <small style={intelligenceStatHelper}>
+          {helper}
+        </small>
+      </div>
+    </article>
+  );
+}
+
 
 /*
 |--------------------------------------------------------------------------
@@ -4612,6 +6971,31 @@ function formatDeliveryMethod(
   }
 
 }
+
+/*
+|--------------------------------------------------------------------------
+| color de riesgo
+|--------------------------------------------------------------------------
+*/
+function getRiskColor(type) {
+  switch (type) {
+    case "success":
+      return "#22c55e";
+
+    case "warning":
+      return "#facc15";
+
+    case "high":
+      return "#fb923c";
+
+    case "critical":
+      return "#f87171";
+
+    default:
+      return "#94a3b8";
+  }
+}
+
 
 /*
 |--------------------------------------------------------------------------
@@ -5256,6 +7640,28 @@ const riskStatusBadge = (
         "#fde68a"
     },
 
+    high: {
+  border:
+    "1px solid rgba(249, 115, 22, .38)",
+
+  background:
+    "rgba(249, 115, 22, .14)",
+
+  color:
+    "#fdba74"
+},
+
+critical: {
+  border:
+    "1px solid rgba(239, 68, 68, .40)",
+
+  background:
+    "rgba(239, 68, 68, .15)",
+
+  color:
+    "#fca5a5"
+},
+
     pending: {
       border:
         "1px solid rgba(148, 163, 184, .20)",
@@ -5658,6 +8064,126 @@ const twoColumns = {
 
   gap: "14px"
 };
+
+/*
+|--------------------------------------------------------------------------
+|technicalScoreBadge
+|--------------------------------------------------------------------------
+*/
+
+const technicalScoreBadge = {
+  minHeight: "30px",
+  flexShrink: 0,
+
+  display: "inline-flex",
+  alignItems: "center",
+
+  padding: "6px 10px",
+
+  borderRadius: "999px",
+
+  border:
+    "1px solid rgba(56,189,248,.28)",
+
+  background:
+    "rgba(56,189,248,.10)",
+
+  color: "#bae6fd",
+
+  fontSize: "8px",
+  fontWeight: "950"
+};
+
+const evidenceOptionsGrid = {
+  display: "grid",
+
+  gridTemplateColumns:
+    "repeat(3, minmax(0,1fr))",
+
+  gap: "10px",
+
+  marginTop: "5px"
+};
+
+const evidenceOptionCard = (
+  checked
+) => ({
+  minWidth: 0,
+
+  display: "grid",
+
+  gridTemplateColumns:
+    "40px minmax(0,1fr) 25px",
+
+  alignItems: "center",
+  gap: "9px",
+
+  minHeight: "92px",
+
+  padding: "11px",
+
+  borderRadius: "15px",
+
+  border:
+    checked
+      ? "1px solid rgba(53,208,195,.40)"
+      : "1px solid rgba(148,163,184,.13)",
+
+  background:
+    checked
+      ? "rgba(53,208,195,.10)"
+      : "rgba(2,6,23,.34)",
+
+  color: "#cbd5e1",
+
+  fontSize: "8px",
+  lineHeight: "13px",
+
+  cursor:
+    "pointer"
+});
+
+const evidenceOptionIcon = {
+  width: "40px",
+  height: "40px",
+
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+
+  borderRadius: "12px",
+
+  background:
+    "rgba(53,208,195,.08)",
+
+  fontSize: "17px"
+};
+
+const evidenceCheck = (
+  checked
+) => ({
+  width: "24px",
+  height: "24px",
+
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+
+  borderRadius: "50%",
+
+  background:
+    checked
+      ? "#35d0c3"
+      : "#1e293b",
+
+  color:
+    checked
+      ? "#02131f"
+      : "#64748b",
+
+  fontSize: "9px",
+  fontWeight: "950"
+});
 
 /*
 |--------------------------------------------------------------------------
@@ -6305,6 +8831,384 @@ const aiRecommendationBox = {
   fontSize: "9px",
   lineHeight: "16px"
 };
+
+/*
+|--------------------------------------------------------------------------
+| ai TITLE
+|--------------------------------------------------------------------------
+*/
+const aiTitle = {
+  margin: "5px 0 2px",
+  color: "#f8fafc",
+  fontSize: "19px",
+  lineHeight: "24px"
+};
+
+const aiSubtitle = {
+  margin: 0,
+  color: "#94a3b8",
+  fontSize: "9px",
+  lineHeight: "15px"
+};
+
+const aiLevelBadge = {
+  minHeight: "30px",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  marginLeft: "auto",
+  padding: "6px 10px",
+  border: "1px solid transparent",
+  borderRadius: "999px",
+  fontSize: "8px",
+  fontWeight: "950",
+  whiteSpace: "nowrap"
+};
+
+const intelligenceHero = {
+  display: "grid",
+  gridTemplateColumns:
+    "145px minmax(0, 1fr)",
+  alignItems: "center",
+  gap: "17px",
+  marginBottom: "18px"
+};
+
+const scoreNumber = {
+  fontSize: "38px",
+  lineHeight: "38px",
+  fontWeight: "950"
+};
+
+const scoreTotal = {
+  marginTop: "1px",
+  color: "#94a3b8",
+  fontSize: "11px",
+  fontWeight: "800"
+};
+
+const scoreCaption = {
+  marginTop: "4px",
+  color: "#cbd5e1",
+  fontSize: "8px",
+  fontWeight: "900",
+  letterSpacing: ".7px"
+};
+
+const intelligenceSummary = {
+  minWidth: 0,
+  color: "#94a3b8",
+  fontSize: "9px",
+  lineHeight: "16px"
+};
+
+const trustLevelPill = {
+  minHeight: "29px",
+  display: "inline-flex",
+  alignItems: "center",
+  padding: "6px 10px",
+  border: "1px solid transparent",
+  borderRadius: "999px",
+  fontSize: "8px",
+  fontWeight: "950"
+};
+
+const intelligenceStatsGrid = {
+  display: "grid",
+  gridTemplateColumns:
+    "repeat(2, minmax(0, 1fr))",
+  gap: "9px",
+  marginBottom: "16px"
+};
+
+const intelligenceStatCard = {
+  minWidth: 0,
+  display: "grid",
+  gridTemplateColumns:
+    "42px minmax(0, 1fr)",
+  alignItems: "center",
+  gap: "10px",
+  padding: "11px",
+  borderRadius: "15px",
+  border:
+    "1px solid rgba(148,163,184,.11)",
+  background:
+    "rgba(2,6,23,.38)"
+};
+
+const intelligenceStatIcon = {
+  width: "42px",
+  height: "42px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  border: "1px solid transparent",
+  borderRadius: "13px",
+  fontSize: "17px"
+};
+
+const intelligenceStatLabel = {
+  display: "block",
+  marginBottom: "3px",
+  color: "#94a3b8",
+  fontSize: "7px",
+  fontWeight: "900",
+  textTransform: "uppercase",
+  letterSpacing: ".8px"
+};
+
+const intelligenceStatValue = {
+  display: "block",
+  overflow: "hidden",
+  fontSize: "12px",
+  lineHeight: "16px",
+  fontWeight: "950",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap"
+};
+
+const intelligenceStatHelper = {
+  display: "block",
+  marginTop: "2px",
+  color: "#64748b",
+  fontSize: "7px"
+};
+
+const riskIntelligenceCard = {
+  marginBottom: "16px",
+  padding: "15px",
+  borderRadius: "18px",
+  border:
+    "1px solid rgba(148,163,184,.12)",
+  background:
+    "linear-gradient(135deg, rgba(2,6,23,.52), rgba(30,27,75,.25))"
+};
+
+const riskCardHeader = {
+  display: "flex",
+  alignItems: "center",
+  gap: "11px"
+};
+
+const riskCardIcon = {
+  width: "42px",
+  height: "42px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  borderRadius: "13px",
+  fontSize: "17px"
+};
+
+const riskSmallLabel = {
+  display: "block",
+  color: "#64748b",
+  fontSize: "7px",
+  fontWeight: "950",
+  letterSpacing: "1.1px"
+};
+
+const riskCardTitle = {
+  display: "block",
+  marginTop: "3px",
+  color: "#f8fafc",
+  fontSize: "13px"
+};
+
+const riskExplanation = {
+  margin: "12px 0",
+  color: "#94a3b8",
+  fontSize: "9px",
+  lineHeight: "16px"
+};
+
+const riskAdviceBox = {
+  padding: "11px",
+  borderRadius: "13px",
+  border:
+    "1px solid rgba(53,208,195,.13)",
+  background:
+    "rgba(53,208,195,.06)",
+  color: "#cbd5e1",
+  fontSize: "8px",
+  lineHeight: "14px"
+};
+
+const analysisList = {
+  marginBottom: "17px"
+};
+
+const fraudAlertsBox = {
+  marginBottom: "17px",
+  padding: "14px",
+  borderRadius: "17px",
+  border:
+    "1px solid rgba(239,68,68,.28)",
+  background:
+    "rgba(127,29,29,.15)"
+};
+
+const fraudAlertHeader = {
+  display: "flex",
+  alignItems: "flex-start",
+  gap: "10px",
+  color: "#fecaca",
+  fontSize: "9px",
+  lineHeight: "15px"
+};
+
+const fraudAlertList = {
+  display: "grid",
+  gap: "7px",
+  marginTop: "10px"
+};
+
+const fraudAlertItem = {
+  display: "grid",
+  gridTemplateColumns:
+    "22px minmax(0,1fr)",
+  alignItems: "flex-start",
+  gap: "7px",
+  padding: "8px",
+  borderRadius: "10px",
+  background:
+    "rgba(2,6,23,.30)",
+  color: "#fca5a5",
+  fontSize: "8px",
+  lineHeight: "13px"
+};
+
+const suggestionsHeader = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "12px",
+  marginBottom: "10px"
+};
+
+const suggestionsTitle = {
+  margin: "5px 0 0",
+  color: "#f8fafc",
+  fontSize: "14px"
+};
+
+const suggestionCount = {
+  width: "27px",
+  height: "27px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  borderRadius: "50%",
+  background:
+    "rgba(139,92,246,.18)",
+  color: "#ddd6fe",
+  fontSize: "8px",
+  fontWeight: "950"
+};
+
+const suggestionsList = {
+  display: "grid",
+  gap: "8px"
+};
+
+const suggestionCard = (
+  type
+) => {
+  const variants = {
+    IMPORTANT: {
+      border:
+        "1px solid rgba(245,158,11,.23)",
+      background:
+        "rgba(245,158,11,.07)"
+    },
+
+    SECURITY: {
+      border:
+        "1px solid rgba(239,68,68,.23)",
+      background:
+        "rgba(239,68,68,.07)"
+    },
+
+    OPTIONAL: {
+      border:
+        "1px solid rgba(59,130,246,.20)",
+      background:
+        "rgba(59,130,246,.07)"
+    },
+
+    INFO: {
+      border:
+        "1px solid rgba(53,208,195,.18)",
+      background:
+        "rgba(53,208,195,.06)"
+    }
+  };
+
+  return {
+    minWidth: 0,
+    display: "grid",
+    gridTemplateColumns:
+      "36px minmax(0,1fr) auto",
+    alignItems: "center",
+    gap: "9px",
+    padding: "10px",
+    borderRadius: "13px",
+    ...(variants[type] ||
+      variants.INFO)
+  };
+};
+
+const suggestionIcon = {
+  width: "36px",
+  height: "36px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  borderRadius: "11px",
+  background:
+    "rgba(2,6,23,.38)",
+  fontSize: "15px"
+};
+
+const suggestionContent = {
+  minWidth: 0,
+  color: "#cbd5e1",
+  fontSize: "8px",
+  lineHeight: "13px"
+};
+
+const suggestionPoints = {
+  minWidth: "35px",
+  minHeight: "25px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "4px 7px",
+  borderRadius: "999px",
+  background:
+    "rgba(34,197,94,.13)",
+  color: "#86efac",
+  fontSize: "7px",
+  fontWeight: "950"
+};
+
+const allCompletedBox = {
+  display: "grid",
+  gridTemplateColumns:
+    "38px minmax(0,1fr)",
+  alignItems: "center",
+  gap: "10px",
+  padding: "12px",
+  borderRadius: "14px",
+  border:
+    "1px solid rgba(34,197,94,.22)",
+  background:
+    "rgba(34,197,94,.08)",
+  color: "#bbf7d0",
+  fontSize: "8px",
+  lineHeight: "14px"
+};
+
 
 /*
 |--------------------------------------------------------------------------

@@ -13,6 +13,7 @@ import Profile from "./pages/Profile";
 import Marketplace from "./pages/Marketplace";
 import NewProduct from "./pages/NewProduct";
 import ProductDetails from "./pages/ProductDetails";
+import EditProduct from "./pages/EditProduct";
 import Checkout from "./pages/Checkout";
 import Orders from "./pages/Orders";
 import Sales from "./pages/Sales";
@@ -31,7 +32,16 @@ import AdminLogin from "./pages/admin/auth/AdminLogin";
 import AdminAreaSelector from "./pages/admin/AdminAreaSelector";
 import AdminModulePlaceholder from "./pages/admin/AdminModulePlaceholder";
 import AdminDashboard from "./pages/admin/dashboard/AdminDashboard";
+import WarehouseDashboard from "./pages/admin/warehouse/WarehouseDashboard";
+import DeliveryDashboard from "./pages/admin/delivery/DeliveryDashboard";
+import DisputesDashboard from "./pages/admin/disputes/DisputesDashboard";
+import AuditDashboard from "./pages/admin/audit/AuditDashboard"; 
+import VerificationDashboard from "./pages/admin/verification/VerificationDashboard"; 
+import FinanceDashboard from "./pages/admin/finance/FinanceDashboard";
+import SupportDashboard from "./pages/admin/support/SupportDashboard";
+
 import InternalUsers from "./pages/admin/internalUsers/InternalUsers";
+import SystemSettings from "./pages/admin/systemSettings/SystemSettings";
 
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminProtectedRoute from "./components/AdminProtectedRoute";
@@ -123,6 +133,15 @@ function App() {
           element={
             <ProtectedRoute>
               <ProductDetails />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/products/:id/edit"
+          element={
+            <ProtectedRoute>
+              <EditProduct />
             </ProtectedRoute>
           }
         />
@@ -246,7 +265,7 @@ function App() {
         />
 
         {/* =====================================================
-            DASHBOARD GENERAL
+            ADMINISTRACIÓN GENERAL
         ====================================================== */}
 
         <Route
@@ -261,24 +280,157 @@ function App() {
             </AdminProtectedRoute>
           }
         />
+
         <Route
-  path="/admin/internal-users"
+  path="/admin/warehouse"
   element={
     <AdminProtectedRoute
       allowedRoles={[
-        "SUPER_ADMIN",
-        "SENIOR_ADMIN",
-        "ADMIN",
-        "SUPERVISOR"
+        "WAREHOUSE_MANAGER",
+        "WAREHOUSE_SUPERVISOR",
+        "WAREHOUSE_STAFF"
       ]}
       allowedDepartments={[
-        "ADMINISTRATION"
+        "WAREHOUSE"
       ]}
     >
-      <InternalUsers />
+      <WarehouseDashboard />
     </AdminProtectedRoute>
   }
 />
+
+<Route
+  path="/admin/delivery"
+  element={
+    <AdminProtectedRoute
+      allowedRoles={[
+        "DELIVERY_MANAGER",
+        "DELIVERY_SUPERVISOR",
+        "DELIVERY_AGENT"
+      ]}
+      allowedDepartments={[
+        "DELIVERY"
+      ]}
+    >
+      <DeliveryDashboard />
+    </AdminProtectedRoute>
+  }
+/>
+<Route
+  path="/admin/disputes"
+  element={
+    <AdminProtectedRoute
+      allowedRoles={[
+        "DISPUTE_MANAGER",
+        "DISPUTE_AGENT"
+      ]}
+      allowedDepartments={[
+        "DISPUTES"
+      ]}
+    >
+      <DisputesDashboard />
+    </AdminProtectedRoute>
+  }
+/>
+<Route
+  path="/admin/audit"
+  element={
+    <AdminProtectedRoute
+      allowedRoles={[
+        "AUDITOR"
+      ]}
+      allowedDepartments={[
+        "AUDIT"
+      ]}
+    >
+      <AuditDashboard />
+    </AdminProtectedRoute>
+  }
+/>
+<Route
+  path="/admin/verification"
+  element={
+    <AdminProtectedRoute
+      allowedRoles={[
+        "VERIFICATION_MANAGER",
+        "VERIFICATION_AGENT"
+      ]}
+      allowedDepartments={[
+        "VERIFICATION"
+      ]}
+    >
+      <VerificationDashboard />
+    </AdminProtectedRoute>
+  }
+/>
+<Route
+  path="/admin/finance"
+  element={
+    <AdminProtectedRoute
+      allowedRoles={[
+        "FINANCE_MANAGER",
+        "FINANCE_AGENT"
+      ]}
+      allowedDepartments={[
+        "FINANCE"
+      ]}
+    >
+      <FinanceDashboard />
+    </AdminProtectedRoute>
+  }
+/>
+<Route
+  path="/admin/support"
+  element={
+    <AdminProtectedRoute
+      allowedRoles={[
+        "SUPPORT_MANAGER",
+        "SUPPORT_AGENT"
+      ]}
+      allowedDepartments={[
+        "SUPPORT"
+      ]}
+    >
+      <SupportDashboard />
+    </AdminProtectedRoute>
+  }
+/>
+
+        <Route
+          path="/admin/internal-users"
+          element={
+            <AdminProtectedRoute
+              allowedRoles={[
+                "SUPER_ADMIN",
+                "SENIOR_ADMIN",
+                "ADMIN",
+                "SUPERVISOR"
+              ]}
+              allowedDepartments={[
+                "ADMINISTRATION"
+              ]}
+            >
+              <InternalUsers />
+            </AdminProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/admin/system-settings"
+          element={
+            <AdminProtectedRoute
+              allowedRoles={[
+                "SUPER_ADMIN",
+                "SENIOR_ADMIN"
+              ]}
+              allowedDepartments={[
+                "ADMINISTRATION"
+              ]}
+            >
+              <SystemSettings />
+            </AdminProtectedRoute>
+          }
+        />
 
         {/* =====================================================
             ALMACÉN
@@ -443,6 +595,29 @@ function App() {
                 title="Dashboard de Seguridad"
                 description="Sesiones, intentos fallidos, alertas, IP bloqueadas y accesos sospechosos."
                 icon="🔐"
+              />
+            </AdminProtectedRoute>
+          }
+        />
+
+        {/* =====================================================
+            VERIFICACIÓN / KYC
+            La página real se conectará en la fase correspondiente.
+        ====================================================== */}
+
+        <Route
+          path="/admin/verification"
+          element={
+            <AdminProtectedRoute
+              allowedDepartments={[
+                "VERIFICATION",
+                "ADMINISTRATION"
+              ]}
+            >
+              <AdminModulePlaceholder
+                title="Centro de Verificación y KYC"
+                description="Revisión de cédulas, fotografía de perfil, validación de identidad y aprobación de cuentas."
+                icon="🪪"
               />
             </AdminProtectedRoute>
           }

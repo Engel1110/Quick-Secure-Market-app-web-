@@ -68,6 +68,7 @@ const messageSchema = new mongoose.Schema(
         "IMAGE",
         "VIDEO",
         "AUDIO",
+        "PDF",
         "LOCATION",
         "FILE",
         "SYSTEM"
@@ -128,6 +129,22 @@ const messageSchema = new mongoose.Schema(
       type: String,
       default: ""
     },
+
+    securityScore: {
+  type: Number,
+  default: 0,
+  min: 0,
+  max: 100
+},
+
+securityReasons: {
+  type: [
+    {
+      type: mongoose.Schema.Types.Mixed
+    }
+  ],
+  default: []
+},
 
     isEdited: {
       type: Boolean,

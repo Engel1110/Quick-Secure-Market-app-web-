@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 require("dotenv").config();
 
+const connectDB = require("../src/config/db");
 const Role = require("../src/models/Role");
 const Permission = require("../src/models/Permission");
 
@@ -140,11 +141,9 @@ async function seedRoles() {
     );
   }
 
-  console.log("🔌 Conectando a MongoDB...");
+console.log("🔌 Conectando a MongoDB...");
 
-  await mongoose.connect(process.env.MONGODB_URI);
-
-  console.log("✅ MongoDB conectado.");
+await connectDB();
 
   const permissions = await Permission.find({
     isActive: true

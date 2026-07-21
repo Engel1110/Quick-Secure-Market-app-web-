@@ -4,18 +4,23 @@ const API_URL =
   import.meta.env.VITE_API_URL ||
   "http://localhost:5000/api";
 
+/*
+|--------------------------------------------------------------------------
+| Instancia principal de Axios
+|--------------------------------------------------------------------------
+*/
+
 const api = axios.create({
   baseURL: API_URL,
-  timeout: 30000,
+  timeout: 120000,
   headers: {
-    "Content-Type": "application/json",
     Accept: "application/json"
   }
 });
 
 /*
 |--------------------------------------------------------------------------
-| Obtener token según el tipo de solicitud
+| Tokens
 |--------------------------------------------------------------------------
 */
 
@@ -28,25 +33,149 @@ const getAdminToken = () =>
   );
 
 const getNormalToken = () =>
-  localStorage.getItem("token") ||
-  sessionStorage.getItem("token") ||
-  localStorage.getItem("qsm_token") ||
-  sessionStorage.getItem("qsm_token");
+  localStorage.getItem(
+    "qsm_token"
+  ) ||
+  sessionStorage.getItem(
+    "qsm_token"
+  ) ||
+  localStorage.getItem(
+    "token"
+  ) ||
+  sessionStorage.getItem(
+    "token"
+  );
 
-const isAdminRequest = (config) => {
+/*
+|--------------------------------------------------------------------------
+| Normalizar URL de solicitud
+|--------------------------------------------------------------------------
+*/
+
+const getRequestPath = (config) => {
   const requestUrl = String(
     config?.url || ""
-  ).toLowerCase();
+  )
+    .trim()
+    .toLowerCase();
+
+  try {
+    /*
+     * Permite reconocer tanto:
+     *
+     * /admin/internal-users
+     * /auth/admin/login
+     * http://localhost:5000/api/admin/internal-users
+     */
+    const parsedUrl = new URL(
+      requestUrl,
+      API_URL
+    );
+
+    return parsedUrl.pathname
+      .replace(/^\/api(?=\/|$)/, "");
+  } catch {
+    return requestUrl
+      .split("?")[0]
+      .replace(/^\/api(?=\/|$)/, "");
+  }
+};
+
+/*
+|--------------------------------------------------------------------------
+| Identificar solicitudes administrativas
+|--------------------------------------------------------------------------
+*/
+
+const isAdminRequest = (config) => {
+  const requestPath =
+    getRequestPath(config);
 
   return (
-    requestUrl.startsWith("/admin") ||
-    requestUrl.includes("/admin/")
+    requestPath === "/admin" ||
+    requestPath.startsWith(
+      "/admin/"
+    ) ||
+    requestPath ===
+      "/auth/admin/login" ||
+    requestPath.startsWith(
+      "/auth/admin/"
+    )
   );
 };
 
 /*
 |--------------------------------------------------------------------------
-| Agregar token a cada solicitud
+| Detectar FormData
+|--------------------------------------------------------------------------
+*/
+
+const isFormDataRequest = (
+  data
+) =>
+  typeof FormData !== "undefined" &&
+  data instanceof FormData;
+
+/*
+|--------------------------------------------------------------------------
+| Manejo compatible de encabezados
+|--------------------------------------------------------------------------
+*/
+
+const removeHeader = (
+  headers,
+  headerName
+) => {
+  if (!headers) {
+    return;
+  }
+
+  if (
+    typeof headers.delete ===
+    "function"
+  ) {
+    headers.delete(headerName);
+    headers.delete(
+      headerName.toLowerCase()
+    );
+
+    return;
+  }
+
+  delete headers[headerName];
+  delete headers[
+    headerName.toLowerCase()
+  ];
+};
+
+const setHeader = (
+  headers,
+  headerName,
+  value
+) => {
+  if (!headers) {
+    return;
+  }
+
+  if (
+    typeof headers.set ===
+    "function"
+  ) {
+    headers.set(
+      headerName,
+      value
+    );
+
+    return;
+  }
+
+  headers[headerName] =
+    value;
+};
+
+/*
+|--------------------------------------------------------------------------
+| Interceptor de solicitudes
 |--------------------------------------------------------------------------
 */
 
@@ -59,12 +188,70 @@ api.interceptors.request.use(
       ? getAdminToken()
       : getNormalToken();
 
-    if (token) {
-      config.headers =
-        config.headers || {};
+    config.headers =
+      config.headers || {};
 
-      config.headers.Authorization =
-        `Bearer ${token}`;
+    /*
+    |--------------------------------------------------------------------------
+    | Token correspondiente
+    |--------------------------------------------------------------------------
+    */
+
+    if (token) {
+      setHeader(
+        config.headers,
+        "Authorization",
+        `Bearer ${token}`
+      );
+    } else {
+      removeHeader(
+        config.headers,
+        "Authorization"
+      );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Tipo de contenido
+    |--------------------------------------------------------------------------
+    */
+
+    const method = String(
+      config.method || "get"
+    ).toLowerCase();
+
+    const hasRequestBody =
+      ![
+        "get",
+        "head"
+      ].includes(method);
+
+    if (
+      isFormDataRequest(
+        config.data
+      )
+    ) {
+      /*
+       * No establecer multipart/form-data manualmente.
+       * El navegador agregará el boundary.
+       */
+      removeHeader(
+        config.headers,
+        "Content-Type"
+      );
+    } else if (
+      hasRequestBody
+    ) {
+      setHeader(
+        config.headers,
+        "Content-Type",
+        "application/json"
+      );
+    } else {
+      removeHeader(
+        config.headers,
+        "Content-Type"
+      );
     }
 
     return config;
@@ -86,8 +273,13 @@ const clearAdminSession = () => {
     "qsm_admin_user",
     "qsm_admin_remember"
   ].forEach((key) => {
-    localStorage.removeItem(key);
-    sessionStorage.removeItem(key);
+    localStorage.removeItem(
+      key
+    );
+
+    sessionStorage.removeItem(
+      key
+    );
   });
 };
 
@@ -104,14 +296,47 @@ const clearNormalSession = () => {
     "qsm_token",
     "qsm_user"
   ].forEach((key) => {
-    localStorage.removeItem(key);
-    sessionStorage.removeItem(key);
+    localStorage.removeItem(
+      key
+    );
+
+    sessionStorage.removeItem(
+      key
+    );
   });
 };
 
 /*
 |--------------------------------------------------------------------------
-| Manejo global de respuestas
+| Evitar redirecciones repetidas
+|--------------------------------------------------------------------------
+*/
+
+let redirectingToLogin =
+  false;
+
+const redirectToLogin = (
+  path
+) => {
+  if (
+    redirectingToLogin ||
+    window.location.pathname ===
+      path
+  ) {
+    return;
+  }
+
+  redirectingToLogin =
+    true;
+
+  window.location.assign(
+    path
+  );
+};
+
+/*
+|--------------------------------------------------------------------------
+| Interceptor de respuestas
 |--------------------------------------------------------------------------
 */
 
@@ -124,7 +349,9 @@ api.interceptors.response.use(
         "No se pudo conectar con el servidor."
       );
 
-      return Promise.reject(error);
+      return Promise.reject(
+        error
+      );
     }
 
     const status =
@@ -135,39 +362,90 @@ api.interceptors.response.use(
         error.config
       );
 
+    /*
+    |--------------------------------------------------------------------------
+    | Sesión inválida o expirada
+    |--------------------------------------------------------------------------
+    */
+
     if (status === 401) {
       if (adminRequest) {
         clearAdminSession();
 
-        if (
-          window.location.pathname !==
+        redirectToLogin(
           "/admin/login"
-        ) {
-          window.location.href =
-            "/admin/login";
-        }
+        );
       } else {
         clearNormalSession();
 
-        if (
-          window.location.pathname !==
+        redirectToLogin(
           "/login"
-        ) {
-          window.location.href =
-            "/login";
-        }
+        );
       }
     }
 
+    /*
+    |--------------------------------------------------------------------------
+    | Permisos insuficientes
+    |--------------------------------------------------------------------------
+    */
+
     if (status === 403) {
       console.warn(
-        error.response?.data?.message ||
+        error.response?.data
+          ?.message ||
           "No tienes permisos para realizar esta acción."
       );
     }
 
-    return Promise.reject(error);
+    /*
+    |--------------------------------------------------------------------------
+    | Errores durante desarrollo
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      import.meta.env.DEV &&
+      status >= 400
+    ) {
+      console.error(
+        "Error de API:",
+        {
+          url:
+            error.config?.url,
+
+          method:
+            error.config
+              ?.method,
+
+          status,
+
+          message:
+            error.response?.data
+              ?.message,
+
+          code:
+            error.response?.data
+              ?.code,
+
+          data:
+            error.response?.data
+        }
+      );
+    }
+
+    return Promise.reject(
+      error
+    );
   }
 );
+
+export {
+  clearAdminSession,
+  clearNormalSession,
+  getAdminToken,
+  getNormalToken,
+  isAdminRequest
+};
 
 export default api;

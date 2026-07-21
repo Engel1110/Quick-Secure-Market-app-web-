@@ -17,6 +17,14 @@ const AREAS = [
     icon: "🏬",
     route: "/admin/warehouse"
   },
+{
+  id: "VERIFICATION",
+  title: "Verificación",
+  description:
+    "Identidad, cédulas, fotografías, KYC y aprobación de vendedores.",
+  icon: "🪪",
+  route: "/admin/verification"
+},
   {
     id: "DELIVERY",
     title: "Delivery",

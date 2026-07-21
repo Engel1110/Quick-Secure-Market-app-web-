@@ -5,6 +5,11 @@ import Sidebar from "../components/Sidebar";
 import Topbar from "../components/Topbar";
 import AiAssistant from "../components/AiAssistant";
 
+const API_ORIGIN = String(
+  import.meta.env.VITE_API_URL ||
+  "http://localhost:5000/api"
+).replace(/\/api\/?$/, "");
+
 function ProductDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -27,6 +32,9 @@ function ProductDetails() {
 
   const [product, setProduct] = useState(null);
   const [settings, setSettings] = useState(savedSettings);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    localStorage.getItem("qsm_sidebar_collapsed") === "true"
+  );
   const [activeImage, setActiveImage] = useState("");
   const [activeTab, setActiveTab] = useState("description");
   const [favorite, setFavorite] = useState(false);
@@ -36,9 +44,9 @@ function ProductDetails() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
-  const theme = settings.theme || "dark";
-  const isLight = theme === "light";
-  const accent = getAccentColor(settings.accentColor || "cyan");
+  const theme = settings.appearance || settings.theme || "dark";
+  const isLight = String(theme).toLowerCase().includes("light");
+  const accent = getAccentColor(settings.accentColor || settings.accent || "cyan");
 
   const currentUserId = savedUser._id || savedUser.id || savedUser.userId || "";
   const seller = product?.seller || {};
@@ -71,6 +79,63 @@ function ProductDetails() {
     applySettings(settings);
   }, [settings]);
 
+  useEffect(() => {
+    const handleSidebarChange = (event) => {
+      const collapsed = event?.detail?.collapsed;
+
+      setSidebarCollapsed(
+        typeof collapsed === "boolean"
+          ? collapsed
+          : localStorage.getItem("qsm_sidebar_collapsed") === "true"
+      );
+    };
+
+    const handleSettingsChange = () => {
+      const nextSettings =
+        safeJson(localStorage.getItem("qsm_settings")) ||
+        safeJson(localStorage.getItem("qsm_user_settings")) ||
+        safeJson(localStorage.getItem("qsm_preferences")) ||
+        savedSettings;
+
+      setSettings((current) => ({
+        ...current,
+        ...nextSettings
+      }));
+    };
+
+    const handleStorage = (event) => {
+      if (event.key === "qsm_sidebar_collapsed") {
+        handleSidebarChange();
+      }
+
+      if ([
+        "qsm_settings",
+        "qsm_user_settings",
+        "qsm_preferences",
+        "qsm_theme",
+        "qsm_appearance",
+        "qsm_accent",
+        "qsm_accent_color"
+      ].includes(event.key)) {
+        handleSettingsChange();
+      }
+    };
+
+    window.addEventListener("qsm-sidebar-changed", handleSidebarChange);
+    window.addEventListener("qsm-settings-changed", handleSettingsChange);
+    window.addEventListener("qsm-theme-changed", handleSettingsChange);
+    window.addEventListener("qsm-appearance-changed", handleSettingsChange);
+    window.addEventListener("storage", handleStorage);
+
+    return () => {
+      window.removeEventListener("qsm-sidebar-changed", handleSidebarChange);
+      window.removeEventListener("qsm-settings-changed", handleSettingsChange);
+      window.removeEventListener("qsm-theme-changed", handleSettingsChange);
+      window.removeEventListener("qsm-appearance-changed", handleSettingsChange);
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, []);
+
   const loadProduct = async () => {
     try {
       setLoading(true);
@@ -83,7 +148,7 @@ function ProductDetails() {
       setProduct(loaded);
 
       const firstImage = getProductImage(loaded);
-      setActiveImage(firstImage);
+      setActiveImage(firstImage || "");
 
       try {
         const favResponse = await api.get(`/favorite/${id}/check`);
@@ -119,21 +184,16 @@ function ProductDetails() {
     setError("");
     setMessage("");
 
-    console.log("Agregando favorito:", id);
-
     if (favorite) {
-      const res = await api.delete(`/favorite/${id}`);
-      console.log("DELETE favorito:", res.data);
+      await api.delete(`/favorite/${id}`);
       setFavorite(false);
       setMessage("Producto eliminado de favoritos.");
     } else {
-      const res = await api.post(`/favorite/${id}`);
-      console.log("POST favorito:", res.data);
+      await api.post(`/favorite/${id}`);
       setFavorite(true);
       setMessage("Producto agregado a favoritos.");
     }
   } catch (err) {
-    console.log("ERROR FAVORITO:", err.response?.status, err.response?.data);
     setError(
       err?.response?.data?.message ||
         "No se pudo actualizar favoritos."
@@ -274,7 +334,7 @@ function ProductDetails() {
         }
       `}</style>
 
-      <div className="product-page" style={layout(settings)}>
+      <div className="product-page" style={layout(sidebarCollapsed)}>
         <div className="sidebar-wrapper">
           <Sidebar />
         </div>
@@ -330,6 +390,19 @@ function ProductDetails() {
                 </span>
               </div>
 
+              {settings.showVideo !== false && getVideoUrl(product) && (
+                <div style={videoPanel}>
+                  <p style={label(accent)}>VIDEO DEL PRODUCTO</p>
+                  <video
+                    src={getVideoUrl(product)}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    style={productVideo}
+                  />
+                </div>
+              )}
+
               {gallery.length > 1 && (
                 <div style={thumbRow}>
                   {gallery.map((img) => (
@@ -369,9 +442,26 @@ function ProductDetails() {
               </div>
 
               <div style={sellerBox(isLight)}>
-                <div style={sellerAvatar(accent)}>
-                  {(seller.firstName || seller.email || "V").charAt(0).toUpperCase()}
-                </div>
+                {getImageUrl(
+                  seller.profilePhoto || seller.avatar || seller.photo || ""
+                ) ? (
+                  <img
+                    src={getImageUrl(
+                      seller.profilePhoto || seller.avatar || seller.photo || ""
+                    )}
+                    alt={formatUser(seller, "Vendedor QSM")}
+                    style={sellerPhotoStyle}
+                    onError={(event) => {
+                      event.currentTarget.style.display = "none";
+                    }}
+                  />
+                ) : (
+                  <div style={sellerAvatar(accent)}>
+                    {(seller.firstName || seller.email || "V")
+                      .charAt(0)
+                      .toUpperCase()}
+                  </div>
+                )}
 
                 <div>
                   <strong>{formatUser(seller, "Vendedor QSM")}</strong>
@@ -383,7 +473,7 @@ function ProductDetails() {
               </div>
 
               <div style={riskBox(risk)}>
-                <strong>{risk.icon} Riesgo {risk.label}</strong>
+                <strong>{risk.icon} {risk.label}</strong>
                 <p>{risk.text}</p>
               </div>
 
@@ -557,10 +647,12 @@ function formatMoney(value) {
 function formatCondition(condition) {
   const map = {
     NEW: "Nuevo",
-    USED: "Usado",
     LIKE_NEW: "Como nuevo",
-    REFURBISHED: "Reacondicionado",
-    FOR_PARTS: "Para piezas"
+    USED_GOOD: "Buen estado",
+    USED_DETAILS: "Usado con detalles",
+    FOR_PARTS: "Para piezas",
+    USED: "Usado",
+    REFURBISHED: "Reacondicionado"
   };
 
   return map[String(condition || "").toUpperCase()] || condition || "No especificada";
@@ -581,15 +673,48 @@ function formatProductStatus(status) {
 
 function getImageUrl(image) {
   if (!image) return "";
-  if (typeof image !== "string") return "";
 
-  const clean = image.trim().replaceAll("&#x2F;", "/").replaceAll("&amp;", "&");
+  const source =
+    typeof image === "string"
+      ? image
+      : image.url ||
+        image.path ||
+        image.fileUrl ||
+        image.secure_url ||
+        "";
 
-  if (clean.startsWith("http")) return clean;
-  if (clean.startsWith("/uploads")) return `http://localhost:5000${clean}`;
-  if (clean.startsWith("uploads")) return `http://localhost:5000/${clean}`;
+  if (!source) return "";
 
-  return `http://localhost:5000/uploads/products/images/${clean}`;
+  const clean = String(source)
+    .trim()
+    .replaceAll("&#x2F;", "/")
+    .replaceAll("&amp;", "&");
+
+  if (
+    clean.startsWith("http") ||
+    clean.startsWith("data:") ||
+    clean.startsWith("blob:")
+  ) {
+    return clean;
+  }
+
+  if (clean.startsWith("/")) {
+    return `${API_ORIGIN}${clean}`;
+  }
+
+  if (clean.startsWith("uploads/")) {
+    return `${API_ORIGIN}/${clean}`;
+  }
+
+  return `${API_ORIGIN}/uploads/products/images/${clean}`;
+}
+
+function getVideoUrl(product) {
+  return getImageUrl(
+    product?.video?.url ||
+      product?.videoUrl ||
+      (typeof product?.video === "string" ? product.video : "")
+  );
 }
 
 function getProductImage(product) {
@@ -606,39 +731,57 @@ function getProductImage(product) {
 }
 
 function getRiskLevel(product) {
-  if (!product) {
-    return {
+  const variants = {
+    LOW: {
+      label: "Bajo",
+      icon: "🟢",
+      text: "No se detectaron señales críticas. Mantén la operación dentro de QSM."
+    },
+    MEDIUM: {
       label: "Medio",
       icon: "🟡",
-      text: "No hay datos suficientes para evaluar el producto."
-    };
-  }
-
-  const score = Number(product.riskScore || product.fraudScore || 25);
-  const price = Number(product.price || 0);
-  const seller = product.seller || {};
-
-  if (score >= 75 || product.riskLevel === "HIGH") {
-    return {
+      text: "Recomendamos validar la publicación y utilizar Pago Protegido."
+    },
+    HIGH: {
       label: "Alto",
+      icon: "🟠",
+      text: "QSM detectó señales de riesgo. Verifica el producto antes de continuar."
+    },
+    CRITICAL: {
+      label: "Crítico",
       icon: "🔴",
-      text: "QSM detectó señales de riesgo. Compra solo usando Pago Protegido."
-    };
-  }
-
-  if (score >= 45 || price <= 0 || !seller._id) {
-    return {
-      label: "Medio",
-      icon: "🟡",
-      text: "Recomendamos validar la publicación y contactar al vendedor antes de comprar."
-    };
-  }
-
-  return {
-    label: "Bajo",
-    icon: "🟢",
-    text: "No se detectaron señales críticas. Aun así, mantén la operación dentro de QSM."
+      text: "La publicación presenta señales críticas. No continúes fuera de QSM."
+    },
+    UNCLASSIFIED: {
+      label: "Por determinar",
+      icon: "⚪",
+      text: "QSM todavía no dispone de información suficiente para clasificar el riesgo."
+    }
   };
+
+  if (!product) return variants.UNCLASSIFIED;
+
+  const directLevel = String(product.riskLevel || "").toUpperCase();
+
+  if (variants[directLevel]) {
+    return {
+      ...variants[directLevel],
+      label: product.riskLabel || variants[directLevel].label
+    };
+  }
+
+  const score = Number(
+    product.riskScore ??
+      product.fraudScore ??
+      product.aiAnalysis?.fraudRiskScore
+  );
+
+  if (!Number.isFinite(score)) return variants.UNCLASSIFIED;
+  if (score >= 80) return variants.CRITICAL;
+  if (score >= 60) return variants.HIGH;
+  if (score >= 35) return variants.MEDIUM;
+
+  return variants.LOW;
 }
 
 function getAccentColor(color) {
@@ -658,12 +801,7 @@ function applySettings(settings) {
   const accent = getAccentColor(settings.accentColor || "cyan");
 
   document.documentElement.style.setProperty("--qsm-accent", accent);
-  document.body.dataset.qsmTheme = settings.theme || "dark";
-
-  localStorage.setItem("qsm_theme", settings.theme || "dark");
-  localStorage.setItem("qsm_accent", settings.accentColor || "cyan");
-  localStorage.setItem("qsm_language", settings.language || "es");
-  localStorage.setItem("qsm_settings", JSON.stringify(settings));
+  document.body.dataset.qsmTheme = settings.theme || settings.appearance || "dark";
 }
 
 const page = (isLight) => ({
@@ -675,12 +813,15 @@ const page = (isLight) => ({
   color: isLight ? "#0f172a" : "white"
 });
 
-const layout = (settings) => ({
+const layout = (sidebarCollapsed) => ({
   width: "100%",
   minHeight: "100vh",
   display: "grid",
-  gridTemplateColumns: settings.compactSidebar ? "230px minmax(0, 1fr)" : "280px minmax(0, 1fr)",
-  overflowX: "hidden"
+  gridTemplateColumns: sidebarCollapsed
+    ? "96px minmax(0, 1fr)"
+    : "300px minmax(0, 1fr)",
+  overflowX: "hidden",
+  transition: "grid-template-columns .28s ease"
 });
 
 const main = (settings) => ({
@@ -1067,6 +1208,34 @@ const centerCard = (isLight) => ({
   textAlign: "center",
   color: isLight ? "#0f172a" : "white"
 });
+
+const sellerPhotoStyle = {
+  width: "58px",
+  height: "58px",
+  flexShrink: 0,
+  display: "block",
+  borderRadius: "18px",
+  border: "2px solid rgba(53,208,195,.40)",
+  objectFit: "cover",
+  objectPosition: "center"
+};
+
+const videoPanel = {
+  marginTop: "16px",
+  padding: "14px",
+  borderRadius: "18px",
+  border: "1px solid rgba(139,92,246,.24)",
+  background: "rgba(2,6,23,.32)"
+};
+
+const productVideo = {
+  width: "100%",
+  maxHeight: "420px",
+  display: "block",
+  marginTop: "10px",
+  borderRadius: "15px",
+  background: "#020617"
+};
 
 const modalOverlay = {
   position: "fixed",

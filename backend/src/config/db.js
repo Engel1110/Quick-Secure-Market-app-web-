@@ -3,68 +3,65 @@ const dns = require("node:dns");
 
 /*
 |--------------------------------------------------------------------------
-| Servidores DNS
+| DNS
 |--------------------------------------------------------------------------
-| Ayuda en Windows cuando Node.js falla consultando registros SRV de Atlas,
-| aunque nslookup sí funcione.
+| Fuerza a Node a utilizar los mismos DNS configurados en Windows.
 |--------------------------------------------------------------------------
 */
 
-dns.setServers([
-  "8.8.8.8",
-  "1.1.1.1"
-]);
+try {
+  const servers = dns.getServers();
+
+  if (
+    servers.length === 1 &&
+    servers[0] === "127.0.0.1"
+  ) {
+    dns.setServers([
+      "192.168.130.1",
+      "8.8.8.8",
+      "1.1.1.1"
+    ]);
+  }
+} catch (err) {
+  console.warn(
+    "No fue posible configurar DNS:",
+    err.message
+  );
+}
 
 const connectDB = async () => {
   const mongoUri =
-    process.env.MONGODB_URI?.trim();
+    process.env.MONGODB_URI?.trim() ||
+    process.env.MONGO_URI?.trim();
 
   if (!mongoUri) {
     throw new Error(
-      "MONGODB_URI no está definida en backend/.env"
+      "MONGODB_URI o MONGO_URI no está definida."
     );
   }
 
   if (
-    !mongoUri.startsWith(
-      "mongodb://"
-    ) &&
-    !mongoUri.startsWith(
-      "mongodb+srv://"
-    )
+    !mongoUri.startsWith("mongodb://") &&
+    !mongoUri.startsWith("mongodb+srv://")
   ) {
     throw new Error(
-      "MONGODB_URI no contiene una dirección MongoDB válida."
+      "URI de MongoDB inválida."
     );
   }
 
   try {
-    mongoose.set(
-      "strictQuery",
-      true
-    );
+    mongoose.set("strictQuery", true);
 
     const connection =
       await mongoose.connect(
         mongoUri,
         {
-          serverSelectionTimeoutMS:
-            20000,
-
-          connectTimeoutMS:
-            20000,
-
-          socketTimeoutMS:
-            45000,
-
-          maxPoolSize:
-            10,
-
-          minPoolSize:
-            0,
-
-          retryWrites:
-            true
+          serverSelectionTimeoutMS: 30000,
+          connectTimeoutMS: 30000,
+          socketTimeoutMS: 45000,
+          maxPoolSize: 10,
+          minPoolSize: 0,
+          retryWrites: true
         }
       );
 
@@ -95,7 +92,7 @@ mongoose.connection.on(
   "error",
   (error) => {
     console.error(
-      "❌ Error activo de MongoDB:",
+      "❌ Error activo MongoDB:",
       error.message
     );
   }

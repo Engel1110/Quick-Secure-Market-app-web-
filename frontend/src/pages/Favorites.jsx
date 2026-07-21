@@ -20,7 +20,6 @@ function Favorites() {
   useEffect(() => {
     loadFavorites();
   }, []);
-
   const loadFavorites = async () => {
     try {
       setLoading(true);
@@ -129,7 +128,12 @@ function Favorites() {
       `}</style>
 
       <div className="favorite-page" style={layout}>
-        <div className="sidebar-wrapper"><Sidebar /></div>
+        <div
+          className="sidebar-wrapper"
+          style={sidebarWrapper}
+        >
+          <Sidebar />
+        </div>
 
         <main className="main-content" style={main}>
           <Topbar />
@@ -282,7 +286,22 @@ function getProductImage(product) {
 }
 
 const page = { minHeight: "100vh", width: "100%", background: "radial-gradient(circle at top right, rgba(236,72,153,.14), transparent 34%), radial-gradient(circle at 18% 15%, rgba(56,189,248,.09), transparent 28%), #020617", color: "white" };
-const layout = { width: "100%", minHeight: "100vh", display: "grid", gridTemplateColumns: "280px minmax(0, 1fr)", overflowX: "hidden" };
+const layout = {
+  width: "100%",
+  minHeight: "100vh",
+  display: "grid",
+  gridTemplateColumns: "var(--qsm-sidebar-width, 96px) minmax(0, 1fr)",
+  overflowX: "hidden",
+  transition: "grid-template-columns var(--qsm-transition, .28s ease)",
+  alignItems: "stretch"
+};
+
+const sidebarWrapper = {
+  width: "var(--qsm-sidebar-width, 96px)",
+  minWidth: "var(--qsm-sidebar-width, 96px)",
+  transition:
+    "width var(--qsm-transition, .28s ease), min-width var(--qsm-transition, .28s ease)"
+};
 const main = { width: "100%", minWidth: 0, padding: "26px 34px 56px", overflowX: "hidden" };
 const hero = {
   display: "flex",

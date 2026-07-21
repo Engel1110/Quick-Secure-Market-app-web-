@@ -1,6 +1,14 @@
-import { Link, useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
-import api from "../../../services/api";
+import {
+  Link,
+  useNavigate
+} from "react-router-dom";
+
+import {
+  useEffect,
+  useState
+} from "react";
+
+import api from "../../../api/axios";
 
 const ADMIN_ROLES = [
   "SUPER_ADMIN",
@@ -33,41 +41,6 @@ const ADMIN_ROLES = [
   "SECURITY_MANAGER",
   "SECURITY_ANALYST"
 ];
-
-/*
- * Cuenta temporal de desarrollo.
- * Se usa mientras MongoDB y el login administrativo real no estén disponibles.
- * Elimina este bloque cuando POST /api/admin/auth/login esté funcionando.
- */
-const TEMP_SUPER_ADMIN = {
-  id: "qsm-super-admin-001",
-  firstName: "Engel",
-  lastName: "Feliz",
-  fullName: "Engel Feliz",
-  name: "Engel Feliz",
-  email: "superadmin.qsm@gmail.com",
-  password: "QsmSuperAdmin@2026!",
-  accountType: "INTERNAL",
-  role: "SUPER_ADMIN",
-  roles: ["SUPER_ADMIN"],
-  roleLabel: "Super Administrador",
-  department: "ADMINISTRATION",
-  departments: [
-    "ADMINISTRATION",
-    "WAREHOUSE",
-    "DELIVERY",
-    "FINANCE",
-    "AUDIT",
-    "DISPUTES",
-    "SECURITY",
-    "SUPPORT",
-    "MODERATION"
-  ],
-  permissions: ["*"],
-  status: "ACTIVE",
-  isActive: true,
-  active: true
-};
 
 function AdminLogin() {
   const navigate = useNavigate();
@@ -137,195 +110,198 @@ function AdminLogin() {
     }
   };
 
-  const handleLogin = async (event) => {
-    event.preventDefault();
+const handleLogin = async (event) => {
+  event.preventDefault();
 
-    setMessage("");
-    setMessageType("error");
+  setMessage("");
+  setMessageType("error");
 
-    const email = form.email.trim().toLowerCase();
-    const password = form.password;
+  const email = form.email
+    .trim()
+    .toLowerCase();
 
-    if (!email || !password) {
-      setMessage(
-        "Completa tu correo administrativo y contraseña."
-      );
-      return;
-    }
+  const password = form.password;
 
-    if (!isValidEmail(email)) {
-      setMessage(
-        "Ingresa un correo electrónico válido."
-      );
-      return;
-    }
+  if (!email || !password) {
+    setMessage(
+      "Completa tu correo administrativo y contraseña."
+    );
 
-    setLoading(true);
+    return;
+  }
 
-    try {
-      /*
-       * Acceso temporal para continuar desarrollando el BackOffice
-       * sin depender todavía de MongoDB.
-       */
-      const isTemporarySuperAdmin =
-        email === TEMP_SUPER_ADMIN.email &&
-        password === TEMP_SUPER_ADMIN.password;
+  if (!isValidEmail(email)) {
+    setMessage(
+      "Ingresa un correo electrónico válido."
+    );
 
-      if (isTemporarySuperAdmin) {
-        const {
-          password: removedPassword,
-          ...safeTemporaryAdmin
-        } = TEMP_SUPER_ADMIN;
+    return;
+  }
 
-        const temporaryToken =
-          `qsm-temp-admin-${Date.now()}`;
+  setLoading(true);
 
-        saveAdministrativeSession({
-          token: temporaryToken,
-          user: normalizeAdministrativeUser(
-            safeTemporaryAdmin
-          ),
-          remember
-        });
-
-        setMessageType("success");
-        setMessage(
-          "Acceso autorizado. Bienvenido, Engel Feliz."
-        );
-
-        window.setTimeout(() => {
-          navigate("/admin/select-area", {
-            replace: true
-          });
-        }, 450);
-
-        return;
-      }
-
-      /*
-       * Login real actual.
-       * Cuando el backend administrativo esté listo, cambia:
-       *
-       *   /auth/login
-       *
-       * por:
-       *
-       *   /admin/auth/login
-       */
-      const response = await api.post("/auth/login", {
+  try {
+    const response = await api.post(
+      "/auth/admin/login",
+      {
         email,
         password
-      });
-
-      const data = response?.data || {};
-
-      const token =
-        data.token ||
-        data.accessToken ||
-        data?.user?.token ||
-        data?.data?.token;
-
-      const user =
-        data.user ||
-        data.usuario ||
-        data?.data?.user;
-
-      if (!token) {
-        setMessage(
-          "El servidor no devolvió un token administrativo válido."
-        );
-        return;
       }
+    );
 
-      if (!user) {
-        setMessage(
-          "El servidor no devolvió la información del usuario."
-        );
-        return;
-      }
+    const data =
+      response?.data || {};
 
-      if (!hasAdministrativeAccess(user)) {
-        clearAdministrativeSession();
+    const token =
+      data.token ||
+      data.accessToken ||
+      data?.data?.token;
 
-        setMessage(
-          "Esta cuenta no tiene autorización para ingresar al BackOffice de QSM."
-        );
-        return;
-      }
+    const user =
+      data.user ||
+      data.usuario ||
+      data?.data?.user;
 
-      const normalizedStatus = String(
-        user.status || "ACTIVE"
-      ).toUpperCase();
-
-      if (
-        user.isActive === false ||
-        user.active === false ||
-        [
-          "SUSPENDED",
-          "BANNED",
-          "DISABLED",
-          "INACTIVE"
-        ].includes(normalizedStatus)
-      ) {
-        clearAdministrativeSession();
-
-        setMessage(
-          "Esta cuenta administrativa está suspendida o desactivada."
-        );
-        return;
-      }
-
-      const normalizedUser =
-        normalizeAdministrativeUser(user);
-
-      saveAdministrativeSession({
-        token,
-        user: normalizedUser,
-        remember
-      });
-
-      setMessageType("success");
-      setMessage(
-        `Acceso autorizado. Bienvenido, ${
-          normalizedUser.name || "administrador"
-        }.`
+    if (!token) {
+      throw new Error(
+        "El servidor no devolvió un token administrativo válido."
       );
-
-      window.setTimeout(() => {
-        navigate("/admin/select-area", {
-          replace: true
-        });
-      }, 450);
-    } catch (error) {
-      const status = error?.response?.status;
-
-      let backendMessage =
-        error?.response?.data?.message ||
-        error?.response?.data?.error;
-
-      if (status === 401) {
-        backendMessage =
-          "Correo o contraseña administrativa incorrectos.";
-      }
-
-      if (status === 403) {
-        backendMessage =
-          "Tu cuenta no tiene autorización para acceder al BackOffice.";
-      }
-
-      if (status === 429) {
-        backendMessage =
-          "Demasiados intentos de acceso. Espera unos minutos e inténtalo nuevamente.";
-      }
-
-      setMessage(
-        backendMessage ||
-          "No se pudo iniciar sesión. Verifica tus credenciales administrativas."
-      );
-    } finally {
-      setLoading(false);
     }
-  };
+
+    if (!user) {
+      throw new Error(
+        "El servidor no devolvió la información del usuario administrativo."
+      );
+    }
+
+    if (!hasAdministrativeAccess(user)) {
+      clearAdministrativeSession();
+
+      setMessage(
+        "Esta cuenta no tiene autorización para ingresar al BackOffice de QSM."
+      );
+
+      return;
+    }
+
+    const normalizedUser =
+      normalizeAdministrativeUser(
+        user
+      );
+
+    const normalizedStatus =
+      String(
+        normalizedUser.status ||
+          "ACTIVE"
+      )
+        .trim()
+        .toUpperCase();
+
+    const blockedStatuses = [
+      "SUSPENDED",
+      "BANNED",
+      "DELETED",
+      "DISABLED",
+      "INACTIVE"
+    ];
+
+    if (
+      normalizedUser.isActive ===
+        false ||
+      normalizedUser.active ===
+        false ||
+      blockedStatuses.includes(
+        normalizedStatus
+      )
+    ) {
+      clearAdministrativeSession();
+
+      setMessage(
+        "Esta cuenta administrativa está suspendida, bloqueada o desactivada."
+      );
+
+      return;
+    }
+
+    saveAdministrativeSession({
+      token,
+      user: normalizedUser,
+      remember
+    });
+
+    setMessageType("success");
+
+    setMessage(
+      `Acceso autorizado. Bienvenido, ${
+        normalizedUser.name ||
+        "administrador"
+      }.`
+    );
+
+    window.setTimeout(() => {
+      navigate(
+        "/admin/select-area",
+        {
+          replace: true
+        }
+      );
+    }, 450);
+  } catch (error) {
+    const status =
+      error?.response?.status;
+
+    let backendMessage =
+      error?.response?.data
+        ?.message ||
+      error?.response?.data
+        ?.error ||
+      error?.message;
+
+    if (status === 400) {
+      backendMessage =
+        backendMessage ||
+        "Los datos enviados no son válidos.";
+    }
+
+    if (status === 401) {
+      backendMessage =
+        "Correo o contraseña administrativa incorrectos.";
+    }
+
+    if (status === 403) {
+      backendMessage =
+        error?.response?.data
+          ?.message ||
+        "Tu cuenta no tiene autorización para acceder al BackOffice.";
+    }
+
+    if (status === 423) {
+      backendMessage =
+        error?.response?.data
+          ?.message ||
+        "La cuenta está bloqueada temporalmente por seguridad.";
+    }
+
+    if (status === 429) {
+      backendMessage =
+        "Demasiados intentos de acceso. Espera unos minutos e inténtalo nuevamente.";
+    }
+
+    if (!error?.response) {
+      backendMessage =
+        "No fue posible conectar con el servidor administrativo. Verifica que el backend esté ejecutándose.";
+    }
+
+    clearAdministrativeSession();
+
+    setMessage(
+      backendMessage ||
+        "No se pudo iniciar sesión. Verifica tus credenciales administrativas."
+    );
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div style={page(isDark)}>
@@ -1035,15 +1011,42 @@ function Stat({ icon, value, label }) {
 function normalizeAdministrativeUser(user) {
   const roles = getUserRoles(user);
 
-  const departments = Array.isArray(user.departments)
+const rawDepartments =
+  Array.isArray(
+    user.departments
+  )
     ? user.departments
     : Array.isArray(user.areas)
       ? user.areas
-      : Array.isArray(user.allowedDepartments)
+      : Array.isArray(
+            user.allowedDepartments
+          )
         ? user.allowedDepartments
         : user.department
           ? [user.department]
           : [];
+
+const departments =
+  rawDepartments
+    .map((department) => {
+      if (
+        typeof department ===
+        "string"
+      ) {
+        return department
+          .trim()
+          .toUpperCase();
+      }
+
+      return String(
+        department?.code ||
+          department?.name ||
+          ""
+      )
+        .trim()
+        .toUpperCase();
+    })
+    .filter(Boolean);
 
   const firstName =
     user.firstName ||
@@ -1083,14 +1086,39 @@ function normalizeAdministrativeUser(user) {
           roles[0] ||
           "INTERNAL_USER",
     roles,
-    department:
-      user.department ||
+department:
+  String(
+    user.department ||
       departments[0] ||
-      "ADMINISTRATION",
+      "ADMINISTRATION"
+  )
+    .trim()
+    .toUpperCase(),
     departments,
-    permissions: Array.isArray(user.permissions)
-      ? user.permissions
-      : [],
+permissions: Array.isArray(
+  user.permissions
+)
+  ? user.permissions
+      .map((permission) => {
+        if (
+          typeof permission ===
+          "string"
+        ) {
+          return permission
+            .trim()
+            .toUpperCase();
+        }
+
+        return String(
+          permission?.code ||
+            permission?.name ||
+            ""
+        )
+          .trim()
+          .toUpperCase();
+      })
+      .filter(Boolean)
+  : [],
     accountType:
       user.accountType ||
       user.userType ||
@@ -1111,7 +1139,7 @@ function hasAdministrativeAccess(user) {
     user.accountType ||
       user.userType ||
       user.type ||
-      ""
+      "INTERNAL"
   ).toUpperCase();
 
   if (

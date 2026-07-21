@@ -16,6 +16,10 @@ import Sidebar from "../components/Sidebar";
 import Topbar from "../components/Topbar";
 import AiAssistant from "../components/AiAssistant";
 
+import {
+  useSettings
+} from "../context/SettingsContext";
+
 /*
 |--------------------------------------------------------------------------
 | Configuración inicial segura
@@ -58,6 +62,10 @@ function Dashboard() {
   const navigate =
     useNavigate();
 
+  const {
+    settings
+  } = useSettings();
+
   /*
   |--------------------------------------------------------------------------
   | Datos guardados localmente
@@ -84,54 +92,6 @@ function Dashboard() {
       };
     }, []);
 
-  const storedSettings =
-    useMemo(() => {
-      return {
-        ...DEFAULT_SETTINGS,
-        ...(
-          safeJson(
-            localStorage.getItem(
-              "qsm_settings"
-            )
-          ) ||
-          {}
-        ),
-
-        theme:
-          localStorage.getItem(
-            "qsm_theme"
-          ) ||
-          safeJson(
-            localStorage.getItem(
-              "qsm_settings"
-            )
-          )?.theme ||
-          DEFAULT_SETTINGS.theme,
-
-        accentColor:
-          localStorage.getItem(
-            "qsm_accent"
-          ) ||
-          safeJson(
-            localStorage.getItem(
-              "qsm_settings"
-            )
-          )?.accentColor ||
-          DEFAULT_SETTINGS.accentColor,
-
-        language:
-          localStorage.getItem(
-            "qsm_language"
-          ) ||
-          safeJson(
-            localStorage.getItem(
-              "qsm_settings"
-            )
-          )?.language ||
-          DEFAULT_SETTINGS.language
-      };
-    }, []);
-
   /*
   |--------------------------------------------------------------------------
   | Estados
@@ -143,13 +103,6 @@ function Dashboard() {
     setUser
   ] = useState(
     storedUser
-  );
-
-  const [
-    settings,
-    setSettings
-  ] = useState(
-    storedSettings
   );
 
   const [
@@ -820,81 +773,14 @@ function Dashboard() {
 
   /*
   |--------------------------------------------------------------------------
-  | Cargar configuración
-  |--------------------------------------------------------------------------
-  */
-
-  const loadSettings =
-    useCallback(
-      async () => {
-        try {
-          const response =
-            await api.get(
-              "/settings/me"
-            );
-
-          const backendSettings =
-            extractObject(
-              response?.data,
-              [
-                "settings",
-                "data"
-              ]
-            );
-
-          if (
-            backendSettings &&
-            typeof backendSettings ===
-              "object"
-          ) {
-            const mergedSettings = {
-              ...DEFAULT_SETTINGS,
-              ...storedSettings,
-              ...backendSettings
-            };
-
-            setSettings(
-              mergedSettings
-            );
-
-            localStorage.setItem(
-              "qsm_settings",
-              JSON.stringify(
-                mergedSettings
-              )
-            );
-          }
-        } catch {
-          setSettings(
-            storedSettings
-          );
-        }
-      },
-      [
-        storedSettings
-      ]
-    );
-
-  /*
-  |--------------------------------------------------------------------------
   | Efectos
   |--------------------------------------------------------------------------
   */
 
   useEffect(() => {
     loadDashboard(true);
-    loadSettings();
   }, [
-    loadDashboard,
-    loadSettings
-  ]);
-
-  useEffect(() => {
-    applySettings(
-      settings
-    );
-  }, [
-    settings
+    loadDashboard
   ]);
 
   /*
@@ -926,1030 +812,674 @@ function Dashboard() {
     );
   };
     return (
-    <div style={page(isLight)}>
-      <style>{`
-        * {
-          box-sizing: border-box;
-        }
-
-        html,
-        body,
-        #root {
-          width: 100%;
-          min-height: 100%;
-          margin: 0;
-          padding: 0;
-          overflow-x: hidden;
-          background:
-            ${isLight
-              ? "#f8fafc"
-              : "#020617"};
-          font-family:
-            Inter,
-            "Plus Jakarta Sans",
-            system-ui,
-            sans-serif;
-        }
-
-        input::placeholder {
-          color:
-            ${isLight
-              ? "#94a3b8"
-              : "#64748b"};
-        }
-
-        input,
-        select,
-        button,
-        a {
-          font-family: inherit;
-        }
-
-        button,
-        a {
-          transition:
-            ${settings.animations === false
-              ? "none"
-              : "transform .24s ease, opacity .24s ease, border-color .24s ease, background .24s ease"};
-        }
-
-        button:hover,
-        a:hover {
-          transform:
-            ${settings.animations === false
-              ? "none"
-              : "translateY(-2px)"};
-        }
-
-        button:disabled {
-          transform: none !important;
-        }
-
-        @keyframes fadeUp {
-          from {
-            opacity: 0;
-            transform: translateY(18px);
-          }
-
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-
-        @keyframes softPulse {
-          0% {
-            opacity: .7;
-          }
-
-          50% {
-            opacity: 1;
-          }
-
-          100% {
-            opacity: .7;
-          }
-        }
-
-        @media (max-width: 1480px) {
-          .dashboard-hero-grid {
-            grid-template-columns:
-              minmax(0, 1fr) 320px
-              !important;
-          }
-
-          .dashboard-quick-grid {
-            grid-template-columns:
-              repeat(3, minmax(180px, 1fr))
-              !important;
-          }
-        }
-
-        @media (max-width: 1240px) {
-          .dashboard-page {
-            grid-template-columns:
-              1fr !important;
-          }
-
-          .sidebar-wrapper {
-            display:
-              none !important;
-          }
-
-          .dashboard-hero-grid {
-            grid-template-columns:
-              1fr !important;
-          }
-
-          .dashboard-stats-grid {
-            grid-template-columns:
-              repeat(2, minmax(0, 1fr))
-              !important;
-          }
-
-          .dashboard-main-grid {
-            grid-template-columns:
-              1fr !important;
-          }
-        }
-
-        @media (max-width: 840px) {
-          .dashboard-main-content {
-            padding:
-              18px !important;
-          }
-
-          .dashboard-hero-actions {
-            grid-template-columns:
-              1fr !important;
-          }
-
-          .dashboard-quick-grid {
-            grid-template-columns:
-              repeat(2, minmax(0, 1fr))
-              !important;
-          }
-
-          .dashboard-profile-card {
-            grid-template-columns:
-              90px minmax(0, 1fr)
-              !important;
-            align-items:
-              center !important;
-          }
-
-          .dashboard-profile-actions {
-            grid-column:
-              1 / -1 !important;
-          }
-        }
-
-        @media (max-width: 560px) {
-          .dashboard-stats-grid,
-          .dashboard-quick-grid {
-            grid-template-columns:
-              1fr !important;
-          }
-
-          .dashboard-search-box {
-            grid-template-columns:
-              28px minmax(0, 1fr)
-              !important;
-            height:
-              auto !important;
-            padding:
-              12px !important;
-          }
-
-          .dashboard-search-button {
-            grid-column:
-              1 / -1 !important;
-            width:
-              100% !important;
-          }
-
-          .dashboard-profile-card {
-            grid-template-columns:
-              1fr !important;
-            text-align:
-              center !important;
-          }
-
-          .dashboard-profile-avatar {
-            margin:
-              0 auto !important;
-          }
-
-          .dashboard-badge-row {
-            justify-content:
-              center !important;
-          }
-
-          .dashboard-activity-row {
-            grid-template-columns:
-              44px minmax(0, 1fr)
-              !important;
-          }
-
-          .dashboard-activity-value {
-            grid-column:
-              2 !important;
-            text-align:
-              left !important;
-          }
-        }
-      `}</style>
-
       <div
-        className="dashboard-page"
-        style={layout(settings)}
+        className="qsm-dashboard-v3"
+        data-theme={isLight ? "light" : "dark"}
       >
-        <div className="sidebar-wrapper">
-          <Sidebar />
+        <style>{dashboardV3Styles(settings)}</style>
+
+        <div className="qsm-dashboard-v3-sidebar">
+          <Sidebar
+            counts={{
+              purchases: stats.purchases,
+              sales: stats.sales,
+              favorites: stats.favorites,
+              messages: stats.messages,
+              disputes: stats.disputes
+            }}
+          />
         </div>
 
-        <main
-          className="dashboard-main-content"
-          style={main(settings)}
-        >
+        <main className="qsm-dashboard-v3-main">
           <Topbar />
 
-          <div style={contentContainer}>
-            <section
-              style={dashboardToolbar}
-            >
-              <div>
-                <p style={toolbarEyebrow(accent)}>
-                  PANEL PRINCIPAL
-                </p>
+          <div className="qsm-dashboard-v3-shell">
+            <header className="qsm-dashboard-v3-header">
+              <div className="qsm-dashboard-v3-title-block">
+                <h1>
+                  Hola, {displayFirstName}
+                  <span aria-hidden="true"> 👋</span>
+                </h1>
 
-                <h2 style={toolbarTitle(isLight)}>
-                  Resumen de tu actividad
-                </h2>
+                <strong>Resumen de actividades</strong>
 
-                <p style={toolbarText(isLight)}>
-                  Consulta tu perfil, operaciones,
-                  ventas, productos y seguridad desde
-                  un solo lugar.
+                <p>
+                  Consulta tu perfil, operaciones de venta, compras,
+                  productos, seguridad y estadísticas desde un solo lugar.
                 </p>
               </div>
 
               <button
                 type="button"
-                onClick={() =>
-                  loadDashboard(false)
-                }
-                disabled={
-                  loading ||
-                  refreshing
-                }
-                style={{
-                  ...refreshButton(
-                    isLight,
-                    accent
-                  ),
-                  opacity:
-                    refreshing
-                      ? 0.68
-                      : 1,
-                  cursor:
-                    refreshing
-                      ? "not-allowed"
-                      : "pointer"
-                }}
+                className="qsm-dashboard-v3-refresh"
+                onClick={() => loadDashboard(false)}
+                disabled={loading || refreshing}
               >
-                {refreshing
-                  ? "Actualizando..."
-                  : "↻ Actualizar datos"}
+                {refreshing ? "Actualizando..." : "↻ Actualizar datos"}
               </button>
-            </section>
+            </header>
 
             {error && (
-              <div style={errorBox}>
-                <strong>
-                  No se pudo cargar todo el Dashboard.
-                </strong>
-
-                <span>
-                  {error}
-                </span>
+              <div className="qsm-dashboard-v3-alert qsm-dashboard-v3-alert-error">
+                <strong>No se pudo cargar toda la información.</strong>
+                <span>{error}</span>
               </div>
             )}
 
-            {warnings.length > 0 && (
-              <div style={warningBox(isLight)}>
-                <div style={warningIcon}>
-                  !
+            <section className="qsm-dashboard-v3-stats">
+              <QsmStatCard
+                icon="▣"
+                title="Productos"
+                value={stats.products}
+                text="Publicaciones activas"
+                tone="cyan"
+              />
+
+              <QsmStatCard
+                icon="🛒"
+                title="Compras"
+                value={stats.purchases}
+                text="Órdenes registradas"
+                tone="blue"
+              />
+
+              <QsmStatCard
+                icon="$"
+                title="Ventas"
+                value={stats.sales}
+                text="Órdenes como vendedor"
+                tone="purple"
+              />
+
+              <QsmStatCard
+                icon="🛡"
+                title="Monto protegido"
+                value={formatMoney(stats.protectedAmount)}
+                text="Operaciones activas QSM"
+                tone="orange"
+                compact
+              />
+            </section>
+
+            <section className="qsm-dashboard-v3-upper">
+              <article className="qsm-dashboard-v3-card qsm-dashboard-v3-chart-card">
+                <div className="qsm-dashboard-v3-card-header">
+                  <div>
+                    <h2>Resumen de actividades</h2>
+                    <p>Resumen de tus operaciones en los últimos 30 días.</p>
+                  </div>
+
+                  <span>Últimos 30 días⌄</span>
                 </div>
 
-                <div>
-                  <strong>
-                    Información parcial
-                  </strong>
+                <QsmActivityChart
+                  purchases={recentPurchases}
+                  sales={recentSales}
+                  disputes={recentDisputes}
+                />
+              </article>
 
-                  <ul style={warningList}>
-                    {warnings.map(
-                      (
-                        warning,
-                        index
-                      ) => (
-                        <li
-                          key={`${warning}-${index}`}
-                        >
-                          {warning}
-                        </li>
-                      )
-                    )}
+              <article className="qsm-dashboard-v3-card qsm-dashboard-v3-quick-card">
+                <div className="qsm-dashboard-v3-card-header">
+                  <div>
+                    <h2>Resumen rápido</h2>
+                  </div>
+                </div>
+
+                <QsmQuickMetric
+                  icon="♡"
+                  label="Favoritos"
+                  value={stats.favorites}
+                  tone="purple"
+                />
+
+                <QsmQuickMetric
+                  icon="💬"
+                  label="Mensajes sin leer"
+                  value={stats.messages}
+                  tone="blue"
+                />
+
+                <QsmQuickMetric
+                  icon="⚖"
+                  label="Disputas abiertas"
+                  value={stats.disputes}
+                  tone="red"
+                />
+
+                <QsmQuickMetric
+                  icon="🛡"
+                  label="Confianza QSM"
+                  value={`${trustScore}/100`}
+                  tone="cyan"
+                />
+
+                <Link
+                  to="/profile"
+                  className="qsm-dashboard-v3-outline-button"
+                >
+                  Ver mi perfil completo
+                </Link>
+              </article>
+
+              <QsmProfileCard
+                fullName={displayFullName}
+                profilePhoto={profilePhoto}
+                isVerified={isVerified}
+                trustScore={trustScore}
+                profileCompletion={profileCompletion}
+                verificationStatus={user?.verificationStatus}
+              />
+            </section>
+
+            <section className="qsm-dashboard-v3-actions-card">
+              <form
+                onSubmit={handleSearch}
+                className="qsm-dashboard-v3-market-search"
+              >
+                <span aria-hidden="true">⌕</span>
+
+                <input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Buscar productos en Marketplace..."
+                  aria-label="Buscar productos en Marketplace"
+                />
+
+                <button type="submit">Buscar</button>
+              </form>
+
+              <nav className="qsm-dashboard-v3-actions">
+                <Link to="/marketplace" className="primary">
+                  ▣ Ir al Marketplace
+                </Link>
+
+                <Link to="/new-product">
+                  ＋ Publicar producto
+                </Link>
+
+                <Link to="/sales">
+                  ▣ Mis productos
+                </Link>
+
+                <Link to="/orders">
+                  ▣ Mis pedidos
+                </Link>
+
+                <Link to="/complete-profile">
+                  🛡 Verificación QSM
+                </Link>
+              </nav>
+            </section>
+
+            {loading ? (
+              <div className="qsm-dashboard-v3-loading">
+                <span>◌</span>
+                <strong>Cargando tu Dashboard...</strong>
+                <p>QSM está consultando tus datos reales.</p>
+              </div>
+            ) : (
+              <section className="qsm-dashboard-v3-recent-grid">
+                <QsmRecentPanel
+                  title="Mis productos recientes"
+                  linkText="Ver todos"
+                  linkTo="/sales"
+                  items={recentProducts}
+                  emptyText="Todavía no has publicado productos."
+                  footerText="Publicar nuevo producto"
+                  footerTo="/new-product"
+                  renderItem={(product, index) => (
+                    <QsmRecentItem
+                      key={product?._id || product?.id || index}
+                      image={getProductImage(product)}
+                      fallback="📦"
+                      title={product?.title || "Producto QSM"}
+                      subtitle={formatMoney(product?.price)}
+                      status={formatStatus(product?.status)}
+                    />
+                  )}
+                />
+
+                <QsmRecentPanel
+                  title="Compras recientes"
+                  linkText="Ver todas"
+                  linkTo="/orders"
+                  items={recentPurchases}
+                  emptyText="Todavía no tienes compras recientes."
+                  footerText="Ver mis compras"
+                  footerTo="/orders"
+                  renderItem={(order, index) => (
+                    <QsmRecentItem
+                      key={order?._id || order?.id || index}
+                      image={getProductImage(order?.product)}
+                      fallback="🛒"
+                      title={
+                        order?.product?.title ||
+                        order?.productTitle ||
+                        "Compra QSM"
+                      }
+                      subtitle={formatMoney(
+                        order?.totalAmount ??
+                        order?.total ??
+                        order?.price ??
+                        order?.product?.price ??
+                        0
+                      )}
+                      status={formatStatus(order?.status)}
+                    />
+                  )}
+                />
+
+                <QsmRecentPanel
+                  title="Ventas recientes"
+                  linkText="Ver todas"
+                  linkTo="/sales"
+                  items={recentSales}
+                  emptyText="Todavía no tienes ventas recientes."
+                  footerText="Ver mis ventas"
+                  footerTo="/sales"
+                  renderItem={(order, index) => (
+                    <QsmRecentItem
+                      key={order?._id || order?.id || index}
+                      image={getProductImage(order?.product)}
+                      fallback="💰"
+                      title={
+                        order?.product?.title ||
+                        order?.productTitle ||
+                        "Venta QSM"
+                      }
+                      subtitle={formatMoney(
+                        order?.totalAmount ??
+                        order?.total ??
+                        order?.price ??
+                        order?.product?.price ??
+                        0
+                      )}
+                      status={formatStatus(order?.status)}
+                    />
+                  )}
+                />
+
+                <QsmRecentPanel
+                  title="Disputas activas"
+                  linkText="Ver todos"
+                  linkTo="/disputes"
+                  items={recentDisputes}
+                  emptyText="No tienes disputas activas."
+                  footerText="Ver disputas"
+                  footerTo="/disputes"
+                  renderItem={(dispute, index) => (
+                    <QsmRecentItem
+                      key={dispute?._id || dispute?.id || index}
+                      fallback="⚖"
+                      title={
+                        dispute?.disputeCode ||
+                        dispute?.caseCode ||
+                        "Reclamo QSM"
+                      }
+                      subtitle={
+                        dispute?.reason ||
+                        dispute?.category ||
+                        "Sin descripción"
+                      }
+                      status={formatStatus(dispute?.status)}
+                    />
+                  )}
+                />
+              </section>
+            )}
+
+            {warnings.length > 0 && (
+              <div className="qsm-dashboard-v3-alert qsm-dashboard-v3-alert-warning qsm-dashboard-v3-warning-bottom">
+                <span className="qsm-dashboard-v3-alert-icon">!</span>
+
+                <div>
+                  <strong>Información parcial</strong>
+
+                  <ul>
+                    {warnings.map((warning, index) => (
+                      <li key={`${warning}-${index}`}>{warning}</li>
+                    ))}
                   </ul>
                 </div>
               </div>
             )}
-
-            <section
-              className="dashboard-hero-grid"
-              style={heroGrid}
-            >
-              <div
-                style={heroCard(
-                  isLight,
-                  settings,
-                  accent
-                )}
-              >
-                <div style={heroGlow(accent)} />
-
-                <p style={label(accent)}>
-                  INICIO QSM
-                </p>
-
-                <h1 style={title(isLight)}>
-                  Hola,{" "}
-                  {displayFirstName}.
-                </h1>
-
-                <p style={subtitle(isLight)}>
-                  Este es tu centro principal para
-                  comprar, vender, publicar productos,
-                  revisar mensajes, favoritos,
-                  reclamos y seguridad.
-                </p>
-
-                <form
-                  onSubmit={handleSearch}
-                  className="dashboard-search-box"
-                  style={searchBox(isLight)}
-                >
-                  <span style={searchIcon}>
-                    ⌕
-                  </span>
-
-                  <input
-                    value={search}
-                    onChange={(
-                      event
-                    ) =>
-                      setSearch(
-                        event.target.value
-                      )
-                    }
-                    placeholder="Buscar productos en Marketplace..."
-                    aria-label="Buscar productos en Marketplace"
-                    style={searchInput(isLight)}
-                  />
-
-                  <button
-                    type="submit"
-                    className="dashboard-search-button"
-                    style={searchButton(accent)}
-                  >
-                    Buscar
-                  </button>
-                </form>
-
-                <div
-                  className="dashboard-hero-actions"
-                  style={heroActions}
-                >
-                  <Link
-                    to="/marketplace"
-                    style={primaryButton(accent)}
-                  >
-                    🛒 Ir al Marketplace
-                  </Link>
-
-                  <Link
-                    to="/new-product"
-                    style={outlineButton(isLight)}
-                  >
-                    ＋ Publicar producto
-                  </Link>
-
-                  <Link
-                    to="/complete-profile"
-                    style={outlineButton(isLight)}
-                  >
-                    🛡 Verificación QSM
-                  </Link>
-                </div>
-              </div>
-
-              <aside
-                className="dashboard-profile-card"
-                style={profileCard(
-                  isLight,
-                  settings
-                )}
-              >
-                <div
-                  className="dashboard-profile-avatar"
-                  style={avatar(accent)}
-                >
-                  {profilePhoto ? (
-                    <img
-                      src={profilePhoto}
-                      alt={`Foto de perfil de ${displayFullName}`}
-                      style={profileImage}
-                      onError={(
-                        event
-                      ) => {
-                        event.currentTarget.style.display =
-                          "none";
-                      }}
-                    />
-                  ) : (
-                    displayFirstName
-                      .charAt(0)
-                      .toUpperCase()
-                  )}
-                </div>
-
-                <div style={profileIdentity}>
-                  <p style={profileLabel(accent)}>
-                    PERFIL QSM
-                  </p>
-
-                  <h2 style={panelTitle(isLight)}>
-                    {displayFullName}
-                  </h2>
-
-                  <p style={profileEmail(isLight)}>
-                    {user?.email ||
-                      "usuario@qsm.com"}
-                  </p>
-
-                  <div
-                    className="dashboard-badge-row"
-                    style={badgeRow}
-                  >
-                    <span
-                      style={verifiedBadge(
-                        isVerified
-                      )}
-                    >
-                      {isVerified
-                        ? "✓ Verificado"
-                        : "● Pendiente"}
-                    </span>
-
-                    <span
-                      style={trustBadge(accent)}
-                    >
-                      Confianza{" "}
-                      {trustScore}/100
-                    </span>
-                  </div>
-                </div>
-
-                <div
-                  className="dashboard-profile-actions"
-                  style={profileActions}
-                >
-                  <div style={profileProgressHeader}>
-                    <span style={muted(isLight)}>
-                      Perfil completado
-                    </span>
-
-                    <strong style={profilePercentage(accent)}>
-                      {profileCompletion}%
-                    </strong>
-                  </div>
-
-                  <div style={scoreBar(isLight)}>
-                    <div
-                      style={{
-                        ...scoreFill(accent),
-                        width:
-                          `${profileCompletion}%`
-                      }}
-                    />
-                  </div>
-
-                  <div style={trustRow}>
-                    <span style={muted(isLight)}>
-                      Nivel de confianza
-                    </span>
-
-                    <strong>
-                      {trustScore}/100
-                    </strong>
-                  </div>
-
-                  <div style={scoreBar(isLight)}>
-                    <div
-                      style={{
-                        ...scoreFill(accent),
-                        width:
-                          `${trustScore}%`
-                      }}
-                    />
-                  </div>
-
-                  <Link
-                    to="/profile"
-                    style={primaryButton(accent)}
-                  >
-                    Editar perfil
-                  </Link>
-                </div>
-              </aside>
-            </section>
-
-            {loading ? (
-              <div style={centerCard(isLight)}>
-                <div style={loadingIcon}>
-                  ◌
-                </div>
-
-                <h2>
-                  Cargando inicio...
-                </h2>
-
-                <p>
-                  QSM está consultando tus datos.
-                </p>
-              </div>
-            ) : (
-              <>
-                <section
-                  className="dashboard-stats-grid"
-                  style={statsGrid}
-                >
-                  <StatCard
-                    icon="📦"
-                    title="Productos"
-                    value={stats.products}
-                    text="Publicaciones activas"
-                    isLight={isLight}
-                    accent={accent}
-                  />
-
-                  <StatCard
-                    icon="🛒"
-                    title="Compras"
-                    value={stats.purchases}
-                    text="Órdenes registradas"
-                    isLight={isLight}
-                    accent={accent}
-                  />
-
-                  <StatCard
-                    icon="💰"
-                    title="Ventas"
-                    value={stats.sales}
-                    text="Operaciones como vendedor"
-                    isLight={isLight}
-                    accent={accent}
-                  />
-
-                  <StatCard
-                    icon="🛡"
-                    title="Monto protegido"
-                    value={formatMoney(
-                      stats.protectedAmount
-                    )}
-                    text="Operaciones activas QSM"
-                    isLight={isLight}
-                    accent={accent}
-                    compactValue
-                  />
-                </section>
-
-                <section
-                  className="dashboard-quick-grid"
-                  style={quickGrid}
-                >
-                  <QuickAction
-                    icon="🛒"
-                    title="Marketplace"
-                    text="Explorar productos seguros."
-                    to="/marketplace"
-                    isLight={isLight}
-                    accent={accent}
-                  />
-
-                  <QuickAction
-                    icon="＋"
-                    title="Publicar"
-                    text="Vender con verificación QSM."
-                    to="/new-product"
-                    isLight={isLight}
-                    accent={accent}
-                  />
-
-                  <QuickAction
-                    icon="♥"
-                    title="Favoritos"
-                    text={`${stats.favorites} productos guardados.`}
-                    to="/favorites"
-                    isLight={isLight}
-                    accent={accent}
-                  />
-
-                  <QuickAction
-                    icon="💬"
-                    title="Mensajes"
-                    text={
-                      stats.messages > 0
-                        ? `${stats.messages} mensajes pendientes.`
-                        : "Hablar con compradores o vendedores."
-                    }
-                    to="/messages"
-                    isLight={isLight}
-                    accent={accent}
-                  />
-
-                  <QuickAction
-                    icon="⚖"
-                    title="Reclamos"
-                    text={
-                      stats.disputes > 0
-                        ? `${stats.disputes} reclamos registrados.`
-                        : "Resolver disputas protegidas."
-                    }
-                    to="/disputes"
-                    isLight={isLight}
-                    accent={accent}
-                  />
-
-                  <QuickAction
-                    icon="⚙"
-                    title="Configuración"
-                    text="Tema, idioma y seguridad."
-                    to="/settings"
-                    isLight={isLight}
-                    accent={accent}
-                  />
-                </section>
-
-                <section
-                  className="dashboard-main-grid"
-                  style={dashboardGrid}
-                >
-                  <DashboardPanel
-                    eyebrow="COMPRAS"
-                    title="Compras recientes"
-                    actionText="Ver mis compras"
-                    actionTo="/orders"
-                    isLight={isLight}
-                    accent={accent}
-                    settings={settings}
-                  >
-                    {recentPurchases.length === 0 ? (
-                      <EmptyState
-                        icon="🛒"
-                        text="Todavía no tienes compras recientes."
-                        isLight={isLight}
-                      />
-                    ) : (
-                      recentPurchases.map(
-                        (
-                          order,
-                          index
-                        ) => (
-                          <ActivityRow
-                            key={
-                              order?._id ||
-                              order?.id ||
-                              index
-                            }
-                            icon="🛒"
-                            title={
-                              order?.product
-                                ?.title ||
-                              order
-                                ?.productTitle ||
-                              "Compra QSM"
-                            }
-                            subtitle={
-                              order?.orderCode ||
-                              formatStatus(
-                                order?.status
-                              )
-                            }
-                            value={formatMoney(
-                              order
-                                ?.totalAmount ??
-                              order?.total ??
-                              order?.price ??
-                              order?.product
-                                ?.price ??
-                              0
-                            )}
-                            isLight={isLight}
-                          />
-                        )
-                      )
-                    )}
-                  </DashboardPanel>
-
-                  <DashboardPanel
-                    eyebrow="VENTAS"
-                    title="Ventas recientes"
-                    actionText="Ver mis ventas"
-                    actionTo="/sales"
-                    isLight={isLight}
-                    accent={accent}
-                    settings={settings}
-                  >
-                    {recentSales.length === 0 ? (
-                      <EmptyState
-                        icon="💰"
-                        text="Todavía no tienes ventas recientes."
-                        isLight={isLight}
-                      />
-                    ) : (
-                      recentSales.map(
-                        (
-                          order,
-                          index
-                        ) => (
-                          <ActivityRow
-                            key={
-                              order?._id ||
-                              order?.id ||
-                              index
-                            }
-                            icon="💰"
-                            title={
-                              order?.product
-                                ?.title ||
-                              order
-                                ?.productTitle ||
-                              "Venta QSM"
-                            }
-                            subtitle={
-                              order?.orderCode ||
-                              formatStatus(
-                                order?.status
-                              )
-                            }
-                            value={formatMoney(
-                              order
-                                ?.totalAmount ??
-                              order?.total ??
-                              order?.price ??
-                              order?.product
-                                ?.price ??
-                              0
-                            )}
-                            isLight={isLight}
-                          />
-                        )
-                      )
-                    )}
-                  </DashboardPanel>
-
-                  <DashboardPanel
-                    eyebrow="PUBLICACIONES"
-                    title="Productos publicados"
-                    actionText="Gestionar publicaciones"
-                    actionTo="/sales"
-                    isLight={isLight}
-                    accent={accent}
-                    settings={settings}
-                  >
-                    {recentProducts.length === 0 ? (
-                      <EmptyState
-                        icon="📦"
-                        text="Publica tu primer producto para verlo aquí."
-                        isLight={isLight}
-                      />
-                    ) : (
-                      recentProducts.map(
-                        (
-                          product,
-                          index
-                        ) => (
-                          <ActivityRow
-                            key={
-                              product?._id ||
-                              product?.id ||
-                              index
-                            }
-                            icon="📦"
-                            title={
-                              product?.title ||
-                              "Producto QSM"
-                            }
-                            subtitle={
-                              formatStatus(
-                                product?.status
-                              ) ||
-                              product?.category ||
-                              "Marketplace"
-                            }
-                            value={formatMoney(
-                              product?.price
-                            )}
-                            isLight={isLight}
-                          />
-                        )
-                      )
-                    )}
-                  </DashboardPanel>
-
-                  <DashboardPanel
-                    eyebrow="SEGURIDAD"
-                    title="Progreso QSM"
-                    actionText="Completar verificación"
-                    actionTo="/complete-profile"
-                    isLight={isLight}
-                    accent={accent}
-                    settings={settings}
-                  >
-                    <ProgressLine
-                      done={Boolean(
-                        user?.firstName &&
-                        user?.lastName &&
-                        user?.email
-                      )}
-                      text="Información básica"
-                      isLight={isLight}
-                    />
-
-                    <ProgressLine
-                      done={Boolean(
-                        user?.phone
-                      )}
-                      text="Número de teléfono"
-                      isLight={isLight}
-                    />
-
-                    <ProgressLine
-                      done={Boolean(
-                        user?.city ||
-                        user?.province
-                      )}
-                      text="Ubicación registrada"
-                      isLight={isLight}
-                    />
-
-                    <ProgressLine
-                      done={Boolean(
-                        profilePhoto
-                      )}
-                      text="Foto de perfil"
-                      isLight={isLight}
-                    />
-
-                    <ProgressLine
-                      done={isVerified}
-                      text="Verificación de identidad"
-                      isLight={isLight}
-                    />
-
-                    <ProgressLine
-                      done={
-                        stats.products > 0
-                      }
-                      text="Primer producto publicado"
-                      isLight={isLight}
-                    />
-
-                    <ProgressLine
-                      done={
-                        stats.purchases > 0 ||
-                        stats.sales > 0
-                      }
-                      text="Primera operación protegida"
-                      isLight={isLight}
-                    />
-                  </DashboardPanel>
-
-                  <DashboardPanel
-                    eyebrow="RECLAMOS"
-                    title="Centro de reclamos"
-                    actionText="Ver reclamos"
-                    actionTo="/disputes"
-                    isLight={isLight}
-                    accent={accent}
-                    settings={settings}
-                  >
-                    {recentDisputes.length === 0 ? (
-                      <EmptyState
-                        icon="⚖"
-                        text="No tienes reclamos activos."
-                        isLight={isLight}
-                      />
-                    ) : (
-                      recentDisputes.map(
-                        (
-                          dispute,
-                          index
-                        ) => (
-                          <ActivityRow
-                            key={
-                              dispute?._id ||
-                              dispute?.id ||
-                              index
-                            }
-                            icon="⚖"
-                            title={
-                              dispute
-                                ?.disputeCode ||
-                              dispute
-                                ?.caseCode ||
-                              "Reclamo QSM"
-                            }
-                            subtitle={formatStatus(
-                              dispute?.status
-                            )}
-                            value={
-                              dispute?.reason ||
-                              dispute
-                                ?.category ||
-                              "Disputa"
-                            }
-                            isLight={isLight}
-                            textualValue
-                          />
-                        )
-                      )
-                    )}
-                  </DashboardPanel>
-
-                  <DashboardPanel
-                    eyebrow="CUENTA"
-                    title="Estado de tu cuenta"
-                    actionText="Ver configuración"
-                    actionTo="/settings"
-                    isLight={isLight}
-                    accent={accent}
-                    settings={settings}
-                  >
-                    <AccountStatusRow
-                      label="Estado"
-                      value={formatAccountStatus(
-                        user?.status
-                      )}
-                      isLight={isLight}
-                      accent={accent}
-                    />
-
-                    <AccountStatusRow
-                      label="Verificación"
-                      value={
-                        isVerified
-                          ? "Aprobada"
-                          : formatVerificationStatus(
-                              user?.verificationStatus
-                            )
-                      }
-                      isLight={isLight}
-                      accent={accent}
-                    />
-
-                    <AccountStatusRow
-                      label="Compras habilitadas"
-                      value={
-                        user?.buyerEnabled ===
-                        false
-                          ? "No"
-                          : "Sí"
-                      }
-                      isLight={isLight}
-                      accent={accent}
-                    />
-
-                    <AccountStatusRow
-                      label="Ventas habilitadas"
-                      value={
-                        user?.sellerEnabled ===
-                        false
-                          ? "No"
-                          : "Sí"
-                      }
-                      isLight={isLight}
-                      accent={accent}
-                    />
-
-                    <AccountStatusRow
-                      label="Seguridad"
-                      value={formatSecurityLevel(
-                        user?.securityLevel
-                      )}
-                      isLight={isLight}
-                      accent={accent}
-                    />
-                  </DashboardPanel>
-                </section>
-              </>
-            )}
           </div>
         </main>
+
+        <AiAssistant pageContext="dashboard" />
+      </div>
+    );
+}
+
+function QsmStatCard({
+  icon,
+  title,
+  value,
+  text,
+  tone,
+  compact = false
+}) {
+  return (
+    <article className={`qsm-dashboard-v3-stat tone-${tone}`}>
+      <span className="qsm-dashboard-v3-stat-icon">{icon}</span>
+
+      <div>
+        <small>{title}</small>
+        <strong className={compact ? "compact" : ""}>{value}</strong>
+        <p>{text}</p>
       </div>
 
-      <AiAssistant
-        pageContext="dashboard"
-      />
+      <span className="qsm-dashboard-v3-stat-arrow">›</span>
+    </article>
+  );
+}
+
+function QsmQuickMetric({ icon, label, value, tone }) {
+  return (
+    <div className={`qsm-dashboard-v3-quick-metric tone-${tone}`}>
+      <span>{icon}</span>
+      <p>{label}</p>
+      <strong>{value}</strong>
     </div>
   );
 }
-/*
-|--------------------------------------------------------------------------
-| Panel reutilizable del Dashboard
-|--------------------------------------------------------------------------
-*/
+
+function QsmProfileCard({
+  fullName,
+  profilePhoto,
+  isVerified,
+  trustScore,
+  profileCompletion,
+  verificationStatus
+}) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const initial = String(fullName || "U").trim().charAt(0).toUpperCase();
+
+  return (
+    <aside className="qsm-dashboard-v3-card qsm-dashboard-v3-profile-card">
+      <div className="qsm-dashboard-v3-profile-cover" />
+
+      <div className="qsm-dashboard-v3-profile-content">
+        <div className="qsm-dashboard-v3-avatar-wrap">
+          <div className="qsm-dashboard-v3-avatar">
+            {profilePhoto && !imageFailed ? (
+              <img
+                src={profilePhoto}
+                alt={`Foto de ${fullName}`}
+                onError={() => setImageFailed(true)}
+              />
+            ) : (
+              initial
+            )}
+          </div>
+
+          {isVerified && (
+            <span className="qsm-dashboard-v3-avatar-check">✓</span>
+          )}
+        </div>
+
+        <div className="qsm-dashboard-v3-profile-name">
+          <h2>Perfil QSM</h2>
+          <strong>{fullName}</strong>
+          <span className={isVerified ? "verified" : "pending"}>
+            {isVerified ? "Usuario verificado" : "Verificación pendiente"}
+          </span>
+        </div>
+
+        <QsmProgress label="Perfil completado" value={profileCompletion} />
+        <QsmProgress label="Confianza QSM" value={trustScore} />
+
+        <div className="qsm-dashboard-v3-profile-meta">
+          <div>
+            <span>Estado verificación</span>
+            <strong>{
+              isVerified
+                ? "Verificado"
+                : formatVerificationStatus(verificationStatus)
+            }</strong>
+          </div>
+
+          <div>
+            <span>Nivel de confianza</span>
+            <strong>{formatTrustLevel(trustScore)}</strong>
+          </div>
+        </div>
+
+        <Link
+          to={isVerified ? "/profile" : "/complete-profile"}
+          className="qsm-dashboard-v3-primary-button"
+        >
+          {isVerified ? "Administrar perfil" : "Completar verificación"}
+        </Link>
+      </div>
+    </aside>
+  );
+}
+
+function QsmProgress({ label, value }) {
+  const safeValue = clampNumber(value, 0, 100, 0);
+
+  return (
+    <div className="qsm-dashboard-v3-progress">
+      <div>
+        <span>{label}</span>
+        <strong>{safeValue}/100</strong>
+      </div>
+
+      <div className="qsm-dashboard-v3-progress-track">
+        <span style={{ width: `${safeValue}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function QsmRecentPanel({
+  title,
+  linkText,
+  linkTo,
+  items,
+  emptyText,
+  renderItem,
+  footerText,
+  footerTo
+}) {
+  return (
+    <article className="qsm-dashboard-v3-card qsm-dashboard-v3-recent-panel">
+      <header>
+        <h3>{title}</h3>
+        <Link to={linkTo}>{linkText}</Link>
+      </header>
+
+      <div className="qsm-dashboard-v3-recent-list">
+        {items.length === 0 ? (
+          <div className="qsm-dashboard-v3-empty">{emptyText}</div>
+        ) : (
+          items.slice(0, 3).map(renderItem)
+        )}
+      </div>
+
+      <Link
+        to={footerTo}
+        className="qsm-dashboard-v3-outline-button qsm-dashboard-v3-recent-footer"
+      >
+        {footerText}
+      </Link>
+    </article>
+  );
+}
+
+function QsmRecentItem({
+  image,
+  fallback,
+  title,
+  subtitle,
+  status
+}) {
+  const [imageFailed, setImageFailed] = useState(false);
+
+  return (
+    <div className="qsm-dashboard-v3-recent-item">
+      <div className="qsm-dashboard-v3-recent-thumb">
+        {image && !imageFailed ? (
+          <img
+            src={image}
+            alt={title}
+            onError={() => setImageFailed(true)}
+          />
+        ) : (
+          <span>{fallback}</span>
+        )}
+      </div>
+
+      <div className="qsm-dashboard-v3-recent-copy">
+        <strong>{title}</strong>
+        <span>{subtitle}</span>
+      </div>
+
+      <span className="qsm-dashboard-v3-recent-status">{status}</span>
+    </div>
+  );
+}
+
+function QsmActivityChart({ purchases, sales, disputes }) {
+  const data = useMemo(
+    () => buildChartData({ purchases, sales, disputes }),
+    [purchases, sales, disputes]
+  );
+
+  const hasActivity = data.some(
+    (item) =>
+      item.purchases > 0 ||
+      item.sales > 0 ||
+      item.disputes > 0
+  );
+
+  if (!hasActivity) {
+    return (
+      <div className="qsm-dashboard-v3-chart-empty">
+        Aún no hay suficiente actividad registrada para generar la gráfica.
+      </div>
+    );
+  }
+
+  const width = 760;
+  const height = 260;
+  const padding = {
+    top: 18,
+    right: 20,
+    bottom: 34,
+    left: 36
+  };
+
+  const chartWidth = width - padding.left - padding.right;
+  const chartHeight = height - padding.top - padding.bottom;
+
+  const maxValue = Math.max(
+    1,
+    ...data.flatMap((item) => [
+      item.purchases,
+      item.sales,
+      item.disputes
+    ])
+  );
+
+  const makePoints = (key) =>
+    data
+      .map((item, index) => {
+        const x =
+          padding.left +
+          (chartWidth * index) /
+            Math.max(1, data.length - 1);
+
+        const y =
+          padding.top +
+          chartHeight -
+          (item[key] / maxValue) * chartHeight;
+
+        return `${x},${y}`;
+      })
+      .join(" ");
+
+  return (
+    <>
+      <div className="qsm-dashboard-v3-chart-legend">
+        <span><i className="purchases" />Compras</span>
+        <span><i className="sales" />Ventas</span>
+        <span><i className="disputes" />Reclamos</span>
+      </div>
+
+      <div className="qsm-dashboard-v3-chart-wrap">
+        <svg
+          viewBox={`0 0 ${width} ${height}`}
+          role="img"
+          aria-label="Resumen de actividad de los últimos 30 días"
+        >
+          {[0, 1, 2, 3, 4].map((step) => {
+            const y = padding.top + (chartHeight * step) / 4;
+            const value = Math.round(
+              maxValue - (maxValue * step) / 4
+            );
+
+            return (
+              <g key={step}>
+                <line
+                  x1={padding.left}
+                  x2={width - padding.right}
+                  y1={y}
+                  y2={y}
+                  className="qsm-dashboard-v3-grid-line"
+                />
+
+                <text
+                  x="4"
+                  y={y + 3}
+                  className="qsm-dashboard-v3-axis-label"
+                >
+                  {value}
+                </text>
+              </g>
+            );
+          })}
+
+          <polyline
+            points={makePoints("purchases")}
+            className="qsm-dashboard-v3-line purchases"
+          />
+
+          <polyline
+            points={makePoints("sales")}
+            className="qsm-dashboard-v3-line sales"
+          />
+
+          <polyline
+            points={makePoints("disputes")}
+            className="qsm-dashboard-v3-line disputes"
+          />
+
+          {data.map((item, index) => {
+            const x =
+              padding.left +
+              (chartWidth * index) /
+                Math.max(1, data.length - 1);
+
+            return (
+              <text
+                key={item.label}
+                x={x}
+                y={height - 10}
+                textAnchor="middle"
+                className="qsm-dashboard-v3-axis-label"
+              >
+                {item.label}
+              </text>
+            );
+          })}
+        </svg>
+      </div>
+    </>
+  );
+}
 
 function DashboardPanel({
   eyebrow,
@@ -2611,65 +2141,6 @@ function getAccentColor(color) {
 
 /*
 |--------------------------------------------------------------------------
-| Aplicar configuración
-|--------------------------------------------------------------------------
-*/
-
-function applySettings(settings) {
-  const safeSettings = {
-    ...DEFAULT_SETTINGS,
-    ...(
-      settings || {}
-    )
-  };
-
-  const accent =
-    getAccentColor(
-      safeSettings
-        .accentColor
-    );
-
-  document
-    .documentElement
-    .style
-    .setProperty(
-      "--qsm-accent",
-      accent
-    );
-
-  document.body.dataset.qsmTheme =
-    safeSettings.theme ||
-    "dark";
-
-  localStorage.setItem(
-    "qsm_theme",
-    safeSettings.theme ||
-    "dark"
-  );
-
-  localStorage.setItem(
-    "qsm_accent",
-    safeSettings
-      .accentColor ||
-    "cyan"
-  );
-
-  localStorage.setItem(
-    "qsm_language",
-    safeSettings.language ||
-    "es"
-  );
-
-  localStorage.setItem(
-    "qsm_settings",
-    JSON.stringify(
-      safeSettings
-    )
-  );
-}
-
-/*
-|--------------------------------------------------------------------------
 | Formato monetario
 |--------------------------------------------------------------------------
 */
@@ -2901,6 +2372,1108 @@ function formatSecurityLevel(value) {
 }
 /*
 |--------------------------------------------------------------------------
+| Utilidades visuales del Dashboard V3
+|--------------------------------------------------------------------------
+*/
+
+function getProductImage(product) {
+  if (!product) {
+    return "";
+  }
+
+  const firstImage =
+    Array.isArray(product?.images)
+      ? product.images[0]
+      : "";
+
+  const value =
+    product?.thumbnail ||
+    product?.image ||
+    product?.imageUrl ||
+    firstImage ||
+    "";
+
+  if (!value) {
+    return "";
+  }
+
+  const rawValue =
+    typeof value === "string"
+      ? value
+      : value?.url ||
+        value?.path ||
+        value?.secure_url ||
+        value?.imageUrl ||
+        "";
+
+  if (!rawValue) {
+    return "";
+  }
+
+  const cleanValue =
+    String(rawValue)
+      .trim()
+      .replaceAll("&#x2F;", "/")
+      .replaceAll("&amp;", "&")
+      .replace(/\\/g, "/");
+
+  if (
+    cleanValue.startsWith("http://") ||
+    cleanValue.startsWith("https://") ||
+    cleanValue.startsWith("data:image/") ||
+    cleanValue.startsWith("blob:")
+  ) {
+    return cleanValue;
+  }
+
+  const apiOrigin = getApiOrigin();
+
+  if (cleanValue.startsWith("/uploads/")) {
+    return `${apiOrigin}${cleanValue}`;
+  }
+
+  if (cleanValue.startsWith("uploads/")) {
+    return `${apiOrigin}/${cleanValue}`;
+  }
+
+  return `${apiOrigin}/uploads/products/images/${cleanValue}`;
+}
+
+function formatTrustLevel(value) {
+  const score = clampNumber(value, 0, 100, 0);
+
+  if (score >= 80) {
+    return "Alto";
+  }
+
+  if (score >= 50) {
+    return "Medio";
+  }
+
+  return "Inicial";
+}
+
+function buildChartData({ purchases, sales, disputes }) {
+  const now = new Date();
+
+  const buckets =
+    Array.from(
+      { length: 7 },
+      (_, index) => {
+        const start = new Date(now);
+        start.setHours(0, 0, 0, 0);
+        start.setDate(
+          start.getDate() -
+          (6 - index) * 5
+        );
+
+        const end = new Date(start);
+        end.setDate(end.getDate() + 5);
+
+        return {
+          start,
+          end,
+          label:
+            new Intl.DateTimeFormat(
+              "es-DO",
+              {
+                day: "2-digit",
+                month: "short"
+              }
+            ).format(start),
+          purchases: 0,
+          sales: 0,
+          disputes: 0
+        };
+      }
+    );
+
+  const addItems = (items, key) => {
+    (Array.isArray(items) ? items : [])
+      .forEach((item) => {
+        const date =
+          new Date(
+            item?.createdAt ||
+            item?.updatedAt ||
+            0
+          );
+
+        if (Number.isNaN(date.getTime())) {
+          return;
+        }
+
+        const bucket =
+          buckets.find(
+            (entry) =>
+              date >= entry.start &&
+              date < entry.end
+          );
+
+        if (bucket) {
+          bucket[key] += 1;
+        }
+      });
+  };
+
+  addItems(purchases, "purchases");
+  addItems(sales, "sales");
+  addItems(disputes, "disputes");
+
+  return buckets;
+}
+
+function dashboardV3Styles(settings) {
+  const animations =
+    settings?.animations === false
+      ? "none"
+      : "all .22s ease";
+
+  return `
+    .qsm-dashboard-v3 {
+      --v3-sidebar-width:
+        ${settings?.compactSidebar ? "96px" : "300px"};
+
+      width: 100%;
+      min-height: 100vh;
+      color: var(--qsm-text, #f8fafc);
+      background:
+        radial-gradient(
+          circle at 88% 4%,
+          rgba(var(--qsm-accent-rgb), .12),
+          transparent 28%
+        ),
+        radial-gradient(
+          circle at 8% 14%,
+          rgba(56, 189, 248, .08),
+          transparent 25%
+        ),
+        var(--qsm-bg, #020617);
+    }
+
+    .qsm-dashboard-v3 *,
+    .qsm-dashboard-v3 *::before,
+    .qsm-dashboard-v3 *::after {
+      box-sizing: border-box;
+    }
+
+    .qsm-dashboard-v3-sidebar {
+      position: fixed;
+      inset: 0 auto 0 0;
+      width: var(--v3-sidebar-width);
+      height: 100dvh;
+      z-index: 740;
+    }
+
+    .qsm-dashboard-v3-main {
+      width: calc(100% - var(--v3-sidebar-width));
+      min-height: 100vh;
+      margin-left: var(--v3-sidebar-width);
+      padding: 18px clamp(18px, 2.2vw, 34px) 50px;
+      transition: ${animations};
+    }
+
+    .qsm-dashboard-v3-shell {
+      width: min(1660px, 100%);
+      margin: 0 auto;
+    }
+
+    .qsm-dashboard-v3-header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
+      margin: 12px 0 18px;
+    }
+
+    .qsm-dashboard-v3-title-block h1 {
+      margin: 0 0 8px;
+      color: var(--qsm-text, #f8fafc);
+      font-size: clamp(28px, 2.5vw, 42px);
+      line-height: 1;
+      letter-spacing: -1.3px;
+    }
+
+    .qsm-dashboard-v3-title-block > strong {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--qsm-accent, #35d0c3);
+      font-size: 14px;
+    }
+
+    .qsm-dashboard-v3-title-block p {
+      margin: 0;
+      color: var(--qsm-text-secondary, #94a3b8);
+      font-size: 12px;
+      line-height: 19px;
+    }
+
+    .qsm-dashboard-v3-refresh,
+    .qsm-dashboard-v3-primary-button,
+    .qsm-dashboard-v3-outline-button {
+      min-height: 42px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 15px;
+      border-radius: 12px;
+      font-size: 10px;
+      font-weight: 900;
+      text-decoration: none;
+      cursor: pointer;
+      transition: ${animations};
+    }
+
+    .qsm-dashboard-v3-refresh {
+      border: 1px solid rgba(var(--qsm-accent-rgb), .4);
+      background: rgba(var(--qsm-accent-rgb), .07);
+      color: var(--qsm-accent);
+    }
+
+    .qsm-dashboard-v3-primary-button {
+      width: 100%;
+      border: none;
+      color: #fff;
+      background:
+        linear-gradient(
+          135deg,
+          var(--qsm-accent),
+          #38bdf8,
+          #8b5cf6
+        );
+    }
+
+    .qsm-dashboard-v3-outline-button {
+      border: 1px solid rgba(var(--qsm-accent-rgb), .34);
+      background: transparent;
+      color: var(--qsm-accent);
+    }
+
+    .qsm-dashboard-v3-refresh:hover,
+    .qsm-dashboard-v3-primary-button:hover,
+    .qsm-dashboard-v3-outline-button:hover {
+      transform:
+        ${settings?.animations === false ? "none" : "translateY(-2px)"};
+    }
+
+    .qsm-dashboard-v3-alert {
+      display: flex;
+      align-items: flex-start;
+      gap: 11px;
+      padding: 13px 15px;
+      border-radius: 14px;
+      font-size: 10px;
+      line-height: 17px;
+    }
+
+    .qsm-dashboard-v3-alert strong,
+    .qsm-dashboard-v3-alert span {
+      display: block;
+    }
+
+    .qsm-dashboard-v3-alert ul {
+      margin: 4px 0 0;
+      padding-left: 16px;
+    }
+
+    .qsm-dashboard-v3-alert-error {
+      margin-bottom: 15px;
+      border: 1px solid rgba(239, 68, 68, .3);
+      background: rgba(127, 29, 29, .18);
+      color: #fca5a5;
+    }
+
+    .qsm-dashboard-v3-alert-warning {
+      border: 1px solid rgba(245, 158, 11, .26);
+      background: rgba(245, 158, 11, .07);
+      color: var(--qsm-text-secondary);
+    }
+
+    .qsm-dashboard-v3-warning-bottom {
+      margin-top: 16px;
+    }
+
+    .qsm-dashboard-v3-alert-icon {
+      width: 29px;
+      height: 29px;
+      display: grid !important;
+      place-items: center;
+      flex: 0 0 auto;
+      border-radius: 9px;
+      background: rgba(245, 158, 11, .16);
+      color: #f59e0b;
+      font-weight: 950;
+    }
+
+    .qsm-dashboard-v3-stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .qsm-dashboard-v3-stat,
+    .qsm-dashboard-v3-card,
+    .qsm-dashboard-v3-actions-card {
+      border: 1px solid var(--qsm-border, rgba(148,163,184,.14));
+      background: var(--qsm-surface, rgba(15,23,42,.74));
+      box-shadow: var(--qsm-shadow, 0 18px 50px rgba(0,0,0,.14));
+      backdrop-filter:
+        ${settings?.glassEffect === false ? "none" : "blur(14px)"};
+    }
+
+    .qsm-dashboard-v3-stat {
+      min-width: 0;
+      min-height: 96px;
+      display: grid;
+      grid-template-columns: 44px minmax(0, 1fr) 15px;
+      align-items: center;
+      gap: 11px;
+      padding: 15px;
+      border-radius: 17px;
+    }
+
+    .qsm-dashboard-v3-stat-icon {
+      width: 44px;
+      height: 44px;
+      display: grid;
+      place-items: center;
+      border-radius: 13px;
+      background: rgba(var(--qsm-accent-rgb), .1);
+      color: var(--qsm-accent);
+      font-size: 19px;
+      font-weight: 950;
+    }
+
+    .qsm-dashboard-v3-stat.tone-blue .qsm-dashboard-v3-stat-icon {
+      background: rgba(56, 189, 248, .12);
+      color: #38bdf8;
+    }
+
+    .qsm-dashboard-v3-stat.tone-purple .qsm-dashboard-v3-stat-icon {
+      background: rgba(139, 92, 246, .13);
+      color: #a78bfa;
+    }
+
+    .qsm-dashboard-v3-stat.tone-orange .qsm-dashboard-v3-stat-icon {
+      background: rgba(245, 158, 11, .12);
+      color: #f59e0b;
+    }
+
+    .qsm-dashboard-v3-stat small,
+    .qsm-dashboard-v3-stat strong,
+    .qsm-dashboard-v3-stat p {
+      display: block;
+    }
+
+    .qsm-dashboard-v3-stat small {
+      color: var(--qsm-text-secondary);
+      font-size: 9px;
+      font-weight: 800;
+    }
+
+    .qsm-dashboard-v3-stat strong {
+      margin: 3px 0;
+      color: var(--qsm-text);
+      font-size: 25px;
+      line-height: 27px;
+    }
+
+    .qsm-dashboard-v3-stat strong.compact {
+      font-size: clamp(16px, 1.4vw, 21px);
+    }
+
+    .qsm-dashboard-v3-stat p {
+      margin: 0;
+      color: var(--qsm-muted);
+      font-size: 8px;
+    }
+
+    .qsm-dashboard-v3-stat-arrow {
+      color: var(--qsm-accent);
+      font-size: 17px;
+    }
+
+    .qsm-dashboard-v3-upper {
+      display: grid;
+      grid-template-columns:
+        minmax(0, 1.8fr)
+        minmax(250px, .85fr)
+        minmax(280px, .9fr);
+      grid-template-areas:
+        "chart quick profile";
+      gap: 14px;
+      margin-bottom: 14px;
+      align-items: start;
+    }
+
+
+    .qsm-dashboard-v3-card {
+      min-width: 0;
+      border-radius: 19px;
+    }
+
+    .qsm-dashboard-v3-chart-card {
+      grid-area: chart;
+      padding: 18px;
+    }
+
+    .qsm-dashboard-v3-quick-card {
+      grid-area: quick;
+      padding: 18px;
+    }
+
+    .qsm-dashboard-v3-profile-card {
+      grid-area: profile;
+      overflow: hidden;
+    }
+
+    .qsm-dashboard-v3-card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .qsm-dashboard-v3-card-header h2 {
+      margin: 0 0 5px;
+      color: var(--qsm-text);
+      font-size: 15px;
+    }
+
+    .qsm-dashboard-v3-card-header p {
+      margin: 0;
+      color: var(--qsm-muted);
+      font-size: 9px;
+    }
+
+    .qsm-dashboard-v3-card-header > span {
+      padding: 8px 10px;
+      border: 1px solid var(--qsm-border);
+      border-radius: 9px;
+      color: var(--qsm-text-secondary);
+      font-size: 8px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .qsm-dashboard-v3-chart-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 13px;
+      margin-bottom: 6px;
+    }
+
+    .qsm-dashboard-v3-chart-legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--qsm-text-secondary);
+      font-size: 8px;
+    }
+
+    .qsm-dashboard-v3-chart-legend i {
+      width: 13px;
+      height: 3px;
+      border-radius: 99px;
+    }
+
+    .qsm-dashboard-v3-chart-legend .purchases {
+      background: #8b5cf6;
+    }
+
+    .qsm-dashboard-v3-chart-legend .sales {
+      background: var(--qsm-accent);
+    }
+
+    .qsm-dashboard-v3-chart-legend .disputes {
+      background: #38bdf8;
+    }
+
+    .qsm-dashboard-v3-chart-wrap {
+      min-height: 235px;
+      display: grid;
+      place-items: center;
+    }
+
+    .qsm-dashboard-v3-chart-wrap svg {
+      width: 100%;
+      height: auto;
+      overflow: visible;
+    }
+
+    .qsm-dashboard-v3-grid-line {
+      stroke: var(--qsm-border);
+      stroke-width: 1;
+    }
+
+    .qsm-dashboard-v3-axis-label {
+      fill: var(--qsm-muted);
+      font-size: 8px;
+    }
+
+    .qsm-dashboard-v3-line {
+      fill: none;
+      stroke-width: 3;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .qsm-dashboard-v3-line.purchases {
+      stroke: #8b5cf6;
+    }
+
+    .qsm-dashboard-v3-line.sales {
+      stroke: var(--qsm-accent);
+    }
+
+    .qsm-dashboard-v3-line.disputes {
+      stroke: #38bdf8;
+    }
+
+    .qsm-dashboard-v3-chart-empty {
+      min-height: 235px;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      color: var(--qsm-muted);
+      font-size: 10px;
+      text-align: center;
+    }
+
+    .qsm-dashboard-v3-quick-metric {
+      display: grid;
+      grid-template-columns: 37px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 9px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--qsm-border);
+    }
+
+    .qsm-dashboard-v3-quick-metric > span {
+      width: 37px;
+      height: 37px;
+      display: grid;
+      place-items: center;
+      border-radius: 12px;
+      background: rgba(var(--qsm-accent-rgb), .09);
+      color: var(--qsm-accent);
+    }
+
+    .qsm-dashboard-v3-quick-metric.tone-purple > span {
+      background: rgba(139, 92, 246, .12);
+      color: #a78bfa;
+    }
+
+    .qsm-dashboard-v3-quick-metric.tone-blue > span {
+      background: rgba(56, 189, 248, .12);
+      color: #38bdf8;
+    }
+
+    .qsm-dashboard-v3-quick-metric.tone-red > span {
+      background: rgba(239, 68, 68, .11);
+      color: #f87171;
+    }
+
+    .qsm-dashboard-v3-quick-metric p {
+      margin: 0;
+      color: var(--qsm-text-secondary);
+      font-size: 9px;
+    }
+
+    .qsm-dashboard-v3-quick-metric strong {
+      color: var(--qsm-text);
+      font-size: 11px;
+    }
+
+    .qsm-dashboard-v3-quick-card .qsm-dashboard-v3-outline-button {
+      width: 100%;
+      margin-top: 14px;
+    }
+
+    .qsm-dashboard-v3-profile-cover {
+      height: 58px;
+      background:
+        linear-gradient(
+          135deg,
+          var(--qsm-accent),
+          #38bdf8,
+          #8b5cf6
+        );
+    }
+
+    .qsm-dashboard-v3-profile-content {
+      padding: 0 16px 16px;
+    }
+
+    .qsm-dashboard-v3-avatar-wrap {
+      position: relative;
+      width: 62px;
+      height: 62px;
+      margin-top: -31px;
+    }
+
+    .qsm-dashboard-v3-avatar {
+      width: 62px;
+      height: 62px;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      border-radius: 50%;
+      border: 3px solid var(--qsm-surface-strong, #0f172a);
+      background:
+        linear-gradient(
+          135deg,
+          var(--qsm-accent),
+          #8b5cf6
+        );
+      color: #fff;
+      font-size: 25px;
+      font-weight: 950;
+    }
+
+    .qsm-dashboard-v3-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .qsm-dashboard-v3-avatar-check {
+      position: absolute;
+      right: 0;
+      bottom: 2px;
+      width: 20px;
+      height: 20px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      border: 2px solid var(--qsm-surface-strong, #0f172a);
+      background: #22c55e;
+      color: #fff;
+      font-size: 8px;
+    }
+
+    .qsm-dashboard-v3-profile-name {
+      margin: 9px 0 12px;
+    }
+
+    .qsm-dashboard-v3-profile-name h2 {
+      margin: 0 0 5px;
+      color: var(--qsm-text-secondary);
+      font-size: 14px;
+    }
+
+    .qsm-dashboard-v3-profile-name > strong {
+      display: block;
+      color: var(--qsm-text);
+      font-size: 13px;
+    }
+
+    .qsm-dashboard-v3-profile-name > span {
+      display: block;
+      margin-top: 4px;
+      font-size: 8px;
+      font-weight: 850;
+    }
+
+    .qsm-dashboard-v3-profile-name .verified {
+      color: #22c55e;
+    }
+
+    .qsm-dashboard-v3-profile-name .pending {
+      color: #f59e0b;
+    }
+
+    .qsm-dashboard-v3-progress {
+      margin: 10px 0;
+    }
+
+    .qsm-dashboard-v3-progress > div:first-child {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 6px;
+    }
+
+    .qsm-dashboard-v3-progress span {
+      color: var(--qsm-text-secondary);
+      font-size: 8px;
+    }
+
+    .qsm-dashboard-v3-progress strong {
+      color: var(--qsm-text);
+      font-size: 9px;
+    }
+
+    .qsm-dashboard-v3-progress-track {
+      height: 6px;
+      overflow: hidden;
+      border-radius: 99px;
+      background: var(--qsm-border);
+    }
+
+    .qsm-dashboard-v3-progress-track span {
+      display: block;
+      height: 100%;
+      border-radius: 99px;
+      background:
+        linear-gradient(
+          90deg,
+          var(--qsm-accent),
+          #38bdf8,
+          #8b5cf6
+        );
+    }
+
+    .qsm-dashboard-v3-profile-meta {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin: 12px 0;
+    }
+
+    .qsm-dashboard-v3-profile-meta div {
+      padding: 10px 8px;
+      border-radius: 11px;
+      background: var(--qsm-surface-soft, rgba(148,163,184,.06));
+      text-align: center;
+    }
+
+    .qsm-dashboard-v3-profile-meta span,
+    .qsm-dashboard-v3-profile-meta strong {
+      display: block;
+    }
+
+    .qsm-dashboard-v3-profile-meta span {
+      color: var(--qsm-muted);
+      font-size: 7px;
+    }
+
+    .qsm-dashboard-v3-profile-meta strong {
+      margin-top: 4px;
+      color: var(--qsm-text);
+      font-size: 9px;
+    }
+
+    .qsm-dashboard-v3-actions-card {
+      padding: 8px;
+      border-radius: 17px;
+      margin-bottom: 14px;
+    }
+
+    .qsm-dashboard-v3-market-search {
+      min-height: 42px;
+      display: grid;
+      grid-template-columns: 25px minmax(0, 1fr) 100px;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 5px 4px 11px;
+      border: 1px solid var(--qsm-border);
+      border-radius: 11px;
+      background: var(--qsm-surface-soft, rgba(2,6,23,.25));
+    }
+
+    .qsm-dashboard-v3-market-search > span {
+      color: var(--qsm-accent);
+      font-size: 17px;
+    }
+
+    .qsm-dashboard-v3-market-search input {
+      width: 100%;
+      min-width: 0;
+      border: none;
+      outline: none;
+      background: transparent;
+      color: var(--qsm-text);
+      font-size: 10px;
+    }
+
+    .qsm-dashboard-v3-market-search button {
+      height: 34px;
+      border: none;
+      border-radius: 9px;
+      background:
+        linear-gradient(
+          135deg,
+          var(--qsm-accent),
+          #38bdf8,
+          #8b5cf6
+        );
+      color: #fff;
+      font-size: 9px;
+      font-weight: 900;
+      cursor: pointer;
+    }
+
+    .qsm-dashboard-v3-actions {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 7px;
+      margin-top: 7px;
+    }
+
+    .qsm-dashboard-v3-actions a {
+      min-height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px;
+      border: 1px solid var(--qsm-border);
+      border-radius: 10px;
+      color: var(--qsm-text-secondary);
+      font-size: 8px;
+      font-weight: 850;
+      text-align: center;
+      text-decoration: none;
+    }
+
+    .qsm-dashboard-v3-actions a.primary {
+      border-color: transparent;
+      color: #fff;
+      background:
+        linear-gradient(
+          135deg,
+          var(--qsm-accent),
+          #38bdf8,
+          #8b5cf6
+        );
+    }
+
+    .qsm-dashboard-v3-recent-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 11px;
+    }
+
+    .qsm-dashboard-v3-recent-panel {
+      min-height: 250px;
+      display: flex;
+      flex-direction: column;
+      padding: 14px;
+    }
+
+    .qsm-dashboard-v3-recent-panel > header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .qsm-dashboard-v3-recent-panel h3 {
+      margin: 0;
+      color: var(--qsm-text);
+      font-size: 11px;
+    }
+
+    .qsm-dashboard-v3-recent-panel header a {
+      color: var(--qsm-accent);
+      font-size: 7px;
+      text-decoration: none;
+    }
+
+    .qsm-dashboard-v3-recent-list {
+      display: grid;
+      flex: 1;
+    }
+
+    .qsm-dashboard-v3-recent-item {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: 38px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--qsm-border);
+    }
+
+    .qsm-dashboard-v3-recent-thumb {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      border-radius: 10px;
+      background: var(--qsm-surface-soft, rgba(148,163,184,.06));
+    }
+
+    .qsm-dashboard-v3-recent-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .qsm-dashboard-v3-recent-copy {
+      min-width: 0;
+    }
+
+    .qsm-dashboard-v3-recent-copy strong,
+    .qsm-dashboard-v3-recent-copy span {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .qsm-dashboard-v3-recent-copy strong {
+      color: var(--qsm-text);
+      font-size: 8px;
+    }
+
+    .qsm-dashboard-v3-recent-copy span {
+      margin-top: 3px;
+      color: var(--qsm-muted);
+      font-size: 7px;
+    }
+
+    .qsm-dashboard-v3-recent-status {
+      max-width: 72px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      padding: 4px 6px;
+      border-radius: 99px;
+      background: rgba(var(--qsm-accent-rgb), .09);
+      color: var(--qsm-accent);
+      font-size: 6px;
+      font-weight: 850;
+    }
+
+    .qsm-dashboard-v3-recent-footer {
+      width: 100%;
+      min-height: 36px;
+      margin-top: 9px;
+      font-size: 8px;
+    }
+
+    .qsm-dashboard-v3-empty {
+      min-height: 110px;
+      display: grid;
+      place-items: center;
+      padding: 14px;
+      color: var(--qsm-muted);
+      font-size: 9px;
+      line-height: 15px;
+      text-align: center;
+    }
+
+    .qsm-dashboard-v3-loading {
+      min-height: 260px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      border: 1px solid var(--qsm-border);
+      border-radius: 18px;
+      background: var(--qsm-surface);
+      color: var(--qsm-text-secondary);
+      text-align: center;
+    }
+
+    .qsm-dashboard-v3-loading > span {
+      font-size: 30px;
+    }
+
+    .qsm-dashboard-v3-loading p {
+      margin: 0;
+      color: var(--qsm-muted);
+      font-size: 9px;
+    }
+
+    @media (max-width: 1450px) {
+      .qsm-dashboard-v3-upper {
+        grid-template-columns: minmax(0, 1.55fr) minmax(245px, .8fr);
+        grid-template-areas:
+          "chart quick"
+          "profile profile";
+      }
+
+      .qsm-dashboard-v3-profile-card {
+        max-width: 520px;
+      }
+    }
+
+    @media (max-width: 1180px) {
+      .qsm-dashboard-v3-stats,
+      .qsm-dashboard-v3-recent-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 1100px) {
+      .qsm-dashboard-v3-sidebar {
+        display: none;
+      }
+
+      .qsm-dashboard-v3-main {
+        width: 100%;
+        margin-left: 0;
+      }
+    }
+
+    @media (max-width: 820px) {
+      .qsm-dashboard-v3-header {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .qsm-dashboard-v3-refresh {
+        width: 100%;
+      }
+
+      .qsm-dashboard-v3-upper {
+        grid-template-columns: 1fr;
+        grid-template-areas:
+          "chart"
+          "quick"
+          "profile";
+      }
+
+      .qsm-dashboard-v3-profile-card {
+        max-width: none;
+      }
+
+      .qsm-dashboard-v3-actions {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 560px) {
+      .qsm-dashboard-v3-main {
+        padding: 14px 12px 42px;
+      }
+
+      .qsm-dashboard-v3-stats,
+      .qsm-dashboard-v3-recent-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .qsm-dashboard-v3-market-search {
+        grid-template-columns: 24px minmax(0, 1fr);
+      }
+
+      .qsm-dashboard-v3-market-search button {
+        grid-column: 1 / -1;
+      }
+
+      .qsm-dashboard-v3-actions {
+        grid-template-columns: 1fr;
+      }
+
+      .qsm-dashboard-v3-chart-wrap {
+        overflow-x: auto;
+      }
+
+      .qsm-dashboard-v3-chart-wrap svg {
+        min-width: 560px;
+      }
+    }
+  `;
+}
+
+/*
+|--------------------------------------------------------------------------
 | Página general
 |--------------------------------------------------------------------------
 */
@@ -2958,9 +3531,10 @@ const layout = (settings) => ({
 
   gridTemplateColumns:
     settings?.compactSidebar
-      ? "230px minmax(0, 1fr)"
-      : "280px minmax(0, 1fr)",
+      ? "96px minmax(0, 1fr)"
+      : "300px minmax(0, 1fr)",
 
+  alignItems: "start",
   overflowX: "hidden"
 });
 

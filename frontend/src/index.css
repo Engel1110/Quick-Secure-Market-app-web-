@@ -19,7 +19,500 @@
   letter-spacing: 0.18px;
   color-scheme: light dark;
   color: var(--text);
-  background: var(--bg);
+  background: var(--bg);:root {
+  --qsm-accent: #35d0c3;
+  --qsm-accent-rgb: 53, 208, 195;
+
+  --qsm-bg: #020617;
+  --qsm-bg-secondary: #081123;
+
+  --qsm-surface: rgba(15, 23, 42, 0.82);
+  --qsm-surface-strong: rgba(8, 17, 35, 0.96);
+  --qsm-surface-soft: rgba(2, 6, 23, 0.48);
+
+  --qsm-text: #f8fafc;
+  --qsm-text-secondary: #cbd5e1;
+  --qsm-muted: #94a3b8;
+
+  --qsm-border: rgba(148, 163, 184, 0.16);
+  --qsm-border-accent: rgba(var(--qsm-accent-rgb), 0.32);
+
+  --qsm-success: #22c55e;
+  --qsm-warning: #f59e0b;
+  --qsm-danger: #ef4444;
+
+  --qsm-radius-small: 12px;
+  --qsm-radius-medium: 18px;
+  --qsm-radius-large: 26px;
+
+  --qsm-space-xs: 6px;
+  --qsm-space-sm: 10px;
+  --qsm-space-md: 16px;
+  --qsm-space-lg: 24px;
+  --qsm-space-xl: 34px;
+
+  --qsm-glass-blur: 18px;
+
+  --qsm-shadow:
+    0 24px 70px
+    rgba(0, 0, 0, 0.28);
+
+  --qsm-transition:
+    180ms ease;
+
+  font-family:
+    Inter,
+    "Plus Jakarta Sans",
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing:
+    antialiased;
+  -moz-osx-font-smoothing:
+    grayscale;
+
+  color-scheme: dark;
+  background: var(--qsm-bg);
+  color: var(--qsm-text);
+}
+
+/*
+|--------------------------------------------------------------------------
+| Tema claro
+|--------------------------------------------------------------------------
+*/
+
+html[data-qsm-theme="light"] {
+  --qsm-bg: #f1f5f9;
+  --qsm-bg-secondary: #e2e8f0;
+
+  --qsm-surface:
+    rgba(255, 255, 255, 0.9);
+
+  --qsm-surface-strong:
+    rgba(255, 255, 255, 0.98);
+
+  --qsm-surface-soft:
+    rgba(248, 250, 252, 0.88);
+
+  --qsm-text: #0f172a;
+  --qsm-text-secondary: #334155;
+  --qsm-muted: #64748b;
+
+  --qsm-border:
+    rgba(15, 23, 42, 0.12);
+
+  --qsm-shadow:
+    0 22px 60px
+    rgba(15, 23, 42, 0.12);
+
+  color-scheme: light;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Densidad compacta
+|--------------------------------------------------------------------------
+*/
+
+html[data-qsm-density="compact"] {
+  --qsm-space-xs: 4px;
+  --qsm-space-sm: 7px;
+  --qsm-space-md: 11px;
+  --qsm-space-lg: 17px;
+  --qsm-space-xl: 25px;
+
+  --qsm-radius-small: 9px;
+  --qsm-radius-medium: 14px;
+  --qsm-radius-large: 20px;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Densidad espaciosa
+|--------------------------------------------------------------------------
+*/
+
+html[data-qsm-density="spacious"] {
+  --qsm-space-xs: 8px;
+  --qsm-space-sm: 14px;
+  --qsm-space-md: 21px;
+  --qsm-space-lg: 30px;
+  --qsm-space-xl: 42px;
+
+  --qsm-radius-small: 14px;
+  --qsm-radius-medium: 22px;
+  --qsm-radius-large: 30px;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Reinicio global
+|--------------------------------------------------------------------------
+*/
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
+
+  background:
+    var(--qsm-bg);
+
+  scroll-behavior: smooth;
+}
+
+body {
+  width: 100%;
+  min-width: 320px;
+  min-height: 100vh;
+
+  margin: 0;
+  padding: 0;
+
+  overflow-x: hidden;
+
+  background:
+    radial-gradient(
+      circle at 88% 4%,
+      rgba(139, 92, 246, 0.13),
+      transparent 30%
+    ),
+    radial-gradient(
+      circle at 12% 8%,
+      rgba(var(--qsm-accent-rgb), 0.1),
+      transparent 28%
+    ),
+    var(--qsm-bg);
+
+  color:
+    var(--qsm-text);
+
+  transition:
+    background-color
+      var(--qsm-transition),
+    color
+      var(--qsm-transition);
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+
+  margin: 0;
+  padding: 0;
+
+  display: block;
+
+  text-align: left;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Elementos generales
+|--------------------------------------------------------------------------
+*/
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+a {
+  color: inherit;
+}
+
+img,
+video,
+canvas,
+svg {
+  max-width: 100%;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p {
+  margin-top: 0;
+}
+
+input,
+select,
+textarea {
+  color:
+    var(--qsm-text);
+
+  background:
+    var(--qsm-surface-soft);
+
+  border:
+    1px solid
+    var(--qsm-border);
+}
+
+select option {
+  color:
+    var(--qsm-text);
+
+  background:
+    var(--qsm-bg-secondary);
+}
+
+/*
+|--------------------------------------------------------------------------
+| Clases globales QSM
+|--------------------------------------------------------------------------
+*/
+
+.qsm-page {
+  width: 100%;
+  min-height: 100vh;
+
+  background:
+    transparent;
+
+  color:
+    var(--qsm-text);
+}
+
+.qsm-surface {
+  background:
+    var(--qsm-surface);
+
+  border:
+    1px solid
+    var(--qsm-border);
+
+  border-radius:
+    var(--qsm-radius-large);
+
+  box-shadow:
+    var(--qsm-shadow);
+}
+
+.qsm-card {
+  background:
+    var(--qsm-surface-soft);
+
+  border:
+    1px solid
+    var(--qsm-border);
+
+  border-radius:
+    var(--qsm-radius-medium);
+}
+
+.qsm-glass {
+  background:
+    var(--qsm-surface);
+
+  border:
+    1px solid
+    var(--qsm-border);
+
+  backdrop-filter:
+    blur(
+      var(--qsm-glass-blur)
+    );
+
+  -webkit-backdrop-filter:
+    blur(
+      var(--qsm-glass-blur)
+    );
+}
+
+.qsm-accent-text {
+  color:
+    var(--qsm-accent);
+}
+
+.qsm-accent-border {
+  border-color:
+    var(--qsm-border-accent);
+}
+
+.qsm-primary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  min-height: 48px;
+
+  padding:
+    0 var(--qsm-space-lg);
+
+  border: none;
+  border-radius:
+    var(--qsm-radius-small);
+
+  background:
+    linear-gradient(
+      135deg,
+      var(--qsm-accent),
+      #38bdf8,
+      #8b5cf6
+    );
+
+  color: #ffffff;
+
+  font-weight: 900;
+
+  box-shadow:
+    0 16px 40px
+    rgba(
+      var(--qsm-accent-rgb),
+      0.2
+    );
+
+  transition:
+    transform
+      var(--qsm-transition),
+    box-shadow
+      var(--qsm-transition);
+}
+
+.qsm-primary-button:hover {
+  transform:
+    translateY(-2px);
+
+  box-shadow:
+    0 20px 52px
+    rgba(
+      var(--qsm-accent-rgb),
+      0.28
+    );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Desactivar efecto cristal
+|--------------------------------------------------------------------------
+*/
+
+html[data-qsm-glass="false"]
+.qsm-glass {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+
+  background:
+    var(--qsm-surface-strong);
+}
+
+/*
+|--------------------------------------------------------------------------
+| Desactivar animaciones
+|--------------------------------------------------------------------------
+*/
+
+html[data-qsm-animations="false"] *,
+html[data-qsm-animations="false"] *::before,
+html[data-qsm-animations="false"] *::after {
+  animation-duration:
+    0.001ms !important;
+
+  animation-iteration-count:
+    1 !important;
+
+  transition-duration:
+    0.001ms !important;
+
+  scroll-behavior:
+    auto !important;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Barra de desplazamiento
+|--------------------------------------------------------------------------
+*/
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color:
+    rgba(
+      var(--qsm-accent-rgb),
+      0.34
+    )
+    transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+*::-webkit-scrollbar-track {
+  background:
+    transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background:
+    rgba(
+      var(--qsm-accent-rgb),
+      0.3
+    );
+
+  border-radius:
+    999px;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Accesibilidad
+|--------------------------------------------------------------------------
+*/
+
+:focus-visible {
+  outline:
+    3px solid
+    rgba(
+      var(--qsm-accent-rgb),
+      0.38
+    );
+
+  outline-offset: 3px;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Responsive
+|--------------------------------------------------------------------------
+*/
+
+@media (
+  max-width: 768px
+) {
+  body {
+    font-size: 15px;
+  }
+}
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;

@@ -39,15 +39,20 @@ const INTERNAL_ROLES = [
   "MODERATOR"
 ];
 
+const GLOBAL_ADMIN_ROLES = [
+  "SUPER_ADMIN",
+  "SENIOR_ADMIN"
+];
+
 function AdminProtectedRoute({
   children,
   allowedRoles = [],
-  allowedDepartments = []
+  allowedDepartments = [],
+  requiredPermissions = []
 }) {
   const location = useLocation();
 
-  const session =
-    getAdministrativeSession();
+  const session = getAdministrativeSession();
 
   if (!session.token || !session.user) {
     clearAdminSession();
@@ -65,35 +70,34 @@ function AdminProtectedRoute({
 
   const { user } = session;
 
-  const roles =
-    normalizeRoles(user);
+  const roles = normalizeRoles(user);
 
-  const primaryRole =
-    roles[0] || "";
+  const accountType = normalizeValue(
+    user.accountType ||
+      user.userType ||
+      user.type
+  );
 
-  const accountType =
-    normalizeValue(
-      user.accountType ||
-        user.userType ||
-        user.type
-    );
+  const status = normalizeValue(
+    user.status || "ACTIVE"
+  );
 
-  const status =
-    normalizeValue(
-      user.status ||
-        "ACTIVE"
-    );
+  const permissions = normalizePermissions(
+    user.permissions
+  );
 
-  const permissions =
-    normalizePermissions(
-      user.permissions
-    );
+  const departments = normalizeDepartments(
+    user
+  );
 
-  const departments =
-    normalizeDepartments(user);
-
-  const isSuperAdmin =
-    roles.includes("SUPER_ADMIN") ||
+  /*
+   * SUPER_ADMIN y SENIOR_ADMIN tienen acceso completo.
+   * También recibe acceso total quien tenga permiso "*".
+   */
+  const hasGlobalAccess =
+    roles.some((role) =>
+      GLOBAL_ADMIN_ROLES.includes(role)
+    ) ||
     permissions.includes("*");
 
   const isInternal =
@@ -118,11 +122,20 @@ function AdminProtectedRoute({
     );
   }
 
+  /*
+   * SUPER_ADMIN y SENIOR_ADMIN no necesitan
+   * validaciones adicionales de área, rol o permiso.
+   */
+  if (hasGlobalAccess) {
+    return children;
+  }
+
   const normalizedAllowedRoles =
-    allowedRoles.map(normalizeValue);
+    allowedRoles
+      .map(normalizeValue)
+      .filter(Boolean);
 
   if (
-    !isSuperAdmin &&
     normalizedAllowedRoles.length > 0 &&
     !normalizedAllowedRoles.some((role) =>
       roles.includes(role)
@@ -137,12 +150,11 @@ function AdminProtectedRoute({
   }
 
   const normalizedAllowedDepartments =
-    allowedDepartments.map(
-      normalizeValue
-    );
+    allowedDepartments
+      .map(normalizeValue)
+      .filter(Boolean);
 
   if (
-    !isSuperAdmin &&
     normalizedAllowedDepartments.length > 0
   ) {
     const hasDepartmentAccess =
@@ -152,6 +164,30 @@ function AdminProtectedRoute({
       );
 
     if (!hasDepartmentAccess) {
+      return (
+        <Navigate
+          to="/admin/select-area"
+          replace
+        />
+      );
+    }
+  }
+
+  const normalizedRequiredPermissions =
+    requiredPermissions
+      .map(normalizeValue)
+      .filter(Boolean);
+
+  if (
+    normalizedRequiredPermissions.length > 0
+  ) {
+    const hasRequiredPermission =
+      normalizedRequiredPermissions.some(
+        (permission) =>
+          permissions.includes(permission)
+      );
+
+    if (!hasRequiredPermission) {
       return (
         <Navigate
           to="/admin/select-area"
@@ -204,6 +240,8 @@ function getAdministrativeSession() {
       user: JSON.parse(rawUser)
     };
   } catch {
+    clearAdminSession();
+
     return {
       token: null,
       user: null
@@ -221,7 +259,17 @@ function normalizeRoles(user) {
   if (
     typeof user?.role?.name === "string"
   ) {
-    roleValues.push(user.role.name);
+    roleValues.push(
+      user.role.name
+    );
+  }
+
+  if (
+    typeof user?.role?.code === "string"
+  ) {
+    roleValues.push(
+      user.role.code
+    );
   }
 
   if (Array.isArray(user?.roles)) {
@@ -234,6 +282,12 @@ function normalizeRoles(user) {
         typeof role?.name === "string"
       ) {
         roleValues.push(role.name);
+      }
+
+      if (
+        typeof role?.code === "string"
+      ) {
+        roleValues.push(role.code);
       }
     });
   }
@@ -254,28 +308,34 @@ function normalizePermissions(
     return [];
   }
 
-  return permissions
-    .map((permission) => {
-      if (
-        typeof permission === "string"
-      ) {
-        return normalizeValue(
-          permission
-        );
-      }
+  return [
+    ...new Set(
+      permissions
+        .map((permission) => {
+          if (
+            typeof permission === "string"
+          ) {
+            return normalizeValue(
+              permission
+            );
+          }
 
-      return normalizeValue(
-        permission?.code ||
-          permission?.name
-      );
-    })
-    .filter(Boolean);
+          return normalizeValue(
+            permission?.code ||
+              permission?.name
+          );
+        })
+        .filter(Boolean)
+    )
+  ];
 }
 
 function normalizeDepartments(user) {
   const values = [];
 
-  if (typeof user?.department === "string") {
+  if (
+    typeof user?.department === "string"
+  ) {
     values.push(user.department);
   }
 
@@ -285,6 +345,15 @@ function normalizeDepartments(user) {
   ) {
     values.push(
       user.department.name
+    );
+  }
+
+  if (
+    typeof user?.department?.code ===
+    "string"
+  ) {
+    values.push(
+      user.department.code
     );
   }
 

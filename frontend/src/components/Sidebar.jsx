@@ -15,6 +15,10 @@ import {
   useAuth
 } from "../context/AuthContext";
 
+import {
+  useSettings
+} from "../context/SettingsContext";
+
 const DEFAULT_USER = {
   firstName: "Usuario",
   lastName: "QSM",
@@ -63,6 +67,12 @@ function Sidebar({
     logout
   } = useAuth();
 
+  const {
+    settings,
+    updateSetting,
+    saveSettings
+  } = useSettings();
+
   const savedUser =
     useMemo(() => {
       return (
@@ -92,16 +102,38 @@ function Sidebar({
       savedUser
     ]);
 
-  const [
-    collapsed,
-    setCollapsed
-  ] = useState(() => {
-    return (
-      localStorage.getItem(
-        "qsm_sidebar_collapsed"
-      ) === "true"
+  const collapsed =
+    Boolean(
+      settings.compactSidebar
     );
-  });
+
+  const desktopSidebarWidth =
+    collapsed
+      ? 96
+      : 300;
+
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      "--qsm-sidebar-width",
+      `${desktopSidebarWidth}px`
+    );
+
+    window.dispatchEvent(
+      new CustomEvent(
+        "qsm-sidebar-width-change",
+        {
+          detail: {
+            width:
+              desktopSidebarWidth,
+            collapsed
+          }
+        }
+      )
+    );
+  }, [
+    collapsed,
+    desktopSidebarWidth
+  ]);
 
   const [
     mobileOpen,
@@ -169,29 +201,24 @@ function Sidebar({
     );
 
   const toggleCollapsed = () => {
-    setCollapsed(
-      (currentValue) => {
-        const nextValue =
-          !currentValue;
+    const nextValue =
+      !collapsed;
 
-        localStorage.setItem(
-          "qsm_sidebar_collapsed",
-          String(nextValue)
+    updateSetting(
+      "compactSidebar",
+      nextValue
+    );
+
+    saveSettings({
+      ...settings,
+      compactSidebar:
+        nextValue
+    }).catch(
+      (error) => {
+        console.error(
+          "No se pudo guardar el estado del Sidebar:",
+          error
         );
-
-        window.dispatchEvent(
-          new CustomEvent(
-            "qsm-sidebar-changed",
-            {
-              detail: {
-                collapsed:
-                  nextValue
-              }
-            }
-          )
-        );
-
-        return nextValue;
       }
     );
   };
@@ -274,7 +301,7 @@ function Sidebar({
         }
 
         .qsm-sidebar-scroll::-webkit-scrollbar-thumb {
-          background: rgba(53, 208, 195, .22);
+          background: rgba(var(--qsm-accent-rgb), .22);
           border-radius: 999px;
         }
 
@@ -282,12 +309,12 @@ function Sidebar({
           background:
             linear-gradient(
               135deg,
-              rgba(53, 208, 195, .10),
+              rgba(var(--qsm-accent-rgb), .10),
               rgba(139, 92, 246, .10)
             ) !important;
 
           border-color:
-            rgba(53, 208, 195, .20) !important;
+            rgba(var(--qsm-accent-rgb), .20) !important;
 
           transform:
             translateX(3px);
@@ -1511,11 +1538,11 @@ function countBadge(
 
     default: {
       background:
-        "rgba(53, 208, 195, .16)",
+        "rgba(var(--qsm-accent-rgb), .16)",
       border:
-        "1px solid rgba(53, 208, 195, .30)",
+        "1px solid rgba(var(--qsm-accent-rgb), .30)",
       color:
-        "#5eead4"
+        "var(--qsm-accent)"
     }
   };
 
@@ -1577,11 +1604,11 @@ function textBadge(
 
     default: {
       background:
-        "rgba(53, 208, 195, .14)",
+        "rgba(var(--qsm-accent-rgb), .14)",
       color:
-        "#5eead4",
+        "var(--qsm-accent)",
       border:
-        "1px solid rgba(53, 208, 195, .28)"
+        "1px solid rgba(var(--qsm-accent-rgb), .28)"
     }
   };
 
@@ -1657,15 +1684,17 @@ const sidebar = (
       ? "96px"
       : "300px",
 
-  height: "100vh",
+  height: "100dvh",
 
-  position: "sticky",
+  position: "fixed",
   top: 0,
+  left: 0,
+  bottom: 0,
 
   display: "flex",
   flexDirection: "column",
 
-  overflow: "hidden",
+  overflow: "visible",
 
   padding:
     collapsed
@@ -1679,7 +1708,7 @@ const sidebar = (
     `
       radial-gradient(
         circle at 15% 5%,
-        rgba(53, 208, 195, .12),
+        rgba(var(--qsm-accent-rgb), .12),
         transparent 24%
       ),
       radial-gradient(
@@ -1700,7 +1729,10 @@ const sidebar = (
     "18px 0 60px rgba(0, 0, 0, .18)",
 
   transition:
-    "width .28s ease, min-width .28s ease, padding .28s ease",
+    "width var(--qsm-transition), min-width var(--qsm-transition), padding var(--qsm-transition)",
+
+  willChange:
+    "width, min-width",
 
   zIndex: 700
 });
@@ -1769,13 +1801,13 @@ const brandIcon = (
       : "19px",
 
   border:
-    "1px solid rgba(53, 208, 195, .32)",
+    "1px solid rgba(var(--qsm-accent-rgb), .32)",
 
   background:
     `
       linear-gradient(
         135deg,
-        rgba(53, 208, 195, .28),
+        rgba(var(--qsm-accent-rgb), .28),
         rgba(56, 189, 248, .24),
         rgba(139, 92, 246, .28)
       )
@@ -1810,7 +1842,7 @@ const brandTitle = {
 };
 
 const brandSub = {
-  color: "#94a3b8",
+  color: "var(--qsm-muted)",
 
   fontSize: "10px",
   fontWeight: "700",
@@ -1872,7 +1904,7 @@ const sectionTitle = {
   margin:
     "8px 12px 5px",
 
-  color: "#35d0c3",
+  color: "var(--qsm-accent)",
 
   fontSize: "9px",
   fontWeight: "950",
@@ -1932,7 +1964,7 @@ const menuItem = (
   background:
     "transparent",
 
-  color: "#cbd5e1",
+  color: "var(--qsm-text-secondary)",
 
   textDecoration: "none",
 
@@ -1946,13 +1978,13 @@ const activeMenuItem = (
   color: "#ffffff",
 
   border:
-    "1px solid rgba(53, 208, 195, .36)",
+    "1px solid rgba(var(--qsm-accent-rgb), .36)",
 
   background:
     `
       linear-gradient(
         135deg,
-        rgba(53, 208, 195, .26),
+        rgba(var(--qsm-accent-rgb), .26),
         rgba(56, 189, 248, .22),
         rgba(139, 92, 246, .26)
       )
@@ -1960,8 +1992,8 @@ const activeMenuItem = (
 
   boxShadow:
     collapsed
-      ? "0 0 30px rgba(53, 208, 195, .18)"
-      : "0 14px 40px rgba(53, 208, 195, .12), inset 0 0 22px rgba(139, 92, 246, .08)"
+      ? "0 0 30px rgba(var(--qsm-accent-rgb), .18)"
+      : "0 14px 40px rgba(var(--qsm-accent-rgb), .12), inset 0 0 22px rgba(139, 92, 246, .08)"
 });
 
 const highlightedMenuItem = {
@@ -1997,7 +2029,7 @@ const menuIcon = (
       : "11px",
 
   background:
-    "rgba(53, 208, 195, .08)",
+    "rgba(var(--qsm-accent-rgb), .08)",
 
   color: "#e2e8f0",
 
@@ -2101,7 +2133,7 @@ const sidebarTooltip = {
   borderRadius: "12px",
 
   border:
-    "1px solid rgba(53, 208, 195, .20)",
+    "1px solid rgba(var(--qsm-accent-rgb), .20)",
 
   background:
     "rgba(8, 19, 37, .98)",
@@ -2115,13 +2147,13 @@ const sidebarTooltip = {
 };
 
 const tooltipTitle = {
-  color: "#f8fafc",
+  color: "var(--qsm-text)",
 
   fontSize: "11px"
 };
 
 const tooltipText = {
-  color: "#94a3b8",
+  color: "var(--qsm-muted)",
 
   fontSize: "9px"
 };
@@ -2135,9 +2167,9 @@ const tooltipCount = {
   borderRadius: "7px",
 
   background:
-    "rgba(53, 208, 195, .14)",
+    "rgba(var(--qsm-accent-rgb), .14)",
 
-  color: "#5eead4",
+  color: "var(--qsm-accent)",
 
   fontSize: "8px",
   fontWeight: "950"
@@ -2208,17 +2240,17 @@ const sidebarAvatar = {
   borderRadius: "50%",
 
   border:
-    "2px solid rgba(53, 208, 195, .62)",
+    "2px solid rgba(var(--qsm-accent-rgb), .62)",
 
   background:
-    "linear-gradient(135deg, #35d0c3, #38bdf8, #8b5cf6)",
+    "linear-gradient(135deg, var(--qsm-accent), #38bdf8, #8b5cf6)",
 
   color: "#ffffff",
 
   fontWeight: "950",
 
   boxShadow:
-    "0 0 0 4px rgba(139, 92, 246, .10), 0 12px 34px rgba(53, 208, 195, .18)"
+    "0 0 0 4px rgba(139, 92, 246, .10), 0 12px 34px rgba(var(--qsm-accent-rgb), .18)"
 };
 
 const sidebarAvatarImage = {
@@ -2251,7 +2283,7 @@ const avatarVerified = {
   border:
     "2px solid #081123",
 
-  background: "#35d0c3",
+  background: "var(--qsm-accent)",
 
   color: "#020617",
 
@@ -2304,7 +2336,7 @@ const userName = {
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
 
-  color: "#f8fafc",
+  color: "var(--qsm-text)",
 
   fontSize: "12px",
   fontWeight: "950"
@@ -2330,7 +2362,7 @@ const verifiedMiniBadge = {
 };
 
 const userRole = {
-  color: "#35d0c3",
+  color: "var(--qsm-accent)",
 
   fontSize: "8px",
   fontWeight: "800"
@@ -2344,13 +2376,13 @@ const trustHeader = {
 };
 
 const userMeta = {
-  color: "#94a3b8",
+  color: "var(--qsm-muted)",
 
   fontSize: "8px"
 };
 
 const trustValue = {
-  color: "#5eead4",
+  color: "var(--qsm-accent)",
 
   fontSize: "9px"
 };
@@ -2373,7 +2405,7 @@ const trustFill = {
   borderRadius: "999px",
 
   background:
-    "linear-gradient(90deg, #35d0c3, #38bdf8, #8b5cf6)",
+    "linear-gradient(90deg, var(--qsm-accent), #38bdf8, #8b5cf6)",
 
   transition:
     "width .4s ease"
@@ -2458,12 +2490,12 @@ const securityMessage = {
   borderRadius: "14px",
 
   border:
-    "1px solid rgba(53, 208, 195, .12)",
+    "1px solid rgba(var(--qsm-accent-rgb), .12)",
 
   background:
-    "rgba(53, 208, 195, .05)",
+    "rgba(var(--qsm-accent-rgb), .05)",
 
-  color: "#94a3b8"
+  color: "var(--qsm-muted)"
 };
 
 const securityMessageIcon = {
@@ -2477,7 +2509,7 @@ const securityMessageIcon = {
   borderRadius: "10px",
 
   background:
-    "rgba(53, 208, 195, .10)"
+    "rgba(var(--qsm-accent-rgb), .10)"
 };
 
 /*
@@ -2502,7 +2534,7 @@ const mobileMenuButton = {
   borderRadius: "15px",
 
   border:
-    "1px solid rgba(53, 208, 195, .28)",
+    "1px solid rgba(var(--qsm-accent-rgb), .28)",
 
   background:
     "rgba(8, 19, 37, .96)",
@@ -2556,7 +2588,7 @@ const mobileSidebar = {
     `
       radial-gradient(
         circle at 12% 5%,
-        rgba(53, 208, 195, .14),
+        rgba(var(--qsm-accent-rgb), .14),
         transparent 25%
       ),
       linear-gradient(
@@ -2605,7 +2637,7 @@ const mobileBrandIcon = {
   borderRadius: "14px",
 
   background:
-    "linear-gradient(135deg, rgba(53,208,195,.26), rgba(139,92,246,.28))",
+    "linear-gradient(135deg, rgba(var(--qsm-accent-rgb),.26), rgba(139,92,246,.28))",
 
   fontSize: "23px"
 };
@@ -2624,7 +2656,7 @@ const mobileBrandSub = {
 
   marginTop: "3px",
 
-  color: "#94a3b8",
+  color: "var(--qsm-muted)",
 
   fontSize: "8px"
 };
@@ -2645,7 +2677,7 @@ const mobileCloseButton = {
   background:
     "rgba(15, 23, 42, .76)",
 
-  color: "#cbd5e1",
+  color: "var(--qsm-text-secondary)",
 
   fontSize: "21px",
 

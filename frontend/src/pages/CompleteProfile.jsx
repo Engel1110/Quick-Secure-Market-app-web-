@@ -27,10 +27,14 @@ function CompleteProfile() {
   const [frontFile, setFrontFile] = useState(null);
   const [backFile, setBackFile] = useState(null);
   const [selfieFile, setSelfieFile] = useState(null);
+  const [profilePhotoFile, setProfilePhotoFile] = useState(null);
 
   const [frontPreview, setFrontPreview] = useState("");
   const [backPreview, setBackPreview] = useState("");
   const [selfiePreview, setSelfiePreview] = useState("");
+  const [profilePhotoPreview, setProfilePhotoPreview] = useState("");
+
+  const [editingFields, setEditingFields] = useState({});
 
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -55,11 +59,23 @@ function CompleteProfile() {
       Boolean(form.birthDate),
       Boolean(frontFile || profile?.documentFrontUrl),
       Boolean(backFile || profile?.documentBackUrl),
-      Boolean(selfieFile || profile?.selfieUrl)
+      Boolean(selfieFile || profile?.selfieUrl),
+      Boolean(
+        profilePhotoFile ||
+        profile?.profilePhotoUrl ||
+        profile?.profilePhoto
+      )
     ];
 
     return Math.round((checks.filter(Boolean).length / checks.length) * 100);
-  }, [form, frontFile, backFile, selfieFile, profile]);
+  }, [
+    form,
+    frontFile,
+    backFile,
+    selfieFile,
+    profilePhotoFile,
+    profile
+  ]);
 
   const status = profile?.status || "NOT_SUBMITTED";
 
@@ -125,6 +141,57 @@ function CompleteProfile() {
       setSelfieFile(file);
       setSelfiePreview(preview);
     }
+
+    if (type === "profilePhoto") {
+      setProfilePhotoFile(file);
+      setProfilePhotoPreview(preview);
+    }
+  };
+
+  const toggleFieldEditing = (fieldName) => {
+    setEditingFields((current) => ({
+      ...current,
+      [fieldName]: !current[fieldName]
+    }));
+  };
+
+  const fieldState = (fieldName, hasValue = false) => {
+    const direct =
+      profile?.fieldStatuses?.[fieldName] ||
+      profile?.reviewStatus?.[fieldName] ||
+      profile?.review?.[fieldName]?.status ||
+      profile?.fields?.[fieldName]?.status ||
+      "";
+
+    const normalized = String(direct || "").toUpperCase();
+
+    if (normalized) {
+      return normalized;
+    }
+
+    if (status === "APPROVED" && hasValue) {
+      return "APPROVED";
+    }
+
+    if (status === "REJECTED" && hasValue) {
+      return "REJECTED";
+    }
+
+    if (status === "PENDING" && hasValue) {
+      return "PENDING";
+    }
+
+    return hasValue ? "COMPLETED" : "MISSING";
+  };
+
+  const fieldReason = (fieldName) => {
+    return (
+      profile?.fieldReasons?.[fieldName] ||
+      profile?.rejectionReasons?.[fieldName] ||
+      profile?.review?.[fieldName]?.reason ||
+      profile?.fields?.[fieldName]?.reason ||
+      ""
+    );
   };
 
   const submitVerification = async (event) => {
@@ -149,6 +216,9 @@ function CompleteProfile() {
       if (frontFile) formData.append("documentFront", frontFile);
       if (backFile) formData.append("documentBack", backFile);
       if (selfieFile) formData.append("selfie", selfieFile);
+      if (profilePhotoFile) {
+        formData.append("profilePhoto", profilePhotoFile);
+      }
 
       const response = await api.post("/verification/submit", formData, {
         headers: { "Content-Type": "multipart/form-data" }
@@ -204,6 +274,10 @@ function CompleteProfile() {
           overflow-x: hidden;
         }
         input, select, textarea, button, a { font-family: inherit; }
+        input:disabled, select:disabled, textarea:disabled {
+          opacity: .72;
+          cursor: not-allowed;
+        }
         button, a { transition: all .25s ease; }
         button:hover, a:hover { transform: translateY(-2px); }
         @keyframes fadeUp {
@@ -211,14 +285,18 @@ function CompleteProfile() {
           to { opacity: 1; transform: translateY(0); }
         }
         @media (max-width: 1240px) {
-          .verification-page { grid-template-columns: 1fr !important; }
-          .sidebar-wrapper { display: none !important; }
           .verification-layout,
           .stats-grid,
           .two-columns,
           .file-grid { grid-template-columns: 1fr !important; }
           .hero-row { flex-direction: column !important; align-items: flex-start !important; }
         }
+
+        @media (max-width: 1100px) {
+          .verification-page { grid-template-columns: 1fr !important; }
+          .sidebar-wrapper { display: none !important; }
+        }
+
         @media (max-width: 760px) {
           .main-content { padding: 18px !important; }
           .action-row { grid-template-columns: 1fr !important; }
@@ -226,7 +304,10 @@ function CompleteProfile() {
       `}</style>
 
       <div className="verification-page" style={layout}>
-        <div className="sidebar-wrapper">
+        <div
+          className="sidebar-wrapper"
+          style={sidebarWrapper}
+        >
           <Sidebar />
         </div>
 
@@ -278,62 +359,218 @@ function CompleteProfile() {
                 </div>
 
                 <div className="two-columns" style={twoColumns}>
-                  <Field label="Nombre">
-                    <input name="firstName" value={form.firstName} onChange={handleChange} style={input} />
-                  </Field>
+                  <VerificationField
+                    label="Nombre"
+                    status={fieldState("firstName", Boolean(form.firstName.trim()))}
+                    reason={fieldReason("firstName")}
+                    editing={Boolean(editingFields.firstName)}
+                    onEdit={() => toggleFieldEditing("firstName")}
+                  >
+                    <input
+                      name="firstName"
+                      value={form.firstName}
+                      onChange={handleChange}
+                      disabled={
+                        fieldState("firstName", Boolean(form.firstName.trim())) === "APPROVED" &&
+                        !editingFields.firstName
+                      }
+                      style={input}
+                    />
+                  </VerificationField>
 
-                  <Field label="Apellido">
-                    <input name="lastName" value={form.lastName} onChange={handleChange} style={input} />
-                  </Field>
+                  <VerificationField
+                    label="Apellido"
+                    status={fieldState("lastName", Boolean(form.lastName.trim()))}
+                    reason={fieldReason("lastName")}
+                    editing={Boolean(editingFields.lastName)}
+                    onEdit={() => toggleFieldEditing("lastName")}
+                  >
+                    <input
+                      name="lastName"
+                      value={form.lastName}
+                      onChange={handleChange}
+                      disabled={
+                        fieldState("lastName", Boolean(form.lastName.trim())) === "APPROVED" &&
+                        !editingFields.lastName
+                      }
+                      style={input}
+                    />
+                  </VerificationField>
                 </div>
 
                 <div className="two-columns" style={twoColumns}>
-                  <Field label="Teléfono">
-                    <input name="phone" value={form.phone} onChange={handleChange} placeholder="809-000-0000" style={input} />
-                  </Field>
+                  <VerificationField
+                    label="Teléfono"
+                    status={fieldState("phone", Boolean(form.phone.trim()))}
+                    reason={fieldReason("phone")}
+                    editing={Boolean(editingFields.phone)}
+                    onEdit={() => toggleFieldEditing("phone")}
+                  >
+                    <input
+                      name="phone"
+                      value={form.phone}
+                      onChange={handleChange}
+                      placeholder="809-000-0000"
+                      disabled={
+                        fieldState("phone", Boolean(form.phone.trim())) === "APPROVED" &&
+                        !editingFields.phone
+                      }
+                      style={input}
+                    />
+                  </VerificationField>
 
-                  <Field label="Género">
-                    <select name="gender" value={form.gender} onChange={handleChange} style={input}>
+                  <VerificationField
+                    label="Género"
+                    status={fieldState("gender", Boolean(form.gender))}
+                    reason={fieldReason("gender")}
+                    editing={Boolean(editingFields.gender)}
+                    onEdit={() => toggleFieldEditing("gender")}
+                  >
+                    <select
+                      name="gender"
+                      value={form.gender}
+                      onChange={handleChange}
+                      disabled={
+                        fieldState("gender", Boolean(form.gender)) === "APPROVED" &&
+                        !editingFields.gender
+                      }
+                      style={input}
+                    >
                       <option value="">Seleccionar</option>
                       <option value="MASCULINO">Masculino</option>
                       <option value="FEMENINO">Femenino</option>
                       <option value="OTRO">Otro</option>
                     </select>
-                  </Field>
+                  </VerificationField>
                 </div>
 
                 <div className="two-columns" style={twoColumns}>
-                  <Field label="Tipo de documento">
-                    <select name="documentType" value={form.documentType} onChange={handleChange} style={input}>
+                  <VerificationField
+                    label="Tipo de documento"
+                    status={fieldState("documentType", Boolean(form.documentType))}
+                    reason={fieldReason("documentType")}
+                    editing={Boolean(editingFields.documentType)}
+                    onEdit={() => toggleFieldEditing("documentType")}
+                  >
+                    <select
+                      name="documentType"
+                      value={form.documentType}
+                      onChange={handleChange}
+                      disabled={
+                        fieldState("documentType", Boolean(form.documentType)) === "APPROVED" &&
+                        !editingFields.documentType
+                      }
+                      style={input}
+                    >
                       <option value="CEDULA">Cédula</option>
                       <option value="PASAPORTE">Pasaporte</option>
                       <option value="LICENCIA">Licencia</option>
                     </select>
-                  </Field>
+                  </VerificationField>
 
-                  <Field label="Número de documento">
-                    <input name="documentNumber" value={form.documentNumber} onChange={handleChange} placeholder="000-0000000-0" style={input} />
-                  </Field>
+                  <VerificationField
+                    label="Número de documento"
+                    status={fieldState("documentNumber", Boolean(form.documentNumber.trim()))}
+                    reason={fieldReason("documentNumber")}
+                    editing={Boolean(editingFields.documentNumber)}
+                    onEdit={() => toggleFieldEditing("documentNumber")}
+                  >
+                    <input
+                      name="documentNumber"
+                      value={form.documentNumber}
+                      onChange={handleChange}
+                      placeholder="000-0000000-0"
+                      disabled={
+                        fieldState("documentNumber", Boolean(form.documentNumber.trim())) === "APPROVED" &&
+                        !editingFields.documentNumber
+                      }
+                      style={input}
+                    />
+                  </VerificationField>
                 </div>
 
                 <div className="two-columns" style={twoColumns}>
-                  <Field label="Fecha de nacimiento">
-                    <input name="birthDate" type="date" value={form.birthDate} onChange={handleChange} style={input} />
-                  </Field>
+                  <VerificationField
+                    label="Fecha de nacimiento"
+                    status={fieldState("birthDate", Boolean(form.birthDate))}
+                    reason={fieldReason("birthDate")}
+                    editing={Boolean(editingFields.birthDate)}
+                    onEdit={() => toggleFieldEditing("birthDate")}
+                  >
+                    <input
+                      name="birthDate"
+                      type="date"
+                      value={form.birthDate}
+                      onChange={handleChange}
+                      disabled={
+                        fieldState("birthDate", Boolean(form.birthDate)) === "APPROVED" &&
+                        !editingFields.birthDate
+                      }
+                      style={input}
+                    />
+                  </VerificationField>
 
-                  <Field label="Provincia">
-                    <input name="province" value={form.province} onChange={handleChange} placeholder="Distrito Nacional" style={input} />
-                  </Field>
+                  <VerificationField
+                    label="Provincia"
+                    status={fieldState("province", Boolean(form.province.trim()))}
+                    reason={fieldReason("province")}
+                    editing={Boolean(editingFields.province)}
+                    onEdit={() => toggleFieldEditing("province")}
+                  >
+                    <input
+                      name="province"
+                      value={form.province}
+                      onChange={handleChange}
+                      placeholder="Distrito Nacional"
+                      disabled={
+                        fieldState("province", Boolean(form.province.trim())) === "APPROVED" &&
+                        !editingFields.province
+                      }
+                      style={input}
+                    />
+                  </VerificationField>
                 </div>
 
                 <div className="two-columns" style={twoColumns}>
-                  <Field label="Ciudad">
-                    <input name="city" value={form.city} onChange={handleChange} placeholder="Santo Domingo" style={input} />
-                  </Field>
+                  <VerificationField
+                    label="Ciudad"
+                    status={fieldState("city", Boolean(form.city.trim()))}
+                    reason={fieldReason("city")}
+                    editing={Boolean(editingFields.city)}
+                    onEdit={() => toggleFieldEditing("city")}
+                  >
+                    <input
+                      name="city"
+                      value={form.city}
+                      onChange={handleChange}
+                      placeholder="Santo Domingo"
+                      disabled={
+                        fieldState("city", Boolean(form.city.trim())) === "APPROVED" &&
+                        !editingFields.city
+                      }
+                      style={input}
+                    />
+                  </VerificationField>
 
-                  <Field label="Dirección">
-                    <input name="address" value={form.address} onChange={handleChange} placeholder="Dirección general, no pública" style={input} />
-                  </Field>
+                  <VerificationField
+                    label="Dirección"
+                    status={fieldState("address", Boolean(form.address.trim()))}
+                    reason={fieldReason("address")}
+                    editing={Boolean(editingFields.address)}
+                    onEdit={() => toggleFieldEditing("address")}
+                  >
+                    <input
+                      name="address"
+                      value={form.address}
+                      onChange={handleChange}
+                      placeholder="Dirección general, no pública"
+                      disabled={
+                        fieldState("address", Boolean(form.address.trim())) === "APPROVED" &&
+                        !editingFields.address
+                      }
+                      style={input}
+                    />
+                  </VerificationField>
                 </div>
 
                 <div style={sectionHeader}>
@@ -343,9 +580,36 @@ function CompleteProfile() {
 
                 <div className="file-grid" style={fileGrid}>
                   <UploadBox
+                    title="Foto de perfil 2x2"
+                    description="Foto clara, reciente y apropiada para tu perfil"
+                    preview={
+                      profilePhotoPreview ||
+                      toAbsoluteFile(
+                        profile?.profilePhotoUrl ||
+                        profile?.profilePhoto
+                      )
+                    }
+                    status={fieldState(
+                      "profilePhoto",
+                      Boolean(
+                        profilePhotoFile ||
+                        profile?.profilePhotoUrl ||
+                        profile?.profilePhoto
+                      )
+                    )}
+                    reason={fieldReason("profilePhoto")}
+                    onChange={(event) => handleFile(event, "profilePhoto")}
+                  />
+
+                  <UploadBox
                     title="Documento frontal"
                     description="Foto clara del frente"
                     preview={frontPreview || toAbsoluteFile(profile?.documentFrontUrl)}
+                    status={fieldState(
+                      "documentFront",
+                      Boolean(frontFile || profile?.documentFrontUrl)
+                    )}
+                    reason={fieldReason("documentFront")}
                     onChange={(event) => handleFile(event, "front")}
                   />
 
@@ -353,13 +617,23 @@ function CompleteProfile() {
                     title="Documento reverso"
                     description="Foto clara del reverso"
                     preview={backPreview || toAbsoluteFile(profile?.documentBackUrl)}
+                    status={fieldState(
+                      "documentBack",
+                      Boolean(backFile || profile?.documentBackUrl)
+                    )}
+                    reason={fieldReason("documentBack")}
                     onChange={(event) => handleFile(event, "back")}
                   />
 
                   <UploadBox
                     title="Selfie de validación"
-                    description="Rostro visible y buena luz"
+                    description="Rostro visible, fondo limpio y buena iluminación"
                     preview={selfiePreview || toAbsoluteFile(profile?.selfieUrl)}
+                    status={fieldState(
+                      "selfie",
+                      Boolean(selfieFile || profile?.selfieUrl)
+                    )}
+                    reason={fieldReason("selfie")}
                     onChange={(event) => handleFile(event, "selfie")}
                   />
                 </div>
@@ -397,6 +671,15 @@ function CompleteProfile() {
                     <div style={{ ...scoreFill, width: `${completion}%` }}></div>
                   </div>
 
+                  <CheckLine done={Boolean(form.firstName && form.lastName)} text="Nombre legal registrado" />
+                  <CheckLine
+                    done={Boolean(
+                      profilePhotoFile ||
+                      profile?.profilePhotoUrl ||
+                      profile?.profilePhoto
+                    )}
+                    text="Foto de perfil enviada"
+                  />
                   <CheckLine done={Boolean(form.documentNumber)} text="Documento registrado" />
                   <CheckLine done={Boolean(frontFile || profile?.documentFrontUrl)} text="Frente del documento" />
                   <CheckLine done={Boolean(backFile || profile?.documentBackUrl)} text="Reverso del documento" />
@@ -442,21 +725,119 @@ function Field({ label, children }) {
   );
 }
 
-function UploadBox({ title, description, preview, onChange }) {
+function VerificationField({
+  label,
+  status,
+  reason,
+  editing,
+  onEdit,
+  children
+}) {
   return (
-    <label style={uploadBox}>
-      <input type="file" accept="image/*" onChange={onChange} style={{ display: "none" }} />
+    <div style={verifiedFieldCard}>
+      <div style={fieldTopRow}>
+        <span style={fieldLabel}>{label}</span>
 
-      {preview ? (
-        <img src={preview} alt={title} style={uploadPreview} />
-      ) : (
-        <div style={uploadPlaceholder}>
-          <span>📷</span>
+        <div style={fieldActions}>
+          <StatusPill status={status} />
+
+          <button
+            type="button"
+            onClick={onEdit}
+            style={editFieldButton}
+          >
+            {editing ? "Cerrar" : "Editar"}
+          </button>
+        </div>
+      </div>
+
+      {children}
+
+      {reason && (
+        <div style={rejectionReason}>
+          <strong>Corrección solicitada</strong>
+          <p>{reason}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatusPill({ status }) {
+  const normalized = String(status || "MISSING").toUpperCase();
+
+  const labels = {
+    APPROVED: "✓ Verificado",
+    VERIFIED: "✓ Verificado",
+    PENDING: "En revisión",
+    IN_REVIEW: "En revisión",
+    REJECTED: "Rechazado",
+    NEEDS_REVIEW: "Corregir",
+    REQUIRES_RESUBMISSION: "Reenviar",
+    COMPLETED: "Completado",
+    MISSING: "Sin completar"
+  };
+
+  return (
+    <span style={statusPill(normalized)}>
+      {labels[normalized] || "Pendiente"}
+    </span>
+  );
+}
+
+function UploadBox({
+  title,
+  description,
+  preview,
+  status,
+  reason,
+  onChange
+}) {
+  return (
+    <div style={uploadCard}>
+      <div style={uploadHeader}>
+        <div>
           <strong>{title}</strong>
           <p>{description}</p>
         </div>
+
+        <StatusPill status={status} />
+      </div>
+
+      <label style={uploadBox}>
+        <input
+          type="file"
+          accept="image/*"
+          onChange={onChange}
+          style={{ display: "none" }}
+        />
+
+        {preview ? (
+          <img
+            src={preview}
+            alt={title}
+            style={uploadPreview}
+          />
+        ) : (
+          <div style={uploadPlaceholder}>
+            <span>📷</span>
+            <strong>Seleccionar imagen</strong>
+            <p>JPG, PNG o WEBP con buena calidad.</p>
+          </div>
+        )}
+
+        <span style={replaceImageButton}>
+          {preview ? "Cambiar imagen" : "Subir imagen"}
+        </span>
+      </label>
+
+      {reason && (
+        <div style={rejectionReason}>
+          <strong>Imagen rechazada</strong>
+          <p>{reason}</p>
+        </div>
       )}
-    </label>
+    </div>
   );
 }
 
@@ -540,8 +921,21 @@ const layout = {
   width: "100%",
   minHeight: "100vh",
   display: "grid",
-  gridTemplateColumns: "280px minmax(0, 1fr)",
-  overflowX: "hidden"
+  gridTemplateColumns:
+    "var(--qsm-sidebar-width, 96px) minmax(0, 1fr)",
+  overflowX: "hidden",
+  transition:
+    "grid-template-columns var(--qsm-transition, .28s ease)",
+  alignItems: "stretch"
+};
+
+const sidebarWrapper = {
+  width:
+    "var(--qsm-sidebar-width, 96px)",
+  minWidth:
+    "var(--qsm-sidebar-width, 96px)",
+  transition:
+    "width var(--qsm-transition, .28s ease), min-width var(--qsm-transition, .28s ease)"
 };
 
 const main = {
@@ -660,6 +1054,83 @@ const fieldLabel = {
   color: "#e2e8f0"
 };
 
+const verifiedFieldCard = {
+  display: "grid",
+  gap: "9px",
+  padding: "13px",
+  borderRadius: "16px",
+  border: "1px solid rgba(148,163,184,.12)",
+  background: "rgba(2,6,23,.26)"
+};
+
+const fieldTopRow = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "10px"
+};
+
+const fieldActions = {
+  display: "flex",
+  alignItems: "center",
+  gap: "7px",
+  flexWrap: "wrap",
+  justifyContent: "flex-end"
+};
+
+const editFieldButton = {
+  minHeight: "29px",
+  padding: "5px 9px",
+  borderRadius: "9px",
+  border: "1px solid rgba(56,189,248,.20)",
+  background: "rgba(56,189,248,.08)",
+  color: "#7dd3fc",
+  fontSize: "10px",
+  fontWeight: "900",
+  cursor: "pointer"
+};
+
+const statusPill = (status) => {
+  const colors = {
+    APPROVED: ["rgba(34,197,94,.15)", "#86efac", "rgba(34,197,94,.30)"],
+    VERIFIED: ["rgba(34,197,94,.15)", "#86efac", "rgba(34,197,94,.30)"],
+    PENDING: ["rgba(245,158,11,.14)", "#fde68a", "rgba(245,158,11,.30)"],
+    IN_REVIEW: ["rgba(56,189,248,.14)", "#7dd3fc", "rgba(56,189,248,.30)"],
+    REJECTED: ["rgba(239,68,68,.15)", "#fca5a5", "rgba(239,68,68,.30)"],
+    NEEDS_REVIEW: ["rgba(239,68,68,.15)", "#fca5a5", "rgba(239,68,68,.30)"],
+    REQUIRES_RESUBMISSION: ["rgba(168,85,247,.15)", "#d8b4fe", "rgba(168,85,247,.30)"],
+    COMPLETED: ["rgba(53,208,195,.14)", "#7ce7dc", "rgba(53,208,195,.28)"],
+    MISSING: ["rgba(148,163,184,.12)", "#94a3b8", "rgba(148,163,184,.20)"]
+  };
+
+  const selected = colors[status] || colors.MISSING;
+
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: "27px",
+    padding: "5px 9px",
+    borderRadius: "999px",
+    background: selected[0],
+    color: selected[1],
+    border: `1px solid ${selected[2]}`,
+    fontSize: "9px",
+    fontWeight: "950",
+    whiteSpace: "nowrap"
+  };
+};
+
+const rejectionReason = {
+  padding: "10px 12px",
+  borderRadius: "12px",
+  border: "1px solid rgba(239,68,68,.24)",
+  background: "rgba(127,29,29,.16)",
+  color: "#fecaca",
+  fontSize: "11px",
+  lineHeight: "17px"
+};
+
 const input = {
   width: "100%",
   minHeight: "54px",
@@ -673,11 +1144,43 @@ const input = {
 
 const fileGrid = {
   display: "grid",
-  gridTemplateColumns: "repeat(3, 1fr)",
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
   gap: "14px"
 };
 
+const uploadCard = {
+  minWidth: 0,
+  display: "grid",
+  gap: "10px",
+  padding: "14px",
+  borderRadius: "20px",
+  border: "1px solid rgba(148,163,184,.12)",
+  background: "rgba(2,6,23,.30)"
+};
+
+const uploadHeader = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: "10px"
+};
+
+const replaceImageButton = {
+  position: "absolute",
+  right: "12px",
+  bottom: "12px",
+  padding: "8px 11px",
+  borderRadius: "10px",
+  border: "1px solid rgba(255,255,255,.14)",
+  background: "rgba(2,6,23,.82)",
+  color: "#ffffff",
+  fontSize: "11px",
+  fontWeight: "900",
+  backdropFilter: "blur(10px)"
+};
+
 const uploadBox = {
+  position: "relative",
   minHeight: "230px",
   borderRadius: "22px",
   border: "1px dashed rgba(53,208,195,.38)",

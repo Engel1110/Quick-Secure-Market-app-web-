@@ -8,22 +8,77 @@ const {
   getProducts,
   getMyProducts,
   getProductById,
+  updateProduct,
   improveProductEvidence,
   deleteProduct
 } = require("../controllers/product.controller");
 
-// Rutas públicas
-router.get("/", getProducts);
+/*
+|--------------------------------------------------------------------------
+| Rutas públicas
+|--------------------------------------------------------------------------
+*/
 
-// Esta debe ir antes de "/:id"
-router.get("/my-products", authMiddleware, getMyProducts);
+router.get(
+  "/",
+  getProducts
+);
 
-// Detalle público
-router.get("/:id", getProductById);
+/*
+|--------------------------------------------------------------------------
+| Rutas protegidas específicas
+|--------------------------------------------------------------------------
+|
+| Deben declararse antes de "/:id" para evitar que Express interprete
+| "my-products" como un identificador de producto.
+|--------------------------------------------------------------------------
+*/
 
-// Rutas protegidas
-router.post("/", authMiddleware, createProduct);
-router.put("/:productId/evidence", authMiddleware, improveProductEvidence);
-router.delete("/:id", authMiddleware, deleteProduct);
+router.get(
+  "/my-products",
+  authMiddleware,
+  getMyProducts
+);
+
+router.post(
+  "/",
+  authMiddleware,
+  createProduct
+);
+
+router.put(
+  "/:productId/evidence",
+  authMiddleware,
+  improveProductEvidence
+);
+
+/*
+|--------------------------------------------------------------------------
+| Detalle, edición y eliminación
+|--------------------------------------------------------------------------
+*/
+
+router.get(
+  "/:id",
+  getProductById
+);
+
+router.put(
+  "/:id",
+  authMiddleware,
+  updateProduct
+);
+
+router.patch(
+  "/:id",
+  authMiddleware,
+  updateProduct
+);
+
+router.delete(
+  "/:id",
+  authMiddleware,
+  deleteProduct
+);
 
 module.exports = router;
