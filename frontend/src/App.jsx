@@ -32,7 +32,7 @@ import OrderTracking from "./pages/OrderTracking";
 
 import AdminLogin from "./pages/admin/auth/AdminLogin";
 import AdminAreaSelector from "./pages/admin/AdminAreaSelector";
-import AdminDashboard from "./pages/admin/dashboard/AdminDashboard";
+import AdminDashboard from "./pages/admin/Dashboard/AdminDashboard";
 import WarehouseDashboard from "./pages/admin/warehouse/WarehouseDashboard";
 import DeliveryDashboard from "./pages/admin/delivery/DeliveryDashboard";
 import DisputesDashboard from "./pages/admin/disputes/DisputesDashboard";
@@ -41,7 +41,7 @@ import VerificationDashboard from "./pages/admin/verification/VerificationDashbo
 import FinanceDashboard from "./pages/admin/finance/FinanceDashboard";
 import SupportDashboard from "./pages/admin/support/SupportDashboard";
 import ModerationDashboard from "./pages/admin/moderation/ModerationDashboard";
-import SecurityDashboard from "./pages/admin/security/SecurityDashboard";
+import SecurityDashboard from "./pages/admin/Security/SecurityDashboard";
 import InternalUsers from "./pages/admin/internalUsers/InternalUsers";
 import SystemSettings from "./pages/admin/systemSettings/SystemSettings";
 
