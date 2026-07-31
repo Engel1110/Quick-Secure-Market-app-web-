@@ -21,10 +21,12 @@ const getMessageId = (message) =>
   "";
 
 const getSenderId = (message) =>
-  message?.sender?._id ||
-  message?.sender?.id ||
-  message?.sender ||
-  message?.senderId ||
+  message?.sender?.prismaId ??
+  message?.sender?.userId ??
+  message?.sender?.id ??
+  message?.sender?._id ??
+  message?.senderId ??
+  message?.sender ??
   "";
 
 export default function ChatWindow({

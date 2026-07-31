@@ -19,15 +19,30 @@ export default function ChatHeader({
     "Usuario QSM"
   );
 
-  const avatar = getAvatar(otherUser);
+  const avatar =
+    getAvatar(otherUser);
+
+  const publicUserId =
+    otherUser?.prismaId ??
+    otherUser?.userId ??
+    otherUser?.id ??
+    otherUser?._id ??
+    "";
+
+  const publicProfilePath =
+    publicUserId
+      ? `/users/${publicUserId}`
+      : "";
 
   const product =
     conversation?.product &&
-    typeof conversation.product === "object"
+    typeof conversation.product ===
+      "object"
       ? conversation.product
       : null;
 
-  const order = conversation?.order;
+  const order =
+    conversation?.order;
 
   const orderId =
     typeof order === "object"
@@ -38,6 +53,7 @@ export default function ChatHeader({
     product?._id || product?.id;
 
   const productImage =
+    product?.imageUrl ||
     product?.images?.[0] ||
     product?.image ||
     product?.thumbnail ||
@@ -48,47 +64,77 @@ export default function ChatHeader({
       ? order?.orderCode ||
         order?.code ||
         (orderId
-          ? `Orden #${String(orderId).slice(-8).toUpperCase()}`
+          ? `Orden #${String(
+              orderId
+            )
+              .slice(-8)
+              .toUpperCase()}`
           : "")
       : orderId
-      ? `Orden #${String(orderId).slice(-8).toUpperCase()}`
+      ? `Orden #${String(
+          orderId
+        )
+          .slice(-8)
+          .toUpperCase()}`
       : "";
+
+  const identity = (
+    <>
+      <div className="qsm-avatar qsm-avatar--header">
+        {avatar ? (
+          <img
+            src={avatar}
+            alt={name}
+          />
+        ) : (
+          <span>
+            {getInitials(name)}
+          </span>
+        )}
+
+        <i
+          className="qsm-online-dot"
+          aria-hidden="true"
+        />
+      </div>
+
+      <div>
+        <h2>{name}</h2>
+
+        <p>
+          Ver perfil y reputación
+        </p>
+      </div>
+    </>
+  );
 
   return (
     <header className="qsm-chat-header">
       <div className="qsm-chat-header__user">
-        <div className="qsm-avatar qsm-avatar--header">
-          {avatar ? (
-            <img
-              src={avatar}
-              alt={name}
-            />
-          ) : (
-            <span>
-              {getInitials(name)}
-            </span>
-          )}
-
-          <i
-            className="qsm-online-dot"
-            aria-hidden="true"
-          />
-        </div>
-
-        <div>
-          <h2>{name}</h2>
-
-          <p>
-            Conversación protegida por QSM
-          </p>
-        </div>
+        {publicProfilePath ? (
+          <Link
+            to={publicProfilePath}
+            className="qsm-chat-profile-link"
+            title={`Ver perfil de ${name}`}
+          >
+            {identity}
+          </Link>
+        ) : (
+          <div className="qsm-chat-profile-link">
+            {identity}
+          </div>
+        )}
       </div>
 
       {(product || orderId) && (
         <div className="qsm-chat-context">
           {productImage && (
             <img
-              src={resolveMediaUrl(productImage)}
+              src={
+                resolveMediaUrl(
+                  productImage
+                )
+              }
               alt={
                 product?.title ||
                 "Producto QSM"
@@ -104,7 +150,9 @@ export default function ChatHeader({
             </strong>
 
             {orderCode && (
-              <span>{orderCode}</span>
+              <span>
+                {orderCode}
+              </span>
             )}
           </div>
         </div>
@@ -124,6 +172,15 @@ export default function ChatHeader({
         >
           ⌕
         </button>
+
+        {publicProfilePath && (
+          <Link
+            to={publicProfilePath}
+            className="qsm-header-action"
+          >
+            Perfil
+          </Link>
+        )}
 
         {productId && (
           <Link

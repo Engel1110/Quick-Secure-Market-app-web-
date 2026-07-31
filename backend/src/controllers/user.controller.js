@@ -1,9 +1,11 @@
-const fs = require("fs");
 const path = require("path");
 
-const User = require(
-  "../models/User"
-);
+const {
+  prisma,
+  getRequestUserId,
+  sanitizeUser,
+  isPrismaError
+} = require("../utils/prismaCompat");
 
 const {
   removeUploadedFile
@@ -11,47 +13,30 @@ const {
   "../middleware/profileImageUpload.middleware"
 );
 
-/*
-|--------------------------------------------------------------------------
-| Utilidades internas
-|--------------------------------------------------------------------------
-*/
-
-const getAuthenticatedUserId = (
-  req
-) => {
-  return (
-    req.user?._id ||
-    req.user?.id ||
-    req.user?.userId ||
-    req.userId ||
-    ""
-  );
-};
+const {
+  uploadPublicFile,
+  deletePublicFileByUrl,
+  deletePublicObjectPath
+} = require(
+  "../services/storage.service"
+);
 
 const normalizeText = (
   value,
   maxLength = 500
-) => {
-  return String(
-    value || ""
-  )
+) =>
+  String(value || "")
     .trim()
     .replace(/\s+/g, " ")
     .slice(0, maxLength);
-};
 
 const normalizePersonName = (
   value
-) => {
-  return String(
-    value || ""
-  )
+) =>
+  String(value || "")
     .trim()
     .replace(/\s+/g, " ")
-    .toLocaleLowerCase(
-      "es-DO"
-    )
+    .toLocaleLowerCase("es-DO")
     .replace(
       /(^|[\s'-])\p{L}/gu,
       (letter) =>
@@ -59,42 +44,23 @@ const normalizePersonName = (
           "es-DO"
         )
     );
-};
 
 const normalizePhone = (
   value
-) => {
-  return String(
-    value || ""
-  )
+) =>
+  String(value || "")
     .trim()
     .replace(
       /[^\d+\-()\s]/g,
       ""
     )
     .slice(0, 30);
-};
 
-const normalizeProfilePhotoUrl = (
-  req,
-  filename
-) => {
-  if (!filename) {
-    return "";
-  }
-
-  return `/uploads/profiles/${filename}`;
-};
-
-const getStoredProfilePhotoPath = (
+function getStoredProfilePhotoPath(
   profilePhoto
-) => {
-  if (!profilePhoto) {
-    return "";
-  }
-
+) {
   const cleanValue =
-    String(profilePhoto)
+    String(profilePhoto || "")
       .trim()
       .replace(/\\/g, "/");
 
@@ -106,79 +72,58 @@ const getStoredProfilePhotoPath = (
     return "";
   }
 
-  const filename =
-    path.basename(
-      cleanValue
-    );
-
   return path.join(
     __dirname,
     "..",
     "..",
     "uploads",
     "profiles",
-    filename
+    path.basename(cleanValue)
   );
-};
+}
 
-const deletePreviousProfilePhoto = (
+async function deletePreviousProfilePhoto(
   profilePhoto
-) => {
+) {
+  if (!profilePhoto) {
+    return;
+  }
+
+  try {
+    const removedFromSupabase =
+      await deletePublicFileByUrl(
+        profilePhoto
+      );
+
+    if (removedFromSupabase) {
+      return;
+    }
+  } catch (error) {
+    console.error(
+      "No se pudo eliminar la foto anterior de Supabase:",
+      error.message
+    );
+  }
+
   const filePath =
     getStoredProfilePhotoPath(
       profilePhoto
     );
 
-  if (!filePath) {
-    return;
+  if (filePath) {
+    removeUploadedFile(
+      filePath
+    );
   }
+}
 
-  removeUploadedFile(
-    filePath
-  );
-};
-
-const sanitizeUser = (
-  user
-) => {
-  if (!user) {
-    return null;
-  }
-
-  const safeUser =
-    typeof user.toJSON ===
-    "function"
-      ? user.toJSON()
-      : {
-          ...user
-        };
-
-  delete safeUser.password;
-  delete safeUser.resetPasswordToken;
-  delete safeUser.resetPasswordExpires;
-  delete safeUser.twoFactorSecret;
-  delete safeUser.profilePhotoPublicId;
-
-  return safeUser;
-};
-
-/*
-|--------------------------------------------------------------------------
-| GET /api/users/me
-|--------------------------------------------------------------------------
-| Devuelve el perfil completo del usuario autenticado.
-|--------------------------------------------------------------------------
-*/
-
-const getMe = async (
+async function getMe(
   req,
   res
-) => {
+) {
   try {
     const userId =
-      getAuthenticatedUserId(
-        req
-      );
+      await getRequestUserId(req);
 
     if (!userId) {
       return res
@@ -191,15 +136,11 @@ const getMe = async (
     }
 
     const user =
-      await User.findById(
-        userId
-      )
-        .select(
-          "-password -resetPasswordToken -resetPasswordExpires -twoFactorSecret -profilePhotoPublicId"
-        )
-        .lean({
-          virtuals: true
-        });
+      await prisma.user.findUnique({
+        where: {
+          id: userId
+        }
+      });
 
     if (!user) {
       return res
@@ -215,7 +156,8 @@ const getMe = async (
       .status(200)
       .json({
         success: true,
-        user
+        user:
+          sanitizeUser(user)
       });
   } catch (error) {
     console.error(
@@ -236,35 +178,15 @@ const getMe = async (
             : error.message
       });
   }
-};
+}
 
-/*
-|--------------------------------------------------------------------------
-| PATCH /api/users/me
-|--------------------------------------------------------------------------
-| Permite actualizar únicamente información personal segura.
-|
-| El usuario NO puede cambiar desde aquí:
-| - role
-| - permissions
-| - department
-| - status
-| - trustScore
-| - securityLevel
-| - isVerified
-| - verificationStatus
-|--------------------------------------------------------------------------
-*/
-
-const updateMe = async (
+async function updateMe(
   req,
   res
-) => {
+) {
   try {
     const userId =
-      getAuthenticatedUserId(
-        req
-      );
+      await getRequestUserId(req);
 
     if (!userId) {
       return res
@@ -276,12 +198,14 @@ const updateMe = async (
         });
     }
 
-    const user =
-      await User.findById(
-        userId
-      );
+    const current =
+      await prisma.user.findUnique({
+        where: {
+          id: userId
+        }
+      });
 
-    if (!user) {
+    if (!current) {
       return res
         .status(404)
         .json({
@@ -291,36 +215,21 @@ const updateMe = async (
         });
     }
 
-    const {
-      firstName,
-      lastName,
-      phone,
-      documentId,
-      dateOfBirth,
-      gender,
-      country,
-      province,
-      city,
-      address,
-      language,
-      timezone,
-      notificationsEnabled,
-      emailNotificationsEnabled
-    } = req.body || {};
+    const body =
+      req.body || {};
+
+    const data = {};
 
     if (
-      firstName !==
+      body.firstName !==
       undefined
     ) {
-      const normalizedFirstName =
+      const value =
         normalizePersonName(
-          firstName
+          body.firstName
         );
 
-      if (
-        normalizedFirstName.length <
-        2
-      ) {
+      if (value.length < 2) {
         return res
           .status(400)
           .json({
@@ -330,23 +239,20 @@ const updateMe = async (
           });
       }
 
-      user.firstName =
-        normalizedFirstName;
+      data.firstName =
+        value;
     }
 
     if (
-      lastName !==
+      body.lastName !==
       undefined
     ) {
-      const normalizedLastName =
+      const value =
         normalizePersonName(
-          lastName
+          body.lastName
         );
 
-      if (
-        normalizedLastName.length <
-        2
-      ) {
+      if (value.length < 2) {
         return res
           .status(400)
           .json({
@@ -356,48 +262,47 @@ const updateMe = async (
           });
       }
 
-      user.lastName =
-        normalizedLastName;
+      data.lastName =
+        value;
     }
 
     if (
-      phone !== undefined
+      body.phone !==
+      undefined
     ) {
-      user.phone =
+      data.phone =
         normalizePhone(
-          phone
+          body.phone
         );
     }
 
     if (
-      documentId !==
+      body.documentId !==
       undefined
     ) {
-      user.documentId =
+      data.documentId =
         normalizeText(
-          documentId,
+          body.documentId,
           50
-        );
+        ) || null;
     }
 
     if (
-      dateOfBirth !==
+      body.dateOfBirth !==
       undefined
     ) {
-      if (
-        !dateOfBirth
-      ) {
-        user.dateOfBirth =
+      if (!body.dateOfBirth) {
+        data.dateOfBirth =
           null;
       } else {
-        const parsedDate =
+        const parsed =
           new Date(
-            dateOfBirth
+            body.dateOfBirth
           );
 
         if (
           Number.isNaN(
-            parsedDate.getTime()
+            parsed.getTime()
           )
         ) {
           return res
@@ -409,30 +314,27 @@ const updateMe = async (
             });
         }
 
-        user.dateOfBirth =
-          parsedDate;
+        data.dateOfBirth =
+          parsed;
       }
     }
 
     if (
-      gender !== undefined
+      body.gender !==
+      undefined
     ) {
-      const allowedGenders = [
-        "MALE",
-        "FEMALE",
-        "OTHER",
-        "PREFER_NOT_TO_SAY"
-      ];
-
-      const normalizedGender =
+      const value =
         String(
-          gender || ""
+          body.gender || ""
         ).toUpperCase();
 
       if (
-        !allowedGenders.includes(
-          normalizedGender
-        )
+        ![
+          "MALE",
+          "FEMALE",
+          "OTHER",
+          "PREFER_NOT_TO_SAY"
+        ].includes(value)
       ) {
         return res
           .status(400)
@@ -443,68 +345,46 @@ const updateMe = async (
           });
       }
 
-      user.gender =
-        normalizedGender;
+      data.gender =
+        value;
+    }
+
+    for (
+      const [
+        field,
+        maxLength
+      ] of [
+        ["country", 100],
+        ["province", 100],
+        ["city", 100],
+        ["address", 500],
+        ["timezone", 100]
+      ]
+    ) {
+      if (
+        body[field] !==
+        undefined
+      ) {
+        data[field] =
+          normalizeText(
+            body[field],
+            maxLength
+          );
+      }
     }
 
     if (
-      country !==
+      body.language !==
       undefined
     ) {
-      user.country =
-        normalizeText(
-          country,
-          100
-        );
-    }
-
-    if (
-      province !==
-      undefined
-    ) {
-      user.province =
-        normalizeText(
-          province,
-          100
-        );
-    }
-
-    if (
-      city !== undefined
-    ) {
-      user.city =
-        normalizeText(
-          city,
-          100
-        );
-    }
-
-    if (
-      address !==
-      undefined
-    ) {
-      user.address =
-        normalizeText(
-          address,
-          500
-        );
-    }
-
-    if (
-      language !==
-      undefined
-    ) {
-      const normalizedLanguage =
+      const value =
         String(
-          language || ""
+          body.language || ""
         ).toLowerCase();
 
       if (
-        ![
-          "es",
-          "en"
-        ].includes(
-          normalizedLanguage
+        !["es", "en"].includes(
+          value
         )
       ) {
         return res
@@ -516,47 +396,37 @@ const updateMe = async (
           });
       }
 
-      user.language =
-        normalizedLanguage;
+      data.language =
+        value;
     }
 
     if (
-      timezone !==
+      body.notificationsEnabled !==
       undefined
     ) {
-      user.timezone =
-        normalizeText(
-          timezone,
-          100
-        );
-    }
-
-    if (
-      notificationsEnabled !==
-      undefined
-    ) {
-      user.notificationsEnabled =
+      data.notificationsEnabled =
         Boolean(
-          notificationsEnabled
+          body.notificationsEnabled
         );
     }
 
     if (
-      emailNotificationsEnabled !==
+      body.emailNotificationsEnabled !==
       undefined
     ) {
-      user.emailNotificationsEnabled =
+      data.emailNotificationsEnabled =
         Boolean(
-          emailNotificationsEnabled
+          body.emailNotificationsEnabled
         );
     }
 
-    await user.save();
-
-    const safeUser =
-      sanitizeUser(
-        user
-      );
+    const user =
+      await prisma.user.update({
+        where: {
+          id: userId
+        },
+        data
+      });
 
     return res
       .status(200)
@@ -565,7 +435,7 @@ const updateMe = async (
         message:
           "Perfil actualizado correctamente.",
         user:
-          safeUser
+          sanitizeUser(user)
       });
   } catch (error) {
     console.error(
@@ -574,44 +444,17 @@ const updateMe = async (
     );
 
     if (
-      error.code === 11000
+      isPrismaError(
+        error,
+        "P2002"
+      )
     ) {
-      const duplicatedField =
-        Object.keys(
-          error.keyPattern ||
-            {}
-        )[0] ||
-        "dato";
-
       return res
         .status(409)
         .json({
           success: false,
           message:
-            duplicatedField ===
-            "documentId"
-              ? "Este documento ya está registrado en otra cuenta."
-              : `El ${duplicatedField} ya está registrado.`
-        });
-    }
-
-    if (
-      error.name ===
-      "ValidationError"
-    ) {
-      const firstError =
-        Object.values(
-          error.errors ||
-            {}
-        )[0];
-
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message:
-            firstError?.message ||
-            "Los datos del perfil no son válidos."
+            "Uno de los datos ya está registrado en otra cuenta."
         });
     }
 
@@ -628,39 +471,19 @@ const updateMe = async (
             : error.message
       });
   }
-};
+}
 
-/*
-|--------------------------------------------------------------------------
-| PATCH /api/users/me/avatar
-|--------------------------------------------------------------------------
-| Guarda la imagen en /uploads/profiles y registra la URL en MongoDB.
-|--------------------------------------------------------------------------
-*/
-
-const updateProfilePhoto = async (
+async function updateProfilePhoto(
   req,
   res
-) => {
-  let uploadedFilePath =
-    req.file?.path ||
-    "";
+) {
+  let uploadedObjectPath = "";
 
   try {
     const userId =
-      getAuthenticatedUserId(
-        req
-      );
+      await getRequestUserId(req);
 
     if (!userId) {
-      if (
-        uploadedFilePath
-      ) {
-        removeUploadedFile(
-          uploadedFilePath
-        );
-      }
-
       return res
         .status(401)
         .json({
@@ -670,7 +493,9 @@ const updateProfilePhoto = async (
         });
     }
 
-    if (!req.file) {
+    if (
+      !req.file?.buffer
+    ) {
       return res
         .status(400)
         .json({
@@ -680,16 +505,14 @@ const updateProfilePhoto = async (
         });
     }
 
-    const user =
-      await User.findById(
-        userId
-      );
+    const current =
+      await prisma.user.findUnique({
+        where: {
+          id: userId
+        }
+      });
 
-    if (!user) {
-      removeUploadedFile(
-        uploadedFilePath
-      );
-
+    if (!current) {
       return res
         .status(404)
         .json({
@@ -699,40 +522,45 @@ const updateProfilePhoto = async (
         });
     }
 
-    const previousPhoto =
-      user.profilePhoto ||
+    const uploaded =
+      await uploadPublicFile(
+        req.file,
+        {
+          folder:
+            `profiles/${userId}`
+        }
+      );
+
+    uploadedObjectPath =
+      uploaded.objectPath;
+
+    const profilePhoto =
+      uploaded.url;
+
+    const user =
+      await prisma.user.update({
+        where: {
+          id: userId
+        },
+        data: {
+          profilePhoto,
+          profilePhotoUploadedAt:
+            new Date()
+        }
+      });
+
+    uploadedObjectPath =
       "";
 
-    const profilePhotoUrl =
-      normalizeProfilePhotoUrl(
-        req,
-        req.file.filename
-      );
-
-    user.profilePhoto =
-      profilePhotoUrl;
-
-    user.profilePhotoUploadedAt =
-      new Date();
-
-    await user.save();
-
     if (
-      previousPhoto &&
-      previousPhoto !==
-        profilePhotoUrl
+      current.profilePhoto &&
+      current.profilePhoto !==
+        profilePhoto
     ) {
-      deletePreviousProfilePhoto(
-        previousPhoto
+      await deletePreviousProfilePhoto(
+        current.profilePhoto
       );
     }
-
-    uploadedFilePath = "";
-
-    const safeUser =
-      sanitizeUser(
-        user
-      );
 
     return res
       .status(200)
@@ -740,24 +568,30 @@ const updateProfilePhoto = async (
         success: true,
         message:
           "Foto de perfil actualizada correctamente.",
-        profilePhoto:
-          profilePhotoUrl,
+        profilePhoto,
         user:
-          safeUser
+          sanitizeUser(user)
       });
   } catch (error) {
+    if (uploadedObjectPath) {
+      try {
+        await deletePublicObjectPath(
+          uploadedObjectPath
+        );
+      } catch (
+        cleanupError
+      ) {
+        console.error(
+          "No se pudo limpiar la foto nueva:",
+          cleanupError.message
+        );
+      }
+    }
+
     console.error(
       "Error actualizando foto de perfil:",
       error
     );
-
-    if (
-      uploadedFilePath
-    ) {
-      removeUploadedFile(
-        uploadedFilePath
-      );
-    }
 
     return res
       .status(500)
@@ -772,23 +606,15 @@ const updateProfilePhoto = async (
             : error.message
       });
   }
-};
+}
 
-/*
-|--------------------------------------------------------------------------
-| DELETE /api/users/me/avatar
-|--------------------------------------------------------------------------
-*/
-
-const deleteProfilePhoto = async (
+async function deleteProfilePhoto(
   req,
   res
-) => {
+) {
   try {
     const userId =
-      getAuthenticatedUserId(
-        req
-      );
+      await getRequestUserId(req);
 
     if (!userId) {
       return res
@@ -800,12 +626,14 @@ const deleteProfilePhoto = async (
         });
     }
 
-    const user =
-      await User.findById(
-        userId
-      );
+    const current =
+      await prisma.user.findUnique({
+        where: {
+          id: userId
+        }
+      });
 
-    if (!user) {
+    if (!current) {
       return res
         .status(404)
         .json({
@@ -815,30 +643,26 @@ const deleteProfilePhoto = async (
         });
     }
 
-    const previousPhoto =
-      user.profilePhoto ||
-      "";
-
-    user.profilePhoto =
-      "";
-
-    user.profilePhotoUploadedAt =
-      null;
-
-    await user.save();
+    const user =
+      await prisma.user.update({
+        where: {
+          id: userId
+        },
+        data: {
+          profilePhoto:
+            "",
+          profilePhotoUploadedAt:
+            null
+        }
+      });
 
     if (
-      previousPhoto
+      current.profilePhoto
     ) {
-      deletePreviousProfilePhoto(
-        previousPhoto
+      await deletePreviousProfilePhoto(
+        current.profilePhoto
       );
     }
-
-    const safeUser =
-      sanitizeUser(
-        user
-      );
 
     return res
       .status(200)
@@ -846,9 +670,10 @@ const deleteProfilePhoto = async (
         success: true,
         message:
           "Foto de perfil eliminada correctamente.",
-        profilePhoto: "",
+        profilePhoto:
+          "",
         user:
-          safeUser
+          sanitizeUser(user)
       });
   } catch (error) {
     console.error(
@@ -869,10 +694,241 @@ const deleteProfilePhoto = async (
             : error.message
       });
   }
-};
+}
+
+async function getPublicProfile(
+  req,
+  res
+) {
+  try {
+    const requesterId =
+      await getRequestUserId(req);
+
+    if (!requesterId) {
+      return res
+        .status(401)
+        .json({
+          success: false,
+          message:
+            "Debes iniciar sesión para consultar este perfil."
+        });
+    }
+
+    const userId =
+      Number(req.params.userId);
+
+    if (
+      !Number.isSafeInteger(userId) ||
+      userId <= 0
+    ) {
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message:
+            "El identificador del usuario no es válido."
+        });
+    }
+
+    const user =
+      await prisma.user.findFirst({
+        where: {
+          id: userId,
+          status: "ACTIVE",
+          deletedAt: null
+        },
+
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          profilePhoto: true,
+          isVerified: true,
+          verificationStatus: true,
+          identityLevel: true,
+          trustScore: true,
+          completedPurchases: true,
+          completedSales: true,
+          sellerEnabled: true,
+          buyerEnabled: true,
+          city: true,
+          province: true,
+          country: true,
+          createdAt: true,
+
+          products: {
+            where: {
+              deletedAt: null,
+              status: {
+                notIn: [
+                  "DELETED",
+                  "REJECTED"
+                ]
+              }
+            },
+
+            select: {
+              id: true,
+              title: true,
+              price: true,
+              category: true,
+              condition: true,
+              imageUrl: true,
+              images: true,
+              status: true,
+              createdAt: true
+            },
+
+            orderBy: {
+              createdAt: "desc"
+            },
+
+            take: 8
+          },
+
+          reviewsReceived: {
+            select: {
+              id: true,
+              rating: true,
+              comment: true,
+              createdAt: true,
+
+              reviewer: {
+                select: {
+                  id: true,
+                  firstName: true,
+                  lastName: true,
+                  profilePhoto: true,
+                  isVerified: true,
+                  trustScore: true
+                }
+              },
+
+              product: {
+                select: {
+                  id: true,
+                  title: true
+                }
+              }
+            },
+
+            orderBy: {
+              createdAt: "desc"
+            },
+
+            take: 10
+          },
+
+          _count: {
+            select: {
+              products: true,
+              reviewsReceived: true
+            }
+          }
+        }
+      });
+
+    if (!user) {
+      return res
+        .status(404)
+        .json({
+          success: false,
+          message:
+            "El perfil solicitado no está disponible."
+        });
+    }
+
+    const ratings =
+      user.reviewsReceived
+        .map((review) =>
+          Number(review.rating)
+        )
+        .filter(
+          (rating) =>
+            Number.isFinite(rating)
+        );
+
+    const ratingAverage =
+      ratings.length > 0
+        ? Number(
+            (
+              ratings.reduce(
+                (total, rating) =>
+                  total + rating,
+                0
+              ) / ratings.length
+            ).toFixed(1)
+          )
+        : 0;
+
+    const {
+      _count,
+      ...safeProfile
+    } = user;
+
+    return res
+      .status(200)
+      .json({
+        success: true,
+
+        profile: {
+          ...safeProfile,
+
+          stats: {
+            products:
+              Number(
+                _count?.products || 0
+              ),
+
+            reviews:
+              Number(
+                _count
+                  ?.reviewsReceived ||
+                  0
+              ),
+
+            ratingAverage,
+
+            completedPurchases:
+              Number(
+                user
+                  .completedPurchases ||
+                  0
+              ),
+
+            completedSales:
+              Number(
+                user
+                  .completedSales ||
+                  0
+              )
+          }
+        }
+      });
+  } catch (error) {
+    console.error(
+      "Error obteniendo perfil público:",
+      error
+    );
+
+    return res
+      .status(500)
+      .json({
+        success: false,
+        message:
+          "No se pudo obtener el perfil público.",
+        error:
+          process.env.NODE_ENV ===
+          "production"
+            ? undefined
+            : error.message
+      });
+  }
+}
 
 module.exports = {
   getMe,
+  getPublicProfile,
   updateMe,
   updateProfilePhoto,
   deleteProfilePhoto

@@ -683,38 +683,15 @@ function DisputeDetail({
           <ProgressItem active={isStatusReached(dispute.status, ["RESOLVED_BUYER", "RESOLVED_SELLER", "CLOSED"])} text="Resolución tomada" />
         </div>
 
-        <div className="action-row" style={actionRow}>
-          <button
-            onClick={() => updateStatus(dispute._id, "IN_REVIEW")}
-            disabled={updatingId === dispute._id}
-            style={warningButton}
-          >
-            En revisión
-          </button>
+        <div style={securityNotice}>
+          <strong>🛡 Caso protegido por QSM</strong>
 
-          <button
-            onClick={() => updateStatus(dispute._id, "WAITING_EVIDENCE")}
-            disabled={updatingId === dispute._id}
-            style={outlineButton}
-          >
-            Pedir evidencia
-          </button>
-
-          <button
-            onClick={() => updateStatus(dispute._id, "RESOLVED_BUYER")}
-            disabled={updatingId === dispute._id}
-            style={successButton}
-          >
-            Resolver comprador
-          </button>
-
-          <button
-            onClick={() => updateStatus(dispute._id, "RESOLVED_SELLER")}
-            disabled={updatingId === dispute._id}
-            style={successButton}
-          >
-            Resolver vendedor
-          </button>
+          <p>
+            Puedes enviar mensajes y aportar evidencia mientras QSM revisa
+            el caso. Las decisiones de reembolso o liberación del pago
+            solamente pueden realizarse desde BackOffice por personal
+            autorizado.
+          </p>
         </div>
       </section>
 
@@ -841,6 +818,12 @@ function formatStatus(status) {
   const map = {
     OPEN: "Abierto",
     IN_REVIEW: "En revisión",
+    WAITING_BUYER:
+      "Esperando respuesta del comprador",
+    WAITING_SELLER:
+      "Esperando respuesta del vendedor",
+    WAITING_QSM:
+      "Esperando revisión de QSM",
     WAITING_EVIDENCE: "Esperando evidencia",
     RESOLVED_BUYER: "Resuelto a comprador",
     RESOLVED_SELLER: "Resuelto a vendedor",

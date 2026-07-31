@@ -1,1997 +1,388 @@
-const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
-
-const User = require("../models/User");
-const Role = require("../models/Role");
-const Permission = require("../models/Permission");
-const AuditLog = require("../models/AuditLog");
-
-/*
-|--------------------------------------------------------------------------
-| Constantes
-|--------------------------------------------------------------------------
-*/
+const {
+  prisma,
+  parsePositiveInt,
+  normalizeEmail,
+  getRequestUserId,
+  sanitizeUser,
+  getClientIp,
+  getDeviceInfo,
+  isPrismaError
+} = require("../utils/prismaCompat");
 
 const INTERNAL_ROLES = [
-  "SUPER_ADMIN",
-  "SENIOR_ADMIN",
-  "ADMIN",
-  "SUPERVISOR",
-
-  "AUDITOR",
-
-  "DISPUTE_MANAGER",
-  "DISPUTE_AGENT",
-
-  "VERIFICATION_MANAGER",
-  "VERIFICATION_AGENT",
-
-  "WAREHOUSE_MANAGER",
-  "WAREHOUSE_SUPERVISOR",
-  "WAREHOUSE_STAFF",
-
-  "DELIVERY_MANAGER",
-  "DELIVERY_SUPERVISOR",
-  "DELIVERY_AGENT",
-
-  "FINANCE_MANAGER",
-  "FINANCE_AGENT",
-
-  "SECURITY_MANAGER",
-  "SECURITY_ANALYST",
-
-  "SUPPORT_MANAGER",
-  "SUPPORT_AGENT",
-
-  "MODERATION_MANAGER",
-  "MODERATOR"
+  "SUPER_ADMIN", "SENIOR_ADMIN", "ADMIN", "SUPERVISOR", "AUDITOR",
+  "DISPUTE_MANAGER", "DISPUTE_AGENT", "VERIFICATION_MANAGER", "VERIFICATION_AGENT",
+  "WAREHOUSE_MANAGER", "WAREHOUSE_SUPERVISOR", "WAREHOUSE_STAFF",
+  "DELIVERY_MANAGER", "DELIVERY_SUPERVISOR", "DELIVERY_AGENT",
+  "FINANCE_MANAGER", "FINANCE_AGENT", "SECURITY_MANAGER", "SECURITY_ANALYST",
+  "SUPPORT_MANAGER", "SUPPORT_AGENT", "MODERATION_MANAGER", "MODERATOR"
 ];
 
 const INTERNAL_DEPARTMENTS = [
-  "ADMINISTRATION",
-  "WAREHOUSE",
-  "DELIVERY",
-  "FINANCE",
-  "AUDIT",
-  "DISPUTES",
-  "SECURITY",
-  "SUPPORT",
-  "VERIFICATION",
-  "MODERATION"
+  "ADMINISTRATION", "WAREHOUSE", "DELIVERY", "FINANCE", "AUDIT",
+  "DISPUTES", "SECURITY", "SUPPORT", "VERIFICATION", "MODERATION"
 ];
 
-const ACCOUNT_STATUSES = [
-  "ACTIVE",
-  "PENDING",
-  "SUSPENDED",
-  "BANNED",
-  "DELETED"
+const ACCOUNT_STATUSES = ["ACTIVE", "PENDING", "SUSPENDED", "BANNED", "DELETED"];
+const DEPARTMENT_PREFIXES = { ADMINISTRATION: "AD", WAREHOUSE: "WH", DELIVERY: "DL", FINANCE: "FN", AUDIT: "AU", DISPUTES: "DS", SECURITY: "SC", SUPPORT: "SP", VERIFICATION: "VR", MODERATION: "MD" };
+
+const COMMON_VIEW_PERMISSIONS = [
+  "INTERNAL_USERS_VIEW", "INTERNAL_USERS_VIEW_ACTIVITY", "SYSTEM_SETTINGS_VIEW", "SYSTEM_STATUS_VIEW"
 ];
 
-const DEPARTMENT_PREFIXES = {
-  ADMINISTRATION: "AD",
-  WAREHOUSE: "WH",
-  DELIVERY: "DL",
-  FINANCE: "FN",
-  AUDIT: "AU",
-  DISPUTES: "DS",
-  SECURITY: "SC",
-  SUPPORT: "SP",
-  VERIFICATION: "VR",
-  MODERATION: "MD"
+const ROLE_PERMISSIONS = {
+  SUPER_ADMIN: ["*"],
+  SENIOR_ADMIN: [
+    ...COMMON_VIEW_PERMISSIONS,
+    "INTERNAL_USERS_CREATE",
+    "INTERNAL_USERS_UPDATE",
+    "INTERNAL_USERS_SUSPEND",
+    "INTERNAL_USERS_ACTIVATE",
+    "INTERNAL_USERS_CHANGE_ROLE",
+    "INTERNAL_USERS_ASSIGN_PERMISSIONS",
+    "INTERNAL_USERS_RESET_PASSWORD",
+    "SYSTEM_SETTINGS_UPDATE",
+    "SYSTEM_SETTINGS_RESET"
+  ],
+  ADMIN: [
+    ...COMMON_VIEW_PERMISSIONS,
+    "INTERNAL_USERS_CREATE",
+    "INTERNAL_USERS_UPDATE",
+    "INTERNAL_USERS_SUSPEND",
+    "INTERNAL_USERS_ACTIVATE",
+    "INTERNAL_USERS_RESET_PASSWORD",
+    "SYSTEM_SETTINGS_UPDATE"
+  ],
+  SUPERVISOR: COMMON_VIEW_PERMISSIONS,
+  AUDITOR: [
+    "INTERNAL_USERS_VIEW",
+    "INTERNAL_USERS_VIEW_ACTIVITY",
+    "SYSTEM_SETTINGS_VIEW",
+    "SYSTEM_STATUS_VIEW"
+  ]
 };
 
-/*
-|--------------------------------------------------------------------------
-| Utilidades generales
-|--------------------------------------------------------------------------
-*/
+const normalizeValue = (value) => String(value || "").trim().toUpperCase().replace(/\s+/g, "_").replace(/-/g, "_");
+const normalizeStatus = (value) => normalizeValue(value) === "INACTIVE" ? "PENDING" : normalizeValue(value);
+const hasOwn = (object, field) => Object.prototype.hasOwnProperty.call(object || {}, field);
 
-const normalizeValue = (value) =>
-  String(value || "")
-    .trim()
-    .toUpperCase()
-    .replace(/\s+/g, "_")
-    .replace(/-/g, "_");
+function getSecurityLevelForRole(role) {
+  const value = normalizeValue(role);
+  return value === "SUPER_ADMIN" || value === "SENIOR_ADMIN" || value.includes("SECURITY") || value.includes("FINANCE") ? "ELEVATED" : "NORMAL";
+}
 
-const normalizeEmail = (value) =>
-  String(value || "")
-    .trim()
-    .toLowerCase();
+function generateTemporaryPassword() {
+  const sets = ["ABCDEFGHJKLMNPQRSTUVWXYZ", "abcdefghijkmnopqrstuvwxyz", "23456789", "@#$%!?" ];
+  const pick = (chars) => chars[Math.floor(Math.random() * chars.length)];
+  const chars = sets.map(pick);
+  const all = sets.join("");
+  while (chars.length < 16) chars.push(pick(all));
+  return chars.sort(() => Math.random() - 0.5).join("");
+}
 
-const normalizeStatus = (value) => {
-  const status = normalizeValue(value);
-
-  /*
-  |--------------------------------------------------------------------------
-  | Compatibilidad con el frontend temporal
-  |--------------------------------------------------------------------------
-  */
-
-  if (status === "INACTIVE") {
-    return "PENDING";
-  }
-
-  return status;
-};
-
-const isValidObjectId = (value) =>
-  mongoose.Types.ObjectId.isValid(value);
-
-const escapeRegex = (value) =>
-  String(value || "").replace(
-    /[.*+?^${}()|[\]\\]/g,
-    "\\$&"
-  );
-
-const getRequestIp = (req) =>
-  String(
-    req.headers["x-forwarded-for"] ||
-      req.ip ||
-      req.socket?.remoteAddress ||
-      ""
-  )
-    .split(",")[0]
-    .trim();
-
-const getDeviceInfo = (req) =>
-  String(req.headers["user-agent"] || "")
-    .trim()
-    .slice(0, 1000);
-
-const getSecurityLevelForRole = (role) => {
-  const normalizedRole = normalizeValue(role);
-
-  if (
-    normalizedRole === "SUPER_ADMIN" ||
-    normalizedRole === "SENIOR_ADMIN" ||
-    normalizedRole.includes("SECURITY") ||
-    normalizedRole.includes("FINANCE")
-  ) {
-    return "ELEVATED";
-  }
-
-  return "NORMAL";
-};
-
-const generateTemporaryPassword = () => {
-  const uppercase = "ABCDEFGHJKLMNPQRSTUVWXYZ";
-  const lowercase = "abcdefghijkmnopqrstuvwxyz";
-  const numbers = "23456789";
-  const symbols = "@#$%!?";
-
-  const randomCharacter = (characters) =>
-    characters[
-      Math.floor(Math.random() * characters.length)
-    ];
-
-  const requiredCharacters = [
-    randomCharacter(uppercase),
-    randomCharacter(lowercase),
-    randomCharacter(numbers),
-    randomCharacter(symbols)
-  ];
-
-  const allCharacters =
-    uppercase + lowercase + numbers + symbols;
-
-  while (requiredCharacters.length < 16) {
-    requiredCharacters.push(
-      randomCharacter(allCharacters)
-    );
-  }
-
-  return requiredCharacters
-    .sort(() => Math.random() - 0.5)
-    .join("");
-};
-
-const validatePasswordComplexity = (password) => {
+function validatePasswordComplexity(password) {
   const value = String(password || "");
+  if (value.length < 12) return "La contraseña debe tener al menos 12 caracteres.";
+  if (!/[A-Z]/.test(value)) return "La contraseña debe incluir una letra mayúscula.";
+  if (!/[a-z]/.test(value)) return "La contraseña debe incluir una letra minúscula.";
+  if (!/[0-9]/.test(value)) return "La contraseña debe incluir un número.";
+  if (!/[^A-Za-z0-9]/.test(value)) return "La contraseña debe incluir un símbolo.";
+  return "";
+}
 
-  if (value.length < 12) {
-    return {
-      valid: false,
-      message:
-        "La contraseña debe tener al menos 12 caracteres."
-    };
-  }
+function rolePermissions(role) {
+  return [...new Set(ROLE_PERMISSIONS[role] || COMMON_VIEW_PERMISSIONS)];
+}
 
-  if (!/[A-Z]/.test(value)) {
-    return {
-      valid: false,
-      message:
-        "La contraseña debe incluir una letra mayúscula."
-    };
-  }
+function serializeInternalUser(user) {
+  return sanitizeUser(user);
+}
 
-  if (!/[a-z]/.test(value)) {
-    return {
-      valid: false,
-      message:
-        "La contraseña debe incluir una letra minúscula."
-    };
-  }
+function actorIsSuperAdmin(req) {
+  return normalizeValue(req.user?.role) === "SUPER_ADMIN" || (Array.isArray(req.user?.permissions) && req.user.permissions.map(normalizeValue).includes("*"));
+}
 
-  if (!/[0-9]/.test(value)) {
-    return {
-      valid: false,
-      message:
-        "La contraseña debe incluir un número."
-    };
-  }
-
-  if (!/[^A-Za-z0-9]/.test(value)) {
-    return {
-      valid: false,
-      message:
-        "La contraseña debe incluir un símbolo."
-    };
-  }
-
-  return {
-    valid: true,
-    message: ""
-  };
-};
-
-/*
-|--------------------------------------------------------------------------
-| Generación de código de empleado
-|--------------------------------------------------------------------------
-*/
-
-const generateEmployeeCode = async (department) => {
-  const normalizedDepartment =
-    normalizeValue(department);
-
-  const prefix =
-    DEPARTMENT_PREFIXES[
-      normalizedDepartment
-    ] || "IN";
-
-  const codePrefix = `QSM-${prefix}-`;
-
-  const existingUsers = await User.find({
-    accountType: "INTERNAL",
-    employeeCode: {
-      $regex: `^${escapeRegex(codePrefix)}`
-    }
-  })
-    .select("employeeCode")
-    .lean();
-
-  const usedNumbers = existingUsers
-    .map((user) => {
-      const match = String(
-        user.employeeCode || ""
-      ).match(/(\d+)$/);
-
-      return match
-        ? Number(match[1])
-        : 0;
-    })
-    .filter(Number.isFinite);
-
-  let nextNumber =
-    usedNumbers.length > 0
-      ? Math.max(...usedNumbers) + 1
-      : 1;
-
-  let employeeCode;
-
-  do {
-    employeeCode =
-      `${codePrefix}${String(nextNumber).padStart(
-        4,
-        "0"
-      )}`;
-
-    nextNumber += 1;
-  } while (
-    await User.exists({
-      employeeCode
-    })
-  );
-
-  return employeeCode;
-};
-
-/*
-|--------------------------------------------------------------------------
-| Obtener permisos de un rol
-|--------------------------------------------------------------------------
-*/
-
-const getRoleWithPermissions = async (roleName) => {
-  const normalizedRole =
-    normalizeValue(roleName);
-
-  return Role.findOne({
-    name: normalizedRole,
-    isActive: true
-  }).populate({
-    path: "permissions",
-    match: {
-      isActive: true
-    },
-    select: "code name module"
-  });
-};
-
-const getRolePermissionCodes = (roleDocument) => {
-  if (
-    !roleDocument ||
-    !Array.isArray(roleDocument.permissions)
-  ) {
-    return [];
-  }
-
-  return [
-    ...new Set(
-      roleDocument.permissions
-        .map((permission) =>
-          normalizeValue(permission?.code)
-        )
-        .filter(Boolean)
-    )
-  ];
-};
-
-/*
-|--------------------------------------------------------------------------
-| Auditoría
-|--------------------------------------------------------------------------
-*/
-
-const createAuditLog = async ({
-  req,
-  action,
-  targetId,
-  description
-}) => {
+async function audit(req, action, targetId, description) {
   try {
-    if (!req.user?._id) {
-      return;
-    }
-
-    await AuditLog.create({
-      actor: req.user._id,
-      actorRole:
-        normalizeValue(req.user.role),
-      action,
-      targetType: "USER",
-      targetId:
-        String(targetId || ""),
-      description,
-      ipAddress:
-        getRequestIp(req),
-      deviceInfo:
-        getDeviceInfo(req)
+    const actorId = await getRequestUserId(req);
+    await prisma.auditLog.create({
+      data: {
+        actorId,
+        actorName: [req.user?.firstName, req.user?.lastName].filter(Boolean).join(" "),
+        actorRole: normalizeValue(req.user?.role),
+        module: "ADMINISTRATION",
+        action,
+        description,
+        entityType: "USER",
+        entityId: String(targetId || ""),
+        method: String(req.method || ""),
+        endpoint: String(req.originalUrl || ""),
+        ipAddress: getClientIp(req),
+        deviceInfo: getDeviceInfo(req),
+        severity: "MEDIUM",
+        status: "SUCCESS",
+        metadata: {}
+      }
     });
   } catch (error) {
-    console.error(
-      "No se pudo registrar la auditoría:",
-      error.message
-    );
+    console.error("No se pudo registrar la auditoría:", error.message);
   }
-};
+}
 
-/*
-|--------------------------------------------------------------------------
-| Protección de Super Admin
-|--------------------------------------------------------------------------
-*/
+async function generateEmployeeCode(department) {
+  const prefix = DEPARTMENT_PREFIXES[department] || "IN";
+  const codePrefix = `QSM-${prefix}-`;
+  const users = await prisma.user.findMany({ where: { accountType: "INTERNAL", employeeCode: { startsWith: codePrefix } }, select: { employeeCode: true } });
+  const used = users.map((user) => Number(String(user.employeeCode || "").match(/(\d+)$/)?.[1] || 0));
+  let number = used.length ? Math.max(...used) + 1 : 1;
+  while (true) {
+    const code = `${codePrefix}${String(number).padStart(4, "0")}`;
+    const exists = await prisma.user.findFirst({ where: { employeeCode: code }, select: { id: true } });
+    if (!exists) return code;
+    number += 1;
+  }
+}
 
-const getActiveSuperAdminCount = async () =>
-  User.countDocuments({
-    accountType: "INTERNAL",
-    role: "SUPER_ADMIN",
-    status: "ACTIVE"
-  });
+async function protectSuperAdmin(req, target, requestedRole, requestedStatus) {
+  if (target.role === "SUPER_ADMIN" && !actorIsSuperAdmin(req)) return "Solo un Super Admin puede modificar otra cuenta Super Admin.";
+  const removing = target.role === "SUPER_ADMIN" && ((requestedRole && requestedRole !== "SUPER_ADMIN") || (requestedStatus && requestedStatus !== "ACTIVE"));
+  if (removing && target.status === "ACTIVE") {
+    const count = await prisma.user.count({ where: { accountType: "INTERNAL", role: "SUPER_ADMIN", status: "ACTIVE" } });
+    if (count <= 1) return "No puedes modificar al último Super Admin activo del sistema.";
+  }
+  return "";
+}
 
-const actorIsSuperAdmin = (req) =>
-  normalizeValue(req.user?.role) ===
-    "SUPER_ADMIN" ||
-  (
-    Array.isArray(req.user?.permissions) &&
-    req.user.permissions
-      .map(normalizeValue)
-      .includes("*")
-  );
-
-const canManageSuperAdmin = (req) =>
-  actorIsSuperAdmin(req);
-
-const ensureSuperAdminCanBeModified =
-  async ({
-    req,
-    targetUser,
-    requestedRole,
-    requestedStatus
-  }) => {
-    const targetIsSuperAdmin =
-      targetUser.role === "SUPER_ADMIN";
-
-    if (
-      targetIsSuperAdmin &&
-      !canManageSuperAdmin(req)
-    ) {
-      return {
-        allowed: false,
-        statusCode: 403,
-        message:
-          "Solo un Super Admin puede modificar otra cuenta Super Admin."
-      };
-    }
-
-    const changingAwayFromSuperAdmin =
-      targetIsSuperAdmin &&
-      requestedRole &&
-      requestedRole !== "SUPER_ADMIN";
-
-    const disablingSuperAdmin =
-      targetIsSuperAdmin &&
-      requestedStatus &&
-      requestedStatus !== "ACTIVE";
-
-    if (
-      changingAwayFromSuperAdmin ||
-      disablingSuperAdmin
-    ) {
-      const activeSuperAdmins =
-        await getActiveSuperAdminCount();
-
-      if (
-        activeSuperAdmins <= 1 &&
-        targetUser.status === "ACTIVE"
-      ) {
-        return {
-          allowed: false,
-          statusCode: 409,
-          message:
-            "No puedes modificar al último Super Admin activo del sistema."
-        };
-      }
-    }
-
-    return {
-      allowed: true
-    };
-  };
-
-/*
-|--------------------------------------------------------------------------
-| Formatear respuesta segura
-|--------------------------------------------------------------------------
-*/
-
-const serializeInternalUser = (user) => {
-  const object =
-    typeof user.toJSON === "function"
-      ? user.toJSON()
-      : { ...user };
-
-  delete object.password;
-  delete object.resetPasswordToken;
-  delete object.resetPasswordExpires;
-  delete object.twoFactorSecret;
-  delete object.profilePhotoPublicId;
-
-  return object;
-};
-
-/*
-|--------------------------------------------------------------------------
-| GET /api/admin/internal-users
-|--------------------------------------------------------------------------
-*/
-
-const getInternalUsers = async (req, res) => {
+async function getInternalUsers(req, res) {
   try {
-    const page = Math.max(
-      Number(req.query.page) || 1,
-      1
-    );
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 100);
+    const search = String(req.query.search || "").trim();
+    const department = normalizeValue(req.query.department);
+    const role = normalizeValue(req.query.role);
+    const status = normalizeStatus(req.query.status);
+    const sortBy = ["createdAt", "updatedAt", "firstName", "lastName", "email", "employeeCode", "lastLoginAt"].includes(req.query.sortBy) ? req.query.sortBy : "createdAt";
+    const sortOrder = String(req.query.sortOrder).toLowerCase() === "asc" ? "asc" : "desc";
 
-    const limit = Math.min(
-      Math.max(
-        Number(req.query.limit) || 20,
-        1
-      ),
-      100
-    );
-
-    const skip = (page - 1) * limit;
-
-    const search = String(
-      req.query.search || ""
-    ).trim();
-
-    const department =
-      normalizeValue(req.query.department);
-
-    const role =
-      normalizeValue(req.query.role);
-
-    const status =
-      normalizeStatus(req.query.status);
-
-    const sortBy = [
-      "createdAt",
-      "updatedAt",
-      "firstName",
-      "lastName",
-      "email",
-      "employeeCode",
-      "lastLoginAt"
-    ].includes(req.query.sortBy)
-      ? req.query.sortBy
-      : "createdAt";
-
-    const sortOrder =
-      String(req.query.sortOrder).toLowerCase() ===
-      "asc"
-        ? 1
-        : -1;
-
-    const query = {
-      accountType: "INTERNAL"
+    const where = {
+      accountType: "INTERNAL",
+      ...(department && department !== "ALL" ? { department } : {}),
+      ...(role && role !== "ALL" ? { role } : {}),
+      ...(status && status !== "ALL" ? { status } : {}),
+      ...(search ? { OR: ["firstName", "lastName", "email", "employeeCode"].map((field) => ({ [field]: { contains: search, mode: "insensitive" } })) } : {})
     };
 
-    if (
-      department &&
-      department !== "ALL"
-    ) {
-      query.department = department;
-    }
-
-    if (
-      role &&
-      role !== "ALL"
-    ) {
-      query.role = role;
-    }
-
-    if (
-      status &&
-      status !== "ALL"
-    ) {
-      query.status = status;
-    }
-
-    if (search) {
-      const searchRegex = new RegExp(
-        escapeRegex(search),
-        "i"
-      );
-
-      query.$or = [
-        {
-          firstName: searchRegex
-        },
-        {
-          lastName: searchRegex
-        },
-        {
-          email: searchRegex
-        },
-        {
-          employeeCode: searchRegex
-        }
-      ];
-    }
-
-    const [
-      users,
-      total,
-      active,
-      suspended,
-      pending,
-      banned
-    ] = await Promise.all([
-      User.find(query)
-        .select("-password")
-        .populate(
-          "createdBy",
-          "firstName lastName email employeeCode"
-        )
-        .populate(
-          "lastModifiedBy",
-          "firstName lastName email employeeCode"
-        )
-        .sort({
-          [sortBy]: sortOrder
-        })
-        .skip(skip)
-        .limit(limit),
-
-      User.countDocuments(query),
-
-      User.countDocuments({
-        accountType: "INTERNAL",
-        status: "ACTIVE"
-      }),
-
-      User.countDocuments({
-        accountType: "INTERNAL",
-        status: "SUSPENDED"
-      }),
-
-      User.countDocuments({
-        accountType: "INTERNAL",
-        status: "PENDING"
-      }),
-
-      User.countDocuments({
-        accountType: "INTERNAL",
-        status: "BANNED"
-      })
+    const [users, total, active, suspended, pending, banned] = await Promise.all([
+      prisma.user.findMany({ where, orderBy: { [sortBy]: sortOrder }, skip: (page - 1) * limit, take: limit }),
+      prisma.user.count({ where }),
+      prisma.user.count({ where: { accountType: "INTERNAL", status: "ACTIVE" } }),
+      prisma.user.count({ where: { accountType: "INTERNAL", status: "SUSPENDED" } }),
+      prisma.user.count({ where: { accountType: "INTERNAL", status: "PENDING" } }),
+      prisma.user.count({ where: { accountType: "INTERNAL", status: "BANNED" } })
     ]);
 
     return res.status(200).json({
       success: true,
+      users: users.map(serializeInternalUser),
+      statistics: { total, active, suspended, inactive: pending, pending, banned },
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit), hasNextPage: page * limit < total, hasPreviousPage: page > 1 }
+    });
+  } catch (error) {
+    console.error("Error obteniendo usuarios internos:", error);
+    return res.status(500).json({ success: false, message: "No se pudieron obtener los usuarios internos." });
+  }
+}
 
-      users: users.map(
-        serializeInternalUser
-      ),
+async function getInternalUserById(req, res) {
+  try {
+    const id = parsePositiveInt(req.params.userId);
+    if (!id) return res.status(400).json({ success: false, message: "El identificador del usuario no es válido." });
+    const user = await prisma.user.findFirst({ where: { id, accountType: "INTERNAL" } });
+    if (!user) return res.status(404).json({ success: false, message: "Usuario interno no encontrado." });
+    return res.status(200).json({ success: true, user: serializeInternalUser(user) });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "No se pudo obtener el usuario interno." });
+  }
+}
 
-      statistics: {
-        total,
-        active,
-        suspended,
-        inactive: pending,
-        pending,
-        banned
-      },
+async function createInternalUser(req, res) {
+  try {
+    const firstName = String(req.body?.firstName || "").trim();
+    const lastName = String(req.body?.lastName || "").trim();
+    const email = normalizeEmail(req.body?.email);
+    const department = normalizeValue(req.body?.department);
+    const role = normalizeValue(req.body?.role);
+    const status = normalizeStatus(req.body?.status || "ACTIVE");
+    if (!firstName || !lastName || !email || !department || !role) return res.status(400).json({ success: false, message: "Nombre, apellido, correo, departamento y rol son obligatorios." });
+    if (!INTERNAL_DEPARTMENTS.includes(department)) return res.status(400).json({ success: false, message: "El departamento indicado no es válido." });
+    if (!INTERNAL_ROLES.includes(role)) return res.status(400).json({ success: false, message: "El rol administrativo indicado no es válido." });
+    if (!ACCOUNT_STATUSES.includes(status)) return res.status(400).json({ success: false, message: "El estado inicial no es válido." });
+    if (role === "SUPER_ADMIN" && !actorIsSuperAdmin(req)) return res.status(403).json({ success: false, message: "Solo un Super Admin puede crear otra cuenta Super Admin." });
 
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages:
-          Math.ceil(total / limit),
-        hasNextPage:
-          page * limit < total,
-        hasPreviousPage:
-          page > 1
+    const employeeCode = normalizeValue(req.body?.employeeCode) || await generateEmployeeCode(department);
+    const duplicate = await prisma.user.findFirst({ where: { OR: [{ email }, { employeeCode }] } });
+    if (duplicate) return res.status(409).json({ success: false, message: duplicate.email === email ? "Ya existe un usuario con ese correo electrónico." : "El código de empleado ya está registrado." });
+
+    const temporaryPassword = String(req.body?.temporaryPassword || req.body?.password || "") || generateTemporaryPassword();
+    const passwordError = validatePasswordComplexity(temporaryPassword);
+    if (passwordError) return res.status(400).json({ success: false, message: passwordError });
+    const actorId = await getRequestUserId(req);
+    const created = await prisma.user.create({
+      data: {
+        firstName, lastName, email, password: await bcrypt.hash(temporaryPassword, 12),
+        accountType: "INTERNAL", role, department, departments: [department], employeeCode,
+        permissions: rolePermissions(role), status, securityLevel: getSecurityLevelForRole(role),
+        buyerEnabled: false, sellerEnabled: false, mustChangePassword: req.body?.mustChangePassword !== false,
+        createdById: actorId, lastModifiedById: actorId, isVerified: true, verificationStatus: "APPROVED",
+        identityLevel: role === "SUPER_ADMIN" ? "BUSINESS" : "LEVEL_1", trustScore: 100,
+        passwordChangedAt: new Date(), passwordVersion: 0, registrationCompleted: true, registrationCompletedAt: new Date(), onboardingStatus: "COMPLETED"
       }
     });
+    await audit(req, "INTERNAL_USER_CREATED", created.id, `Usuario interno ${created.email} creado con rol ${created.role} y departamento ${created.department}.`);
+    return res.status(201).json({ success: true, message: "Usuario interno creado correctamente.", user: serializeInternalUser(created), credentials: { email: created.email, temporaryPassword, mustChangePassword: created.mustChangePassword } });
   } catch (error) {
-    console.error(
-      "Error obteniendo usuarios internos:",
-      error
-    );
-
-    return res.status(500).json({
-      success: false,
-      message:
-        "No se pudieron obtener los usuarios internos."
-    });
+    console.error("Error creando usuario interno:", error);
+    if (isPrismaError(error, "P2002")) return res.status(409).json({ success: false, message: "Ya existe un registro con esos datos." });
+    return res.status(500).json({ success: false, message: "No se pudo crear el usuario interno." });
   }
-};
+}
 
-/*
-|--------------------------------------------------------------------------
-| GET /api/admin/internal-users/:userId
-|--------------------------------------------------------------------------
-*/
-
-const getInternalUserById = async (req, res) => {
+async function updateInternalUser(req, res) {
   try {
-    const { userId } = req.params;
-
-    if (!isValidObjectId(userId)) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "El identificador del usuario no es válido."
-      });
+    const id = parsePositiveInt(req.params.userId);
+    if (!id) return res.status(400).json({ success: false, message: "El identificador del usuario no es válido." });
+    const current = await prisma.user.findFirst({ where: { id, accountType: "INTERNAL" } });
+    if (!current) return res.status(404).json({ success: false, message: "Usuario interno no encontrado." });
+    const data = {};
+    for (const field of ["firstName", "lastName", "phone", "country", "province", "city", "address", "language", "timezone", "notificationsEnabled", "emailNotificationsEnabled", "mustChangePassword"]) {
+      if (hasOwn(req.body, field)) data[field] = req.body[field];
     }
-
-    const user = await User.findOne({
-      _id: userId,
-      accountType: "INTERNAL"
-    })
-      .select("-password")
-      .populate(
-        "createdBy",
-        "firstName lastName email employeeCode"
-      )
-      .populate(
-        "lastModifiedBy",
-        "firstName lastName email employeeCode"
-      )
-      .populate(
-        "suspendedBy",
-        "firstName lastName email employeeCode"
-      )
-      .populate(
-        "bannedBy",
-        "firstName lastName email employeeCode"
-      );
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message:
-          "Usuario interno no encontrado."
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      user:
-        serializeInternalUser(user)
-    });
+    if (hasOwn(req.body, "email")) data.email = normalizeEmail(req.body.email);
+    if (hasOwn(req.body, "employeeCode")) data.employeeCode = normalizeValue(req.body.employeeCode);
+    data.lastModifiedById = await getRequestUserId(req);
+    const user = await prisma.user.update({ where: { id }, data });
+    await audit(req, "INTERNAL_USER_UPDATED", id, `Información del usuario interno ${user.email} actualizada.`);
+    return res.status(200).json({ success: true, message: "Usuario interno actualizado correctamente.", user: serializeInternalUser(user) });
   } catch (error) {
-    console.error(
-      "Error obteniendo usuario interno:",
-      error
-    );
-
-    return res.status(500).json({
-      success: false,
-      message:
-        "No se pudo obtener el usuario interno."
-    });
+    if (isPrismaError(error, "P2002")) return res.status(409).json({ success: false, message: "Ya existe otro usuario con ese correo o código de empleado." });
+    return res.status(500).json({ success: false, message: "No se pudo actualizar el usuario interno." });
   }
-};
+}
 
-/*
-|--------------------------------------------------------------------------
-| POST /api/admin/internal-users
-|--------------------------------------------------------------------------
-*/
-
-const createInternalUser = async (req, res) => {
+async function changeInternalUserStatus(req, res) {
   try {
-    const firstName = String(
-      req.body.firstName || ""
-    ).trim();
-
-    const lastName = String(
-      req.body.lastName || ""
-    ).trim();
-
-    const email =
-      normalizeEmail(req.body.email);
-
-    const department =
-      normalizeValue(req.body.department);
-
-    const role =
-      normalizeValue(req.body.role);
-
-    const requestedEmployeeCode =
-      normalizeValue(
-        req.body.employeeCode
-      );
-
-    const status =
-      normalizeStatus(
-        req.body.status || "ACTIVE"
-      );
-
-    const mustChangePassword =
-      req.body.mustChangePassword !== false;
-
-    const requestedPassword =
-      String(
-        req.body.temporaryPassword ||
-        req.body.password ||
-        ""
-      );
-
-    if (
-      !firstName ||
-      !lastName ||
-      !email ||
-      !department ||
-      !role
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Nombre, apellido, correo, departamento y rol son obligatorios."
-      });
-    }
-
-    if (
-      !INTERNAL_DEPARTMENTS.includes(
-        department
-      )
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "El departamento indicado no es válido."
-      });
-    }
-
-    if (!INTERNAL_ROLES.includes(role)) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "El rol administrativo indicado no es válido."
-      });
-    }
-
-    if (!ACCOUNT_STATUSES.includes(status)) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "El estado inicial no es válido."
-      });
-    }
-
-    if (
-      role === "SUPER_ADMIN" &&
-      !actorIsSuperAdmin(req)
-    ) {
-      return res.status(403).json({
-        success: false,
-        message:
-          "Solo un Super Admin puede crear otra cuenta Super Admin."
-      });
-    }
-
-    const existingEmail =
-      await User.exists({
-        email
-      });
-
-    if (existingEmail) {
-      return res.status(409).json({
-        success: false,
-        message:
-          "Ya existe un usuario con ese correo electrónico."
-      });
-    }
-
-    const employeeCode =
-      requestedEmployeeCode ||
-      (await generateEmployeeCode(
-        department
-      ));
-
-    const existingEmployeeCode =
-      await User.exists({
-        employeeCode
-      });
-
-    if (existingEmployeeCode) {
-      return res.status(409).json({
-        success: false,
-        message:
-          "El código de empleado ya está registrado."
-      });
-    }
-
-    const roleDocument =
-      await getRoleWithPermissions(role);
-
-    if (!roleDocument) {
-      return res.status(400).json({
-        success: false,
-        message:
-          `El rol ${role} no existe o está inactivo. Ejecuta primero el seed de roles.`
-      });
-    }
-
-    const temporaryPassword =
-      requestedPassword ||
-      generateTemporaryPassword();
-
-    const passwordValidation =
-      validatePasswordComplexity(
-        temporaryPassword
-      );
-
-    if (!passwordValidation.valid) {
-      return res.status(400).json({
-        success: false,
-        message:
-          passwordValidation.message
-      });
-    }
-
-    const hashedPassword =
-      await bcrypt.hash(
-        temporaryPassword,
-        12
-      );
-
-    const rolePermissions =
-      role === "SUPER_ADMIN"
-        ? ["*"]
-        : getRolePermissionCodes(
-            roleDocument
-          );
-
-    const createdUser =
-      await User.create({
-        firstName,
-        lastName,
-        email,
-        password:
-          hashedPassword,
-
-        accountType:
-          "INTERNAL",
-
-        role,
-        department,
-        employeeCode,
-
-        permissions:
-          rolePermissions,
-
-        status,
-
-        securityLevel:
-          getSecurityLevelForRole(
-            role
-          ),
-
-        buyerEnabled:
-          false,
-
-        sellerEnabled:
-          false,
-
-        mustChangePassword,
-
-        createdBy:
-          req.user._id,
-
-        lastModifiedBy:
-          req.user._id,
-
-        isVerified:
-          true,
-
-        verificationStatus:
-          "APPROVED",
-
-        identityLevel:
-          role === "SUPER_ADMIN"
-            ? "BUSINESS"
-            : "LEVEL_1",
-
-        trustScore:
-          100,
-
-        passwordChangedAt:
-          new Date(),
-
-        passwordVersion:
-          0
-      });
-
-    await createAuditLog({
-      req,
-      action:
-        "INTERNAL_USER_CREATED",
-      targetId:
-        createdUser._id,
-      description:
-        `Usuario interno ${createdUser.email} creado con rol ${createdUser.role} y departamento ${createdUser.department}.`
-    });
-
-    return res.status(201).json({
-      success: true,
-      message:
-        "Usuario interno creado correctamente.",
-
-      user:
-        serializeInternalUser(
-          createdUser
-        ),
-
-      credentials: {
-        email:
-          createdUser.email,
-
-        temporaryPassword,
-
-        mustChangePassword:
-          createdUser.mustChangePassword
-      }
-    });
-  } catch (error) {
-    console.error(
-      "Error creando usuario interno:",
-      error
-    );
-
-    if (error.code === 11000) {
-      const duplicatedField =
-        Object.keys(
-          error.keyPattern || {}
-        )[0] || "dato";
-
-      return res.status(409).json({
-        success: false,
-        message:
-          `Ya existe un registro con el mismo ${duplicatedField}.`
-      });
-    }
-
-    if (
-      error.name ===
-      "ValidationError"
-    ) {
-      const messages =
-        Object.values(
-          error.errors
-        ).map(
-          (item) =>
-            item.message
-        );
-
-      return res.status(400).json({
-        success: false,
-        message:
-          messages.join(" ")
-      });
-    }
-
-    return res.status(500).json({
-      success: false,
-      message:
-        "No se pudo crear el usuario interno."
-    });
-  }
-};
-
-/*
-|--------------------------------------------------------------------------
-| PATCH /api/admin/internal-users/:userId
-|--------------------------------------------------------------------------
-*/
-
-const updateInternalUser = async (req, res) => {
-  try {
-    const { userId } = req.params;
-
-    if (!isValidObjectId(userId)) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "El identificador del usuario no es válido."
-      });
-    }
-
-    const user = await User.findOne({
-      _id: userId,
-      accountType: "INTERNAL"
-    });
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message:
-          "Usuario interno no encontrado."
-      });
-    }
-
-    const editableFields = [
-      "firstName",
-      "lastName",
-      "phone",
-      "country",
-      "province",
-      "city",
-      "address",
-      "language",
-      "timezone",
-      "notificationsEnabled",
-      "emailNotificationsEnabled",
-      "mustChangePassword"
-    ];
-
-    editableFields.forEach((field) => {
-      if (
-        Object.prototype.hasOwnProperty.call(
-          req.body,
-          field
-        )
-      ) {
-        user[field] =
-          req.body[field];
-      }
-    });
-
-    if (
-      Object.prototype.hasOwnProperty.call(
-        req.body,
-        "email"
-      )
-    ) {
-      const email =
-        normalizeEmail(
-          req.body.email
-        );
-
-      const existingEmail =
-        await User.exists({
-          email,
-          _id: {
-            $ne: user._id
-          }
-        });
-
-      if (existingEmail) {
-        return res.status(409).json({
-          success: false,
-          message:
-            "Ya existe otro usuario con ese correo electrónico."
-        });
-      }
-
-      user.email = email;
-    }
-
-    if (
-      Object.prototype.hasOwnProperty.call(
-        req.body,
-        "employeeCode"
-      )
-    ) {
-      const employeeCode =
-        normalizeValue(
-          req.body.employeeCode
-        );
-
-      const existingCode =
-        await User.exists({
-          employeeCode,
-          _id: {
-            $ne: user._id
-          }
-        });
-
-      if (existingCode) {
-        return res.status(409).json({
-          success: false,
-          message:
-            "Ya existe otro usuario con ese código de empleado."
-        });
-      }
-
-      user.employeeCode =
-        employeeCode;
-    }
-
-    user.lastModifiedBy =
-      req.user._id;
-
-    await user.save();
-
-    await createAuditLog({
-      req,
-      action:
-        "INTERNAL_USER_UPDATED",
-      targetId:
-        user._id,
-      description:
-        `Información del usuario interno ${user.email} actualizada.`
-    });
-
-    return res.status(200).json({
-      success: true,
-      message:
-        "Usuario interno actualizado correctamente.",
-      user:
-        serializeInternalUser(user)
-    });
-  } catch (error) {
-    console.error(
-      "Error actualizando usuario interno:",
-      error
-    );
-
-    if (
-      error.name ===
-      "ValidationError"
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          Object.values(
-            error.errors
-          )
-            .map(
-              (item) =>
-                item.message
-            )
-            .join(" ")
-      });
-    }
-
-    return res.status(500).json({
-      success: false,
-      message:
-        "No se pudo actualizar el usuario interno."
-    });
-  }
-};
-
-/*
-|--------------------------------------------------------------------------
-| PATCH /api/admin/internal-users/:userId/status
-|--------------------------------------------------------------------------
-*/
-
-const changeInternalUserStatus = async (
-  req,
-  res
-) => {
-  try {
-    const { userId } = req.params;
-
-    if (!isValidObjectId(userId)) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "El identificador del usuario no es válido."
-      });
-    }
-
-    const requestedStatus =
-      normalizeStatus(
-        req.body.status
-      );
-
-    if (
-      !ACCOUNT_STATUSES.includes(
-        requestedStatus
-      )
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "El estado solicitado no es válido."
-      });
-    }
-
-    const user = await User.findOne({
-      _id: userId,
-      accountType: "INTERNAL"
-    });
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message:
-          "Usuario interno no encontrado."
-      });
-    }
-
-    if (
-      String(user._id) ===
-        String(req.user._id) &&
-      requestedStatus !== "ACTIVE"
-    ) {
-      return res.status(409).json({
-        success: false,
-        message:
-          "No puedes suspender, bloquear o desactivar tu propia cuenta."
-      });
-    }
-
-    const protection =
-      await ensureSuperAdminCanBeModified({
-        req,
-        targetUser: user,
-        requestedStatus
-      });
-
-    if (!protection.allowed) {
-      return res
-        .status(
-          protection.statusCode
-        )
-        .json({
-          success: false,
-          message:
-            protection.message
-        });
-    }
-
-    user.status =
-      requestedStatus;
-
-    user.lastModifiedBy =
-      req.user._id;
-
-    if (
-      requestedStatus ===
-      "SUSPENDED"
-    ) {
-      user.suspensionReason =
-        String(
-          req.body.reason ||
-          "Suspendido por un administrador."
-        )
-          .trim()
-          .slice(0, 1000);
-
-      user.suspendedAt =
-        new Date();
-
-      user.suspendedBy =
-        req.user._id;
-    } else {
-      user.suspensionReason = "";
-      user.suspendedAt = null;
-      user.suspendedBy = null;
-    }
-
-    if (
-      requestedStatus ===
-      "BANNED"
-    ) {
-      user.bannedAt =
-        new Date();
-
-      user.bannedBy =
-        req.user._id;
-    } else {
-      user.bannedAt = null;
-      user.bannedBy = null;
-    }
-
-    if (
-      requestedStatus ===
-      "DELETED"
-    ) {
-      user.deletedAt =
-        new Date();
-
-      user.deletedBy =
-        req.user._id;
-
-      user.deletionReason =
-        String(
-          req.body.reason ||
-          "Cuenta desactivada administrativamente."
-        )
-          .trim()
-          .slice(0, 1000);
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Invalidar sesiones
-    |--------------------------------------------------------------------------
-    */
-
-    if (
-      requestedStatus !==
-      "ACTIVE"
-    ) {
-      user.passwordVersion =
-        Number(
-          user.passwordVersion || 0
-        ) + 1;
-
-      user.activeSessions = 0;
-    }
-
-    await user.save();
-
-    await createAuditLog({
-      req,
-      action:
-        "INTERNAL_USER_STATUS_CHANGED",
-      targetId:
-        user._id,
-      description:
-        `Estado del usuario interno ${user.email} cambiado a ${requestedStatus}.`
-    });
-
-    return res.status(200).json({
-      success: true,
-      message:
-        "Estado del usuario actualizado correctamente.",
-      user:
-        serializeInternalUser(user)
-    });
-  } catch (error) {
-    console.error(
-      "Error cambiando estado del usuario:",
-      error
-    );
-
-    return res.status(500).json({
-      success: false,
-      message:
-        "No se pudo cambiar el estado del usuario."
-    });
-  }
-};
-
-/*
-|--------------------------------------------------------------------------
-| PATCH /api/admin/internal-users/:userId/role
-|--------------------------------------------------------------------------
-*/
-
-const changeInternalUserRole = async (
-  req,
-  res
-) => {
-  try {
-    const { userId } = req.params;
-
-    if (!isValidObjectId(userId)) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "El identificador del usuario no es válido."
-      });
-    }
-
-    const requestedRole =
-      normalizeValue(
-        req.body.role
-      );
-
-    const requestedDepartment =
-      normalizeValue(
-        req.body.department
-      );
-
-    if (
-      !INTERNAL_ROLES.includes(
-        requestedRole
-      )
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "El rol solicitado no es válido."
-      });
-    }
-
-    if (
-      !INTERNAL_DEPARTMENTS.includes(
-        requestedDepartment
-      )
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "El departamento solicitado no es válido."
-      });
-    }
-
-    if (
-      requestedRole ===
-        "SUPER_ADMIN" &&
-      !actorIsSuperAdmin(req)
-    ) {
-      return res.status(403).json({
-        success: false,
-        message:
-          "Solo un Super Admin puede asignar el rol Super Admin."
-      });
-    }
-
-    const user = await User.findOne({
-      _id: userId,
-      accountType: "INTERNAL"
-    });
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message:
-          "Usuario interno no encontrado."
-      });
-    }
-
-    const protection =
-      await ensureSuperAdminCanBeModified({
-        req,
-        targetUser: user,
-        requestedRole
-      });
-
-    if (!protection.allowed) {
-      return res
-        .status(
-          protection.statusCode
-        )
-        .json({
-          success: false,
-          message:
-            protection.message
-        });
-    }
-
-    const roleDocument =
-      await getRoleWithPermissions(
-        requestedRole
-      );
-
-    if (!roleDocument) {
-      return res.status(400).json({
-        success: false,
-        message:
-          `El rol ${requestedRole} no existe o está inactivo.`
-      });
-    }
-
-    user.role =
-      requestedRole;
-
-    user.department =
-      requestedDepartment;
-
-    user.permissions =
-      requestedRole ===
-      "SUPER_ADMIN"
-        ? ["*"]
-        : getRolePermissionCodes(
-            roleDocument
-          );
-
-    user.securityLevel =
-      getSecurityLevelForRole(
-        requestedRole
-      );
-
-    user.lastModifiedBy =
-      req.user._id;
-
-    /*
-    |--------------------------------------------------------------------------
-    | Invalidar tokens anteriores
-    |--------------------------------------------------------------------------
-    */
-
-    user.passwordVersion =
-      Number(
-        user.passwordVersion || 0
-      ) + 1;
-
-    await user.save();
-
-    await createAuditLog({
-      req,
-      action:
-        "INTERNAL_USER_ROLE_CHANGED",
-      targetId:
-        user._id,
-      description:
-        `Rol de ${user.email} cambiado a ${requestedRole} y departamento ${requestedDepartment}.`
-    });
-
-    return res.status(200).json({
-      success: true,
-      message:
-        "Rol y departamento actualizados correctamente.",
-      user:
-        serializeInternalUser(user)
-    });
-  } catch (error) {
-    console.error(
-      "Error cambiando rol interno:",
-      error
-    );
-
-    return res.status(500).json({
-      success: false,
-      message:
-        "No se pudo cambiar el rol del usuario."
-    });
-  }
-};
-
-/*
-|--------------------------------------------------------------------------
-| PATCH /api/admin/internal-users/:userId/permissions
-|--------------------------------------------------------------------------
-*/
-
-const assignInternalUserPermissions = async (
-  req,
-  res
-) => {
-  try {
-    const { userId } = req.params;
-
-    if (!isValidObjectId(userId)) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "El identificador del usuario no es válido."
-      });
-    }
-
-    if (
-      !Array.isArray(
-        req.body.permissions
-      )
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Debes enviar una lista de permisos."
-      });
-    }
-
-    const requestedPermissions = [
-      ...new Set(
-        req.body.permissions
-          .map(normalizeValue)
-          .filter(Boolean)
-      )
-    ];
-
-    if (
-      requestedPermissions.includes(
-        "*"
-      ) &&
-      !actorIsSuperAdmin(req)
-    ) {
-      return res.status(403).json({
-        success: false,
-        message:
-          "Solo un Super Admin puede asignar acceso total."
-      });
-    }
-
-    const user = await User.findOne({
-      _id: userId,
-      accountType: "INTERNAL"
-    });
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message:
-          "Usuario interno no encontrado."
-      });
-    }
-
-    if (
-      user.role ===
-        "SUPER_ADMIN" &&
-      !actorIsSuperAdmin(req)
-    ) {
-      return res.status(403).json({
-        success: false,
-        message:
-          "Solo un Super Admin puede modificar permisos de otro Super Admin."
-      });
-    }
-
-    if (
-      requestedPermissions.includes("*")
-    ) {
-      user.permissions = ["*"];
-    } else {
-      const activePermissions =
-        await Permission.find({
-          code: {
-            $in: requestedPermissions
-          },
-          isActive: true
-        }).select("code");
-
-      const validPermissionCodes =
-        activePermissions.map(
-          (permission) =>
-            permission.code
-        );
-
-      const invalidPermissions =
-        requestedPermissions.filter(
-          (code) =>
-            !validPermissionCodes.includes(
-              code
-            )
-        );
-
-      if (
-        invalidPermissions.length > 0
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Uno o más permisos no existen o están inactivos.",
-          invalidPermissions
-        });
-      }
-
-      user.permissions =
-        validPermissionCodes;
-    }
-
-    user.lastModifiedBy =
-      req.user._id;
-
-    user.passwordVersion =
-      Number(
-        user.passwordVersion || 0
-      ) + 1;
-
-    await user.save();
-
-    await createAuditLog({
-      req,
-      action:
-        "INTERNAL_USER_PERMISSIONS_CHANGED",
-      targetId:
-        user._id,
-      description:
-        `Permisos administrativos de ${user.email} actualizados.`
-    });
-
-    return res.status(200).json({
-      success: true,
-      message:
-        "Permisos actualizados correctamente.",
-      user:
-        serializeInternalUser(user)
-    });
-  } catch (error) {
-    console.error(
-      "Error asignando permisos:",
-      error
-    );
-
-    return res.status(500).json({
-      success: false,
-      message:
-        "No se pudieron actualizar los permisos."
-    });
-  }
-};
-
-/*
-|--------------------------------------------------------------------------
-| POST /api/admin/internal-users/:userId/reset-password
-|--------------------------------------------------------------------------
-*/
-
-const resetInternalUserPassword = async (
-  req,
-  res
-) => {
-  try {
-    const { userId } = req.params;
-
-    if (!isValidObjectId(userId)) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "El identificador del usuario no es válido."
-      });
-    }
-
-    const user = await User.findOne({
-      _id: userId,
-      accountType: "INTERNAL"
-    }).select("+password");
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message:
-          "Usuario interno no encontrado."
-      });
-    }
-
-    if (
-      user.role ===
-        "SUPER_ADMIN" &&
-      !actorIsSuperAdmin(req)
-    ) {
-      return res.status(403).json({
-        success: false,
-        message:
-          "Solo un Super Admin puede restablecer la contraseña de otro Super Admin."
-      });
-    }
-
-    const temporaryPassword =
-      String(
-        req.body.temporaryPassword ||
-        ""
-      ) ||
-      generateTemporaryPassword();
-
-    const validation =
-      validatePasswordComplexity(
-        temporaryPassword
-      );
-
-    if (!validation.valid) {
-      return res.status(400).json({
-        success: false,
-        message:
-          validation.message
-      });
-    }
-
-    user.password =
-      await bcrypt.hash(
-        temporaryPassword,
-        12
-      );
-
-    user.mustChangePassword =
-      req.body.mustChangePassword !== false;
-
-    user.passwordChangedAt =
-      new Date();
-
-    user.passwordVersion =
-      Number(
-        user.passwordVersion || 0
-      ) + 1;
-
-    user.failedLoginAttempts = 0;
-    user.accountLockedUntil = null;
-    user.activeSessions = 0;
-
-    user.lastModifiedBy =
-      req.user._id;
-
-    await user.save();
-
-    await createAuditLog({
-      req,
-      action:
-        "INTERNAL_USER_PASSWORD_RESET",
-      targetId:
-        user._id,
-      description:
-        `Contraseña administrativa de ${user.email} restablecida.`
-    });
-
-    return res.status(200).json({
-      success: true,
-      message:
-        "Contraseña restablecida correctamente.",
-
-      credentials: {
-        email:
-          user.email,
-
-        temporaryPassword,
-
-        mustChangePassword:
-          user.mustChangePassword
-      }
-    });
-  } catch (error) {
-    console.error(
-      "Error restableciendo contraseña:",
-      error
-    );
-
-    return res.status(500).json({
-      success: false,
-      message:
-        "No se pudo restablecer la contraseña."
-    });
-  }
-};
-
-/*
-|--------------------------------------------------------------------------
-| GET /api/admin/internal-users/:userId/activity
-|--------------------------------------------------------------------------
-*/
-
-const getInternalUserActivity = async (
-  req,
-  res
-) => {
-  try {
-    const { userId } = req.params;
-
-    if (!isValidObjectId(userId)) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "El identificador del usuario no es válido."
-      });
-    }
-
-    const userExists =
-      await User.exists({
-        _id: userId,
-        accountType: "INTERNAL"
-      });
-
-    if (!userExists) {
-      return res.status(404).json({
-        success: false,
-        message:
-          "Usuario interno no encontrado."
-      });
-    }
-
-    const page = Math.max(
-      Number(req.query.page) || 1,
-      1
-    );
-
-    const limit = Math.min(
-      Math.max(
-        Number(req.query.limit) || 20,
-        1
-      ),
-      100
-    );
-
-    const skip =
-      (page - 1) * limit;
-
-    const query = {
-      targetType: "USER",
-      targetId:
-        String(userId)
+    const id = parsePositiveInt(req.params.userId);
+    const status = normalizeStatus(req.body?.status);
+    if (!id) return res.status(400).json({ success: false, message: "El identificador del usuario no es válido." });
+    if (!ACCOUNT_STATUSES.includes(status)) return res.status(400).json({ success: false, message: "El estado solicitado no es válido." });
+    const current = await prisma.user.findFirst({ where: { id, accountType: "INTERNAL" } });
+    if (!current) return res.status(404).json({ success: false, message: "Usuario interno no encontrado." });
+    const actorId = await getRequestUserId(req);
+    if (id === actorId && status !== "ACTIVE") return res.status(409).json({ success: false, message: "No puedes suspender, bloquear o desactivar tu propia cuenta." });
+    const protection = await protectSuperAdmin(req, current, null, status);
+    if (protection) return res.status(protection.includes("último") ? 409 : 403).json({ success: false, message: protection });
+    const now = new Date();
+    const data = {
+      status,
+      lastModifiedById: actorId,
+      suspensionReason: status === "SUSPENDED" ? String(req.body?.reason || "Suspendido por un administrador.").trim().slice(0, 1000) : "",
+      suspendedAt: status === "SUSPENDED" ? now : null,
+      suspendedById: status === "SUSPENDED" ? actorId : null,
+      bannedAt: status === "BANNED" ? now : null,
+      bannedById: status === "BANNED" ? actorId : null,
+      ...(status === "DELETED" ? { deletedAt: now, deletedById: actorId, deletionReason: String(req.body?.reason || "Cuenta desactivada administrativamente.").trim().slice(0, 1000) } : {}),
+      ...(status !== "ACTIVE" ? { passwordVersion: { increment: 1 }, activeSessions: 0 } : {})
     };
-
-    const [logs, total] =
-      await Promise.all([
-        AuditLog.find(query)
-          .populate(
-            "actor",
-            "firstName lastName email role employeeCode"
-          )
-          .sort({
-            createdAt: -1
-          })
-          .skip(skip)
-          .limit(limit),
-
-        AuditLog.countDocuments(
-          query
-        )
-      ]);
-
-    return res.status(200).json({
-      success: true,
-      activity: logs,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages:
-          Math.ceil(total / limit)
-      }
-    });
+    const user = await prisma.user.update({ where: { id }, data });
+    await audit(req, "INTERNAL_USER_STATUS_CHANGED", id, `Estado del usuario interno ${user.email} cambiado a ${status}.`);
+    return res.status(200).json({ success: true, message: "Estado del usuario actualizado correctamente.", user: serializeInternalUser(user) });
   } catch (error) {
-    console.error(
-      "Error obteniendo actividad:",
-      error
-    );
-
-    return res.status(500).json({
-      success: false,
-      message:
-        "No se pudo consultar la actividad del usuario."
-    });
+    return res.status(500).json({ success: false, message: "No se pudo cambiar el estado del usuario." });
   }
-};
+}
 
-module.exports = {
-  getInternalUsers,
-  getInternalUserById,
-  createInternalUser,
-  updateInternalUser,
-  changeInternalUserStatus,
-  changeInternalUserRole,
-  assignInternalUserPermissions,
-  resetInternalUserPassword,
-  getInternalUserActivity
-};
+async function changeInternalUserRole(req, res) {
+  try {
+    const id = parsePositiveInt(req.params.userId);
+    const role = normalizeValue(req.body?.role);
+    const department = normalizeValue(req.body?.department);
+    if (!id) return res.status(400).json({ success: false, message: "El identificador del usuario no es válido." });
+    if (!INTERNAL_ROLES.includes(role)) return res.status(400).json({ success: false, message: "El rol solicitado no es válido." });
+    if (!INTERNAL_DEPARTMENTS.includes(department)) return res.status(400).json({ success: false, message: "El departamento solicitado no es válido." });
+    if (role === "SUPER_ADMIN" && !actorIsSuperAdmin(req)) return res.status(403).json({ success: false, message: "Solo un Super Admin puede asignar ese rol." });
+    const current = await prisma.user.findFirst({ where: { id, accountType: "INTERNAL" } });
+    if (!current) return res.status(404).json({ success: false, message: "Usuario interno no encontrado." });
+    const protection = await protectSuperAdmin(req, current, role, null);
+    if (protection) return res.status(protection.includes("último") ? 409 : 403).json({ success: false, message: protection });
+    const user = await prisma.user.update({
+      where: { id },
+      data: { role, department, departments: [department], permissions: rolePermissions(role), securityLevel: getSecurityLevelForRole(role), lastModifiedById: await getRequestUserId(req), passwordVersion: { increment: 1 } }
+    });
+    await audit(req, "INTERNAL_USER_ROLE_CHANGED", id, `Rol de ${user.email} cambiado a ${role} y departamento ${department}.`);
+    return res.status(200).json({ success: true, message: "Rol y departamento actualizados correctamente.", user: serializeInternalUser(user) });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "No se pudo cambiar el rol del usuario." });
+  }
+}
+
+async function assignInternalUserPermissions(req, res) {
+  try {
+    const id = parsePositiveInt(req.params.userId);
+    if (!id) return res.status(400).json({ success: false, message: "El identificador del usuario no es válido." });
+    if (!Array.isArray(req.body?.permissions)) return res.status(400).json({ success: false, message: "Debes enviar una lista de permisos." });
+    const permissions = [...new Set(req.body.permissions.map(normalizeValue).filter(Boolean))];
+    if (permissions.includes("*") && !actorIsSuperAdmin(req)) return res.status(403).json({ success: false, message: "Solo un Super Admin puede asignar acceso total." });
+    const current = await prisma.user.findFirst({ where: { id, accountType: "INTERNAL" } });
+    if (!current) return res.status(404).json({ success: false, message: "Usuario interno no encontrado." });
+    if (current.role === "SUPER_ADMIN" && !actorIsSuperAdmin(req)) return res.status(403).json({ success: false, message: "Solo un Super Admin puede modificar permisos de otro Super Admin." });
+    const user = await prisma.user.update({ where: { id }, data: { permissions, lastModifiedById: await getRequestUserId(req), passwordVersion: { increment: 1 } } });
+    await audit(req, "INTERNAL_USER_PERMISSIONS_CHANGED", id, `Permisos administrativos de ${user.email} actualizados.`);
+    return res.status(200).json({ success: true, message: "Permisos actualizados correctamente.", user: serializeInternalUser(user) });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "No se pudieron actualizar los permisos." });
+  }
+}
+
+async function resetInternalUserPassword(req, res) {
+  try {
+    const id = parsePositiveInt(req.params.userId);
+    if (!id) return res.status(400).json({ success: false, message: "El identificador del usuario no es válido." });
+    const current = await prisma.user.findFirst({ where: { id, accountType: "INTERNAL" } });
+    if (!current) return res.status(404).json({ success: false, message: "Usuario interno no encontrado." });
+    if (current.role === "SUPER_ADMIN" && !actorIsSuperAdmin(req)) return res.status(403).json({ success: false, message: "Solo un Super Admin puede restablecer la contraseña de otro Super Admin." });
+    const temporaryPassword = String(req.body?.temporaryPassword || "") || generateTemporaryPassword();
+    const passwordError = validatePasswordComplexity(temporaryPassword);
+    if (passwordError) return res.status(400).json({ success: false, message: passwordError });
+    const user = await prisma.user.update({
+      where: { id },
+      data: { password: await bcrypt.hash(temporaryPassword, 12), mustChangePassword: req.body?.mustChangePassword !== false, passwordChangedAt: new Date(), passwordVersion: { increment: 1 }, failedLoginAttempts: 0, accountLockedUntil: null, activeSessions: 0, lastModifiedById: await getRequestUserId(req) }
+    });
+    await audit(req, "INTERNAL_USER_PASSWORD_RESET", id, `Contraseña administrativa de ${user.email} restablecida.`);
+    return res.status(200).json({ success: true, message: "Contraseña restablecida correctamente.", credentials: { email: user.email, temporaryPassword, mustChangePassword: user.mustChangePassword } });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "No se pudo restablecer la contraseña." });
+  }
+}
+
+async function getInternalUserActivity(req, res) {
+  try {
+    const id = parsePositiveInt(req.params.userId);
+    if (!id) return res.status(400).json({ success: false, message: "El identificador del usuario no es válido." });
+    const exists = await prisma.user.findFirst({ where: { id, accountType: "INTERNAL" }, select: { id: true } });
+    if (!exists) return res.status(404).json({ success: false, message: "Usuario interno no encontrado." });
+    const page = Math.max(Number(req.query.page) || 1, 1);
+    const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 100);
+    const where = { entityType: "USER", entityId: String(id) };
+    const [logs, total] = await Promise.all([
+      prisma.auditLog.findMany({ where, include: { actor: { select: { id: true, firstName: true, lastName: true, email: true, role: true, employeeCode: true } } }, orderBy: { createdAt: "desc" }, skip: (page - 1) * limit, take: limit }),
+      prisma.auditLog.count({ where })
+    ]);
+    const activity = logs.map((log) => ({ ...log, _id: String(log.id), actor: log.actor ? { ...log.actor, _id: String(log.actor.id) } : null, targetType: log.entityType, targetId: log.entityId }));
+    return res.status(200).json({ success: true, activity, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "No se pudo consultar la actividad del usuario." });
+  }
+}
+
+module.exports = { getInternalUsers, getInternalUserById, createInternalUser, updateInternalUser, changeInternalUserStatus, changeInternalUserRole, assignInternalUserPermissions, resetInternalUserPassword, getInternalUserActivity };

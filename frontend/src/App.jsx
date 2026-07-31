@@ -10,6 +10,7 @@ import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Dashboard from "./pages/Dashboard";
 import Profile from "./pages/Profile";
+import PublicProfile from "./pages/PublicProfile";
 import Marketplace from "./pages/Marketplace";
 import NewProduct from "./pages/NewProduct";
 import ProductDetails from "./pages/ProductDetails";
@@ -20,6 +21,7 @@ import Sales from "./pages/Sales";
 import Favorites from "./pages/Favorites";
 import Messages from "./pages/Messages";
 import Disputes from "./pages/Disputes";
+import Notifications from "./pages/Notifications";
 import Settings from "./pages/Settings";
 import ProductHistory from "./pages/ProductHistory";
 import CompleteProfile from "./pages/CompleteProfile";
@@ -30,7 +32,6 @@ import OrderTracking from "./pages/OrderTracking";
 
 import AdminLogin from "./pages/admin/auth/AdminLogin";
 import AdminAreaSelector from "./pages/admin/AdminAreaSelector";
-import AdminModulePlaceholder from "./pages/admin/AdminModulePlaceholder";
 import AdminDashboard from "./pages/admin/dashboard/AdminDashboard";
 import WarehouseDashboard from "./pages/admin/warehouse/WarehouseDashboard";
 import DeliveryDashboard from "./pages/admin/delivery/DeliveryDashboard";
@@ -39,7 +40,8 @@ import AuditDashboard from "./pages/admin/audit/AuditDashboard";
 import VerificationDashboard from "./pages/admin/verification/VerificationDashboard"; 
 import FinanceDashboard from "./pages/admin/finance/FinanceDashboard";
 import SupportDashboard from "./pages/admin/support/SupportDashboard";
-
+import ModerationDashboard from "./pages/admin/moderation/ModerationDashboard";
+import SecurityDashboard from "./pages/admin/security/SecurityDashboard";
 import InternalUsers from "./pages/admin/internalUsers/InternalUsers";
 import SystemSettings from "./pages/admin/systemSettings/SystemSettings";
 
@@ -97,6 +99,15 @@ function App() {
           element={
             <ProtectedRoute>
               <Profile />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/users/:id"
+          element={
+            <ProtectedRoute>
+              <PublicProfile />
             </ProtectedRoute>
           }
         />
@@ -223,6 +234,15 @@ function App() {
           element={
             <ProtectedRoute>
               <Disputes />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/notifications"
+          element={
+            <ProtectedRoute>
+              <Notifications />
             </ProtectedRoute>
           }
         />
@@ -368,11 +388,15 @@ function App() {
   element={
     <AdminProtectedRoute
       allowedRoles={[
+        "SUPER_ADMIN",
+        "SENIOR_ADMIN",
+        "ADMIN",
         "FINANCE_MANAGER",
         "FINANCE_AGENT"
       ]}
       allowedDepartments={[
-        "FINANCE"
+        "FINANCE",
+        "ADMINISTRATION"
       ]}
     >
       <FinanceDashboard />
@@ -394,6 +418,14 @@ function App() {
       <SupportDashboard />
     </AdminProtectedRoute>
   }
+/>
+<Route
+  path="/admin/moderation"
+  element={<ModerationDashboard />}
+/>
+<Route
+  path="/admin/security"
+  element={<SecurityDashboard />}
 />
 
         <Route
@@ -436,192 +468,46 @@ function App() {
             ALMACÉN
         ====================================================== */}
 
-        <Route
-          path="/admin/warehouse"
-          element={
-            <AdminProtectedRoute
-              allowedDepartments={[
-                "WAREHOUSE"
-              ]}
-            >
-              <AdminModulePlaceholder
-                title="Dashboard de Almacén"
-                description="Recepción, inspección, inventario, productos dañados y despacho de órdenes."
-                icon="🏬"
-              />
-            </AdminProtectedRoute>
-          }
-        />
 
-        {/* =====================================================
+{/* =====================================================
             DELIVERY
         ====================================================== */}
 
-        <Route
-          path="/admin/delivery"
-          element={
-            <AdminProtectedRoute
-              allowedDepartments={[
-                "DELIVERY"
-              ]}
-            >
-              <AdminModulePlaceholder
-                title="Dashboard de Delivery"
-                description="Asignaciones, repartidores, rutas, entregas, PIN e incidencias."
-                icon="🚚"
-              />
-            </AdminProtectedRoute>
-          }
-        />
 
-        {/* =====================================================
+{/* =====================================================
             DISPUTAS
         ====================================================== */}
 
-        <Route
-          path="/admin/disputes"
-          element={
-            <AdminProtectedRoute
-              allowedDepartments={[
-                "DISPUTES"
-              ]}
-            >
-              <AdminModulePlaceholder
-                title="Dashboard de Disputas"
-                description="Casos abiertos, evidencias, investigación, escalamiento y resolución."
-                icon="⚖️"
-              />
-            </AdminProtectedRoute>
-          }
-        />
 
-        {/* =====================================================
+{/* =====================================================
             AUDITORÍA
         ====================================================== */}
 
-        <Route
-          path="/admin/audit"
-          element={
-            <AdminProtectedRoute
-              allowedDepartments={[
-                "AUDIT"
-              ]}
-            >
-              <AdminModulePlaceholder
-                title="Dashboard de Auditoría"
-                description="Logs, trazabilidad, cambios administrativos y revisión de operaciones."
-                icon="📋"
-              />
-            </AdminProtectedRoute>
-          }
-        />
 
-        {/* =====================================================
+{/* =====================================================
             FINANZAS
         ====================================================== */}
 
-        <Route
-          path="/admin/finance"
-          element={
-            <AdminProtectedRoute
-              allowedDepartments={[
-                "FINANCE"
-              ]}
-            >
-              <AdminModulePlaceholder
-                title="Dashboard de Finanzas"
-                description="Pagos, escrow, comisiones, liberación de fondos y reembolsos."
-                icon="💰"
-              />
-            </AdminProtectedRoute>
-          }
-        />
 
-        {/* =====================================================
+{/* =====================================================
             SOPORTE
         ====================================================== */}
 
-        <Route
-          path="/admin/support"
-          element={
-            <AdminProtectedRoute
-              allowedDepartments={[
-                "SUPPORT"
-              ]}
-            >
-              <AdminModulePlaceholder
-                title="Dashboard de Soporte"
-                description="Tickets, atención al usuario, seguimiento y escalamiento de casos."
-                icon="🎧"
-              />
-            </AdminProtectedRoute>
-          }
-        />
 
-        {/* =====================================================
+{/* =====================================================
             MODERACIÓN
         ====================================================== */}
 
-        <Route
-          path="/admin/moderation"
-          element={
-            <AdminProtectedRoute
-              allowedDepartments={[
-                "MODERATION"
-              ]}
-            >
-              <AdminModulePlaceholder
-                title="Dashboard de Moderación"
-                description="Productos reportados, usuarios, publicaciones y contenido sospechoso."
-                icon="🚩"
-              />
-            </AdminProtectedRoute>
-          }
-        />
 
-        {/* =====================================================
+{/* =====================================================
             SEGURIDAD
         ====================================================== */}
 
-        <Route
-          path="/admin/security"
-          element={
-            <AdminProtectedRoute
-              allowedDepartments={[
-                "SECURITY"
-              ]}
-            >
-              <AdminModulePlaceholder
-                title="Dashboard de Seguridad"
-                description="Sesiones, intentos fallidos, alertas, IP bloqueadas y accesos sospechosos."
-                icon="🔐"
-              />
-            </AdminProtectedRoute>
-          }
-        />
 
-        {/* =====================================================
+{/* =====================================================
             VERIFICACIÓN / KYC
             La página real se conectará en la fase correspondiente.
         ====================================================== */}
-
-        <Route
-          path="/admin/verification"
-          element={
-            <AdminProtectedRoute
-              allowedDepartments={[
-                "VERIFICATION",
-                "ADMINISTRATION"
-              ]}
-            >
-              <AdminModulePlaceholder
-                title="Centro de Verificación y KYC"
-                description="Revisión de cédulas, fotografía de perfil, validación de identidad y aprobación de cuentas."
-                icon="🪪"
-              />
-            </AdminProtectedRoute>
-          }
-        />
 
         {/* =====================================================
             RUTAS ADMINISTRATIVAS TODAVÍA NO CREADAS

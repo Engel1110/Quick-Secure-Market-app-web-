@@ -1,3 +1,4 @@
+import { API_BASE_URL as QSM_RUNTIME_API_URL } from "../config/runtime";
 /*
 |--------------------------------------------------------------------------
 | Utilidades de mensajería QSM
@@ -44,12 +45,13 @@ export const normalizeId = (
   value
 ) => {
   return String(
-    value?._id ||
-      value?.id ||
-      value?.userId ||
-      value ||
+    value?.prismaId ??
+      value?.userId ??
+      value?.id ??
+      value?._id ??
+      value ??
       ""
-  );
+  ).trim();
 };
 
 export const formatUser = (
@@ -256,8 +258,7 @@ export const resolveMediaUrl = (
   }
 
   const apiUrl = String(
-    import.meta.env.VITE_API_URL ||
-      "http://localhost:5000/api"
+    QSM_RUNTIME_API_URL
   )
     .trim()
     .replace(/\/+$/, "");

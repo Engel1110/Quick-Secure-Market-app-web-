@@ -1,147 +1,79 @@
-const VehicleReport = require("../models/VehicleReport");
+const { prisma, getRequestUserId, parsePositiveInt } = require("../utils/prismaCompat");
 
-const analyzeVehicleRisk = (data) => {
-  let score = 90;
-  let riskLevel = "LOW";
-  let reasons = [];
+function generateVehicleScore(report) {
+  let score = 100;
+  if (report.accidentReported) score -= 25;
+  if (report.salvageTitle) score -= 40;
+  if (Number(report.ownersCount || 0) > 3) score -= 10;
+  if (String(report.mileageStatus || "").toUpperCase() !== "NORMAL") score -= 15;
+  return Math.max(score, 0);
+}
 
-  if (data.accidentReported) {
-    score -= 25;
-    reasons.push("El vehículo tiene accidentes reportados.");
-  }
+function riskFromScore(score) {
+  if (score >= 80) return "LOW";
+  if (score >= 60) return "MEDIUM";
+  return "HIGH";
+}
 
-  if (data.salvageTitle) {
-    score -= 40;
-    reasons.push("El vehículo tiene historial salvage.");
-  }
-
-  if (data.mileageStatus === "INCONSISTENT") {
-    score -= 30;
-    reasons.push("El millaje presenta inconsistencias.");
-  }
-
-  if (data.ownersCount >= 4) {
-    score -= 10;
-    reasons.push("El vehículo tiene múltiples dueños registrados.");
-  }
-
-  if (score < 0) score = 0;
-
-  if (score >= 80) riskLevel = "LOW";
-  else if (score >= 60) riskLevel = "MEDIUM";
-  else if (score >= 35) riskLevel = "HIGH";
-  else riskLevel = "CRITICAL";
-
+async function mockCarfaxLookup(vin) {
+  const suffix = String(vin || "").slice(-1);
+  const number = Number.parseInt(suffix, 16);
+  const seed = Number.isFinite(number) ? number : 1;
   return {
-    vehicleScore: score,
-    riskLevel,
-    reportSummary: reasons.length
-      ? reasons.join(" ")
-      : "Vehículo sin señales críticas en el reporte."
+    carfaxStatus: "COMPLETED",
+    accidentReported: seed % 7 === 0,
+    salvageTitle: seed % 13 === 0,
+    ownersCount: (seed % 4) + 1,
+    mileageStatus: seed % 9 === 0 ? "INCONSISTENT" : "NORMAL"
   };
-};
+}
 
-const mockCarfaxLookup = async (vin) => {
-  return {
-    vin,
-    accidentReported: false,
-    salvageTitle: false,
-    ownersCount: 2,
-    mileageStatus: "CONSISTENT",
-    carfaxStatus: "FOUND",
-    rawCarfaxData: {
-      source: "CARFAX_DEMO",
-      note: "Este es un reporte demo. La integración real requiere API Key de CARFAX."
-    }
-  };
-};
+function serialize(report) {
+  return { ...report, _id: String(report.id), seller: report.sellerId };
+}
 
-const createVehicleReport = async (req, res) => {
+async function createVehicleReport(req, res) {
   try {
-    const { vin, plate, brand, model, year } = req.body;
+    const sellerId = await getRequestUserId(req);
+    if (!sellerId) return res.status(401).json({ success: false, message: "Usuario no autenticado." });
+    const body = req.body || {};
+    const vin = String(body.vin || "").trim().toUpperCase();
+    if (vin.length < 8) return res.status(400).json({ success: false, message: "El VIN no es válido." });
 
-    if (!vin) {
-      return res.status(400).json({
-        message: "El VIN es obligatorio"
-      });
-    }
-
-    if (vin.length !== 17) {
-      return res.status(400).json({
-        message: "El VIN debe tener 17 caracteres"
-      });
-    }
-
-    const carfaxData = await mockCarfaxLookup(vin);
-
-    const analysis = analyzeVehicleRisk(carfaxData);
-
-    const report = await VehicleReport.create({
-      vin,
-      plate,
-      brand,
-      model,
-      year,
-      seller: req.user._id,
-      carfaxStatus: carfaxData.carfaxStatus,
-      accidentReported: carfaxData.accidentReported,
-      salvageTitle: carfaxData.salvageTitle,
-      ownersCount: carfaxData.ownersCount,
-      mileageStatus: carfaxData.mileageStatus,
-      vehicleScore: analysis.vehicleScore,
-      riskLevel: analysis.riskLevel,
-      reportSummary: analysis.reportSummary,
-      rawCarfaxData: carfaxData.rawCarfaxData
+    const lookup = await mockCarfaxLookup(vin);
+    const vehicleScore = generateVehicleScore(lookup);
+    const report = await prisma.vehicleReport.create({
+      data: {
+        sellerId,
+        vin,
+        plate: String(body.plate || "").trim().toUpperCase(),
+        brand: String(body.brand || "").trim(),
+        model: String(body.model || "").trim(),
+        year: parsePositiveInt(body.year),
+        ...lookup,
+        vehicleScore,
+        riskLevel: riskFromScore(vehicleScore),
+        reportSummary: vehicleScore >= 80 ? "Vehículo con riesgo bajo." : vehicleScore >= 60 ? "Vehículo con señales que requieren revisión." : "Vehículo con riesgo elevado.",
+        rawCarfaxData: lookup
+      }
     });
-
-    res.status(201).json({
-      message: "Reporte vehicular creado correctamente",
-      resultado: {
-        vin: report.vin,
-        puntajeVehiculo: report.vehicleScore,
-        nivelDeRiesgo:
-          report.riskLevel === "LOW"
-            ? "Bajo"
-            : report.riskLevel === "MEDIUM"
-            ? "Medio"
-            : report.riskLevel === "HIGH"
-            ? "Alto"
-            : "Crítico",
-        accidenteReportado: report.accidentReported,
-        salvage: report.salvageTitle,
-        cantidadDeDueños: report.ownersCount,
-        estadoMillaje: report.mileageStatus,
-        resumen: report.reportSummary
-      },
-      report
-    });
+    return res.status(201).json({ success: true, message: "Reporte vehicular generado correctamente.", report: serialize(report) });
   } catch (error) {
-    res.status(500).json({
-      message: "Error creando reporte vehicular",
-      error: error.message
-    });
+    console.error("Error creando reporte vehicular:", error);
+    return res.status(500).json({ success: false, message: "No se pudo crear el reporte vehicular.", error: error.message });
   }
-};
+}
 
-const getMyVehicleReports = async (req, res) => {
+async function getMyVehicleReports(req, res) {
   try {
-    const reports = await VehicleReport.find({ seller: req.user._id })
-      .sort({ createdAt: -1 });
-
-    res.json({
-      message: "Reportes vehiculares obtenidos correctamente",
-      count: reports.length,
-      reports
-    });
+    const sellerId = await getRequestUserId(req);
+    if (!sellerId) return res.status(401).json({ success: false, message: "Usuario no autenticado." });
+    const reports = await prisma.vehicleReport.findMany({ where: { sellerId }, orderBy: { createdAt: "desc" } });
+    return res.json({ success: true, count: reports.length, reports: reports.map(serialize) });
   } catch (error) {
-    res.status(500).json({
-      message: "Error obteniendo reportes vehiculares",
-      error: error.message
-    });
+    console.error("Error obteniendo reportes vehiculares:", error);
+    return res.status(500).json({ success: false, message: "No se pudieron obtener los reportes vehiculares." });
   }
-};
+}
 
-module.exports = {
-  createVehicleReport,
-  getMyVehicleReports
-};
+module.exports = { createVehicleReport, getMyVehicleReports };

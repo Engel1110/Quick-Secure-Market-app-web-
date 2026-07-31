@@ -1,9 +1,14 @@
 // backend/src/services/messages/message.service.js
+// QSM Messenger core migrated to Prisma/PostgreSQL.
 
-const Message = require("../../models/Message");
-const Conversation = require("../../models/Conversation");
-const FraudAlert = require("../../models/FraudAlert");
+const fs = require("fs");
+const path = require("path");
 
+const prisma = require("../../utils/prisma");
+
+const {
+  signPrivateReferencesDeep
+} = require("../storage.service");
 const {
   analyzeMessageSecurity
 } = require("./messageSecurity.service");
@@ -14,14 +19,12 @@ const {
 
 const {
   ALLOWED_MESSAGE_TYPES,
-  isValidObjectId,
   sanitizeText,
-  normalizeAttachments,
-  toggleObjectIdInArray,
-  populateMessage
+  normalizeAttachments
 } = require("../../utils/messages/messageController.utils");
 
 const {
+  getConversationRoom,
   emitNewMessage,
   emitMessageUpdated,
   emitMessageDeleted,
@@ -29,1346 +32,1585 @@ const {
   emitConversationUpdated
 } = require("../../socket/message.socket");
 
-const badRequest = (
-  message,
-  statusCode = 400
-) => {
+const mapsPath = path.join(
+  __dirname,
+  "../../../RECOVERY_IMPORT_MAPS.json"
+);
+
+const readMaps = () => {
+  try {
+    if (!fs.existsSync(mapsPath)) {
+      return {};
+    }
+
+    return JSON.parse(
+      fs.readFileSync(mapsPath, "utf8")
+        .replace(/^\uFEFF/, "")
+    );
+  } catch (error) {
+    console.warn(
+      "No se pudieron leer los mapas de recuperación del Messenger:",
+      error.message
+    );
+
+    return {};
+  }
+};
+
+const maps = readMaps();
+
+const invertMap = (source = {}) =>
+  Object.fromEntries(
+    Object.entries(source).map(
+      ([legacyId, prismaId]) => [String(prismaId), legacyId]
+    )
+  );
+
+const inverseUserMap = invertMap(maps.userMap);
+
+const badRequest = (message, statusCode = 400) => {
   const error = new Error(message);
   error.statusCode = statusCode;
   throw error;
 };
 
-const ensureUserId = (userId) => {
-  if (
-    !userId ||
-    !isValidObjectId(userId)
-  ) {
-    badRequest(
-      "Usuario autenticado no válido.",
-      401
-    );
+const normalizeReference = (value) => {
+  if (value === null || value === undefined) {
+    return "";
   }
+
+  if (typeof value === "object") {
+    /*
+     * MongoDB ObjectId.
+     */
+    if (
+      typeof value.toHexString ===
+      "function"
+    ) {
+      return String(
+        value.toHexString()
+      ).trim();
+    }
+
+    /*
+     * Buffer interno de algunos ObjectId.
+     */
+    if (Buffer.isBuffer(value)) {
+      return value.toString("hex");
+    }
+
+    const nestedReference =
+      value._id ??
+      value.id ??
+      value.userId;
+
+    if (
+      nestedReference !== undefined &&
+      nestedReference !== null &&
+      nestedReference !== value
+    ) {
+      return normalizeReference(
+        nestedReference
+      );
+    }
+  }
+
+  const normalized =
+    String(value).trim();
+
+  return normalized ===
+    "[object Object]"
+      ? ""
+      : normalized;
 };
 
-const ensureConversationId = (
-  conversationId
-) => {
-  if (
-    !conversationId ||
-    !isValidObjectId(conversationId)
-  ) {
+const parsePositiveInt = (value) => {
+  const text = normalizeReference(value);
+
+  if (!/^\d+$/.test(text)) {
+    return null;
+  }
+
+  const number = Number(text);
+
+  return Number.isSafeInteger(number) && number > 0
+    ? number
+    : null;
+};
+
+const resolveMappedId = (map = {}, value) => {
+  const numericId = parsePositiveInt(value);
+
+  if (numericId) {
+    return numericId;
+  }
+
+  const legacyId = normalizeReference(value);
+  const mapped = Number(map?.[legacyId]);
+
+  return Number.isSafeInteger(mapped) && mapped > 0
+    ? mapped
+    : null;
+};
+
+const resolveConversationId = (value) =>
+  resolveMappedId(maps.conversationMap, value);
+
+const resolveMessageId = (value) =>
+  resolveMappedId(maps.messageMap, value);
+
+const resolveProductId = (value) =>
+  resolveMappedId(maps.productMap, value);
+
+const resolveOrderId = (value) =>
+  resolveMappedId(maps.orderMap, value);
+
+const userResolutionCache = new Map();
+
+const resolvePrismaUserId = async (userReference) => {
+  const reference =
+    userReference && typeof userReference === "object"
+      ? userReference
+      : { id: userReference };
+
+  const rawId = normalizeReference(
+    reference.id ??
+    reference._id ??
+    reference.userId ??
+    userReference
+  );
+
+  const directEmail = String(reference.email || "")
+    .trim()
+    .toLowerCase();
+
+  const cacheKey = directEmail || rawId;
+
+  if (cacheKey && userResolutionCache.has(cacheKey)) {
+    return userResolutionCache.get(cacheKey);
+  }
+
+  const numericId = parsePositiveInt(rawId);
+
+  if (numericId) {
+    const exists = await prisma.user.findUnique({
+      where: { id: numericId },
+      select: { id: true }
+    });
+
+    if (exists) {
+      userResolutionCache.set(cacheKey, exists.id);
+      return exists.id;
+    }
+  }
+
+  const mappedId = resolveMappedId(maps.userMap, rawId);
+
+  if (mappedId) {
+    const exists = await prisma.user.findUnique({
+      where: { id: mappedId },
+      select: { id: true }
+    });
+
+    if (exists) {
+      userResolutionCache.set(cacheKey, exists.id);
+      return exists.id;
+    }
+  }
+
+  if (directEmail) {
+    const byEmail = await prisma.user.findUnique({
+      where: { email: directEmail },
+      select: { id: true }
+    });
+
+    if (byEmail) {
+      userResolutionCache.set(cacheKey, byEmail.id);
+      return byEmail.id;
+    }
+  }
+
+  if (rawId) {
+    const byLegacyId = await prisma.user.findUnique({
+      where: { legacyMongoId: rawId },
+      select: { id: true }
+    });
+
+    if (byLegacyId) {
+      userResolutionCache.set(cacheKey, byLegacyId.id);
+      return byLegacyId.id;
+    }
+  }
+
+  return null;
+};
+
+const ensureUserId = async (userReference) => {
+  const userId = await resolvePrismaUserId(userReference);
+
+  if (!userId) {
+    badRequest("Usuario autenticado no válido.", 401);
+  }
+
+  return userId;
+};
+
+const ensureConversationId = (value) => {
+  const conversationId = resolveConversationId(value);
+
+  if (!conversationId) {
     badRequest(
       "conversationId es obligatorio y debe ser válido."
     );
   }
+
+  return conversationId;
 };
 
-const ensureMessageId = (messageId) => {
-  if (
-    !messageId ||
-    !isValidObjectId(messageId)
-  ) {
-    badRequest(
-      "messageId no es válido."
-    );
+const ensureMessageId = (value) => {
+  const messageId = resolveMessageId(value);
+
+  if (!messageId) {
+    badRequest("messageId no es válido.");
+  }
+
+  return messageId;
+};
+
+const toClientUserId = (prismaUserId) =>
+  inverseUserMap[String(prismaUserId)] ||
+  String(prismaUserId);
+
+const userSelect = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  email: true,
+  role: true,
+  trustScore: true,
+  isVerified: true,
+  status: true,
+  profilePhoto: true,
+  createdAt: true
+};
+
+const productSelect = {
+  id: true,
+  title: true,
+  price: true,
+  images: true,
+  imageUrl: true,
+  qsmCode: true,
+  status: true,
+  sellerId: true
+};
+
+const shallowReplyInclude = {
+  sender: { select: userSelect },
+  receiver: { select: userSelect }
+};
+
+const messageInclude = {
+  sender: { select: userSelect },
+  receiver: { select: userSelect },
+  product: { select: productSelect },
+  order: true,
+  replyTo: { include: shallowReplyInclude }
+};
+
+const conversationInclude = {
+  product: { select: productSelect },
+  order: true,
+  lastMessageSender: { select: userSelect },
+  participants: {
+    include: {
+      user: { select: userSelect }
+    },
+    orderBy: { id: "asc" }
+  },
+  labelAssignments: {
+    include: {
+      label: true,
+      assignedBy: { select: userSelect }
+    },
+    orderBy: { assignedAt: "asc" }
+  },
+  pinnedMessages: {
+    include: {
+      message: { include: messageInclude },
+      pinnedBy: { select: userSelect }
+    },
+    orderBy: { pinnedAt: "desc" }
   }
 };
 
-const getConversationForUser = async (
-  conversationId,
-  userId
-) => {
-  ensureConversationId(
-    conversationId
+const serializeUser = (user) => {
+  if (!user) {
+    return null;
+  }
+
+  return {
+    ...user,
+    id: user.id,
+    _id: toClientUserId(user.id),
+    userId: user.id,
+    prismaId: user.id
+  };
+};
+
+const serializeProduct = (product) => {
+  if (!product) {
+    return null;
+  }
+
+  return {
+    ...product,
+    _id: String(product.id)
+  };
+};
+
+const serializeOrder = (order) => {
+  if (!order) {
+    return null;
+  }
+
+  return {
+    ...order,
+    _id: String(order.id)
+  };
+};
+
+const serializeReply = (message) => {
+  if (!message) {
+    return null;
+  }
+
+  return {
+    ...message,
+    _id: String(message.id),
+    conversation: String(message.conversationId),
+    sender: serializeUser(message.sender),
+    receiver: serializeUser(message.receiver)
+  };
+};
+
+const serializeMessage = (message) => {
+  if (!message) {
+    return null;
+  }
+
+  return {
+    ...message,
+    _id: String(message.id),
+    conversation: String(message.conversationId),
+    sender: serializeUser(message.sender),
+    receiver: serializeUser(message.receiver),
+    product: serializeProduct(message.product),
+    order: serializeOrder(message.order),
+    replyTo: serializeReply(message.replyTo),
+    attachments: Array.isArray(message.attachments)
+      ? message.attachments
+      : [],
+    reactions: Array.isArray(message.reactions)
+      ? message.reactions
+      : [],
+    location:
+      message.location && typeof message.location === "object"
+        ? message.location
+        : {}
+  };
+};
+
+const serializeConversation = (conversation, currentUserId) => {
+  const memberships = conversation.participants || [];
+  const participants = memberships
+    .map((membership) => serializeUser(membership.user))
+    .filter(Boolean);
+
+  const unread = {};
+  const mutedBy = [];
+  const archivedBy = [];
+  const blockedBy = [];
+  const favoriteBy = [];
+  const pinnedBy = [];
+
+  for (const membership of memberships) {
+    const clientUserId = toClientUserId(membership.userId);
+
+    unread[clientUserId] = Number(membership.unreadCount || 0);
+
+    if (membership.muted) mutedBy.push(clientUserId);
+    if (membership.archived) archivedBy.push(clientUserId);
+    if (membership.blocked) blockedBy.push(clientUserId);
+    if (membership.favorite) favoriteBy.push(clientUserId);
+
+    if (membership.pinned) {
+      pinnedBy.push({
+        user: clientUserId,
+        order: membership.pinnedOrder
+      });
+    }
+  }
+
+  const currentMembership = memberships.find(
+    (membership) => membership.userId === currentUserId
   );
 
-  const conversation =
-    await Conversation.findOne({
-      _id: conversationId,
-      participants: userId
-    });
+  return {
+    ...conversation,
+    id: conversation.id,
+    _id: String(conversation.id),
+    participants,
+    product: serializeProduct(conversation.product),
+    order: serializeOrder(conversation.order),
+    lastMessage: {
+      text: conversation.lastMessageText || "",
+      sender: conversation.lastMessageSenderId
+        ? toClientUserId(conversation.lastMessageSenderId)
+        : null,
+      createdAt: conversation.lastMessageAt || null
+    },
+    unread,
+    unreadCount: Number(currentMembership?.unreadCount || 0),
+
+    isMuted:
+      Boolean(
+        currentMembership?.muted
+      ),
+
+    isArchived:
+      Boolean(
+        currentMembership?.archived
+      ),
+
+    isBlocked:
+      Boolean(
+        currentMembership?.blocked
+      ),
+
+    isFavorite:
+      Boolean(
+        currentMembership?.favorite
+      ),
+
+    isPinned:
+      Boolean(
+        currentMembership?.pinned
+      ),
+
+    mutedBy,
+    archivedBy,
+    blockedBy,
+    favoriteBy,
+    pinnedBy,
+    labels: (conversation.labelAssignments || []).map(
+      (assignment) => ({
+        ...assignment.label,
+        _id: String(assignment.label.id),
+        assignedBy: serializeUser(assignment.assignedBy),
+        assignedAt: assignment.assignedAt
+      })
+    ),
+    pinnedMessages: (conversation.pinnedMessages || []).map(
+      (entry) => serializeMessage(entry.message)
+    )
+  };
+};
+
+const getConversationForUser = async (
+  conversationReference,
+  userId
+) => {
+  const conversationId = ensureConversationId(
+    conversationReference
+  );
+
+  const conversation = await prisma.conversation.findFirst({
+    where: {
+      id: conversationId,
+      participants: {
+        some: { userId }
+      }
+    },
+    include: conversationInclude
+  });
 
   if (!conversation) {
-    badRequest(
-      "Conversación no encontrada.",
-      404
-    );
+    badRequest("Conversación no encontrada.", 404);
   }
 
   return conversation;
 };
 
-const mapSecurityAnalysis = (
-  content
-) => {
+const mapSecurityAnalysis = (content) => {
   if (!content) {
     return {
       score: 0,
       riskLevel: "LOW",
       flagged: false,
       reasons: [],
+      reasonStrings: [],
       recommendation: "",
-      reasonText:
-        "Mensaje sin señales críticas."
+      reasonText: "Mensaje sin señales críticas."
     };
   }
 
-  const security =
-    analyzeMessageSecurity(content);
+  const security = analyzeMessageSecurity(content);
+  const reasons = Array.isArray(security.reasons)
+    ? security.reasons
+    : [];
 
-  const reasonText =
-    security.reasons
-      ?.map((reason) => reason.title)
-      .filter(Boolean)
-      .join(". ") ||
-    "Mensaje sin señales críticas.";
+  const reasonStrings = reasons
+    .map((reason) =>
+      typeof reason === "string"
+        ? reason
+        : reason?.title || reason?.message || reason?.reason || ""
+    )
+    .map((value) => String(value).trim())
+    .filter(Boolean);
 
   return {
     ...security,
-    reasonText
+    reasons,
+    reasonStrings,
+    reasonText:
+      reasonStrings.join(". ") ||
+      "Mensaje sin señales críticas."
   };
 };
 
-const getConversations = async ({
-  userId
-}) => {
-  ensureUserId(userId);
+const getConversations = async ({ userId: userReference }) => {
+  const userId = await ensureUserId(userReference);
 
-  return Conversation.find({
-    participants: userId,
-    archivedBy: {
-      $ne: userId
-    }
-  })
-    .populate(
-      "participants",
-      "firstName lastName name email"
-    )
-    .populate(
-      "product",
-      "title name price images"
-    )
-    .populate("order")
-    .populate("pinnedMessages")
-    .sort({
-      updatedAt: -1
-    });
+  const conversations = await prisma.conversation.findMany({
+    where: {
+      participants: {
+        some: { userId }
+      }
+    },
+    include: conversationInclude,
+    orderBy: [
+      { lastMessageAt: "desc" },
+      { updatedAt: "desc" }
+    ]
+  });
+
+  return conversations.map(
+    (conversation) => serializeConversation(conversation, userId)
+  );
 };
 
 const createConversation = async ({
-  userId,
-  receiverId,
-  productId,
-  orderId
+  userId: userReference,
+  receiverId: receiverReference,
+  productId: productReference,
+  orderId: orderReference
 }) => {
-  ensureUserId(userId);
+  const userId = await ensureUserId(userReference);
+  const receiverId = await resolvePrismaUserId(receiverReference);
 
-  if (
-    !receiverId ||
-    !isValidObjectId(receiverId)
-  ) {
+  if (!receiverId) {
     badRequest(
       "receiverId es obligatorio y debe ser válido."
     );
   }
 
-  if (
-    String(receiverId) ===
-    String(userId)
-  ) {
-    badRequest(
-      "No puedes crear una conversación contigo mismo."
+  if (receiverId === userId) {
+    badRequest("No puedes crear una conversación contigo mismo.");
+  }
+
+  const productId = productReference
+    ? resolveProductId(productReference)
+    : null;
+
+  const orderId = orderReference
+    ? resolveOrderId(orderReference)
+    : null;
+
+  if (productReference && !productId) {
+    badRequest("productId no es válido.");
+  }
+
+  if (orderReference && !orderId) {
+    badRequest("orderId no es válido.");
+  }
+
+  const conversationLockKey = [
+    `users:${[userId, receiverId]
+      .sort((left, right) => left - right)
+      .join(",")}`,
+    `product:${productId ?? "NULL"}`,
+    `order:${orderId ?? "NULL"}`
+  ].join("|");
+
+  const conversation =
+    await prisma.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`
+          SELECT pg_advisory_xact_lock(
+            hashtext(${conversationLockKey})::bigint
+          )
+        `;
+
+        let existing =
+          await tx.conversation.findFirst({
+            where: {
+              productId,
+              orderId,
+
+              AND: [
+                {
+                  participants: {
+                    some: {
+                      userId
+                    }
+                  }
+                },
+                {
+                  participants: {
+                    some: {
+                      userId:
+                        receiverId
+                    }
+                  }
+                }
+              ]
+            },
+
+            include:
+              conversationInclude
+          });
+
+        if (!existing) {
+          existing =
+            await tx.conversation.create({
+              data: {
+                productId,
+                orderId,
+
+                participants: {
+                  create: [
+                    {
+                      userId
+                    },
+                    {
+                      userId:
+                        receiverId
+                    }
+                  ]
+                }
+              },
+
+              include:
+                conversationInclude
+            });
+        }
+
+        return existing;
+      }
     );
-  }
 
-  let conversation =
-    await Conversation.findOne({
-      participants: {
-        $all: [userId, receiverId]
-      },
-      product: productId || null,
-      order: orderId || null
-    });
-
-  if (!conversation) {
-    conversation =
-      await Conversation.create({
-        participants: [
-          userId,
-          receiverId
-        ],
-        product:
-          productId || null,
-        order:
-          orderId || null
-      });
-  }
-
-  return Conversation.findById(
-    conversation._id
-  )
-    .populate(
-      "participants",
-      "firstName lastName name email"
-    )
-    .populate(
-      "product",
-      "title name price images"
-    )
-    .populate("order")
-    .populate("pinnedMessages");
+  return serializeConversation(conversation, userId);
 };
 
 const getConversationMessages = async ({
-  userId,
-  conversationId
+  userId: userReference,
+  conversationId: conversationReference
 }) => {
+  const userId = await ensureUserId(userReference);
+  const conversation = await getConversationForUser(
+    conversationReference,
+    userId
+  );
 
-  ensureUserId(userId);
+  const messages = await prisma.message.findMany({
+    where: { conversationId: conversation.id },
+    include: messageInclude,
+    orderBy: { createdAt: "asc" }
+  });
 
-  const conversation =
-    await getConversationForUser(
-      conversationId,
-      userId
-    );
-
-  return Message.find({
-    conversation:
-      conversation._id
-  })
-    .populate(
-      "sender",
-      "firstName lastName name email"
-    )
-    .populate(
-      "receiver",
-      "firstName lastName name email"
-    )
-    .populate("replyTo")
-    .sort({
-      createdAt: 1
-    });
-
+  return messages.map(serializeMessage);
 };
 
-const markConversationAsRead =
-async ({
-
+const markConversationAsRead = async ({
   io,
-  userId,
-  conversationId
-
+  userId: userReference,
+  conversationId: conversationReference
 }) => {
+  const userId = await ensureUserId(userReference);
+  const conversation = await getConversationForUser(
+    conversationReference,
+    userId
+  );
 
-  ensureUserId(userId);
+  const now = new Date();
 
-  const conversation =
-    await getConversationForUser(
-      conversationId,
-      userId
-    );
-
-  await Message.updateMany(
-
-    {
-
-      conversation:
-        conversation._id,
-
-      receiver:
-        userId,
-
-      status: {
-        $ne: "READ"
+  await prisma.$transaction([
+    prisma.message.updateMany({
+      where: {
+        conversationId: conversation.id,
+        receiverId: userId,
+        status: { not: "READ" }
+      },
+      data: {
+        status: "READ",
+        readAt: now
       }
+    }),
+    prisma.conversationParticipant.update({
+      where: {
+        conversationId_userId: {
+          conversationId: conversation.id,
+          userId
+        }
+      },
+      data: {
+        unreadCount: 0,
+        lastReadAt: now
+      }
+    })
+  ]);
 
-    },
-
-    {
-
-      status: "READ",
-
-      readAt:
-        new Date()
-
-    }
-
-  );
-
-  emitMessagesRead(
-
-    io,
-
-    conversation._id,
-
-    {
-
-      userId,
-
-      readAt:
-        new Date()
-
-    }
-
-  );
+  emitMessagesRead(io, conversation.id, {
+    userId: toClientUserId(userId),
+    readAt: now
+  });
 
   return {
-
     success: true,
-
-    message:
-      "Mensajes marcados como leídos."
-
+    message: "Mensajes marcados como leídos."
   };
+};
 
+const createFraudAlertSafely = async ({
+  productId,
+  securityAnalysis,
+  context = "MESSAGE_SECURITY"
+}) => {
+  if (!productId || !securityAnalysis?.flagged) {
+    return null;
+  }
+
+  try {
+    return await prisma.fraudAlert.create({
+      data: {
+        productId,
+        type: context,
+        level: String(
+          securityAnalysis.riskLevel || "HIGH"
+        ).toUpperCase(),
+        message: securityAnalysis.reasonText
+      }
+    });
+  } catch (error) {
+    console.error(
+      "No se pudo registrar la alerta antifraude del mensaje:",
+      error.message
+    );
+
+    return null;
+  }
 };
 
 const sendMessage = async ({
-
   io,
-
-  userId,
-
-  body
-
+  userId: userReference,
+  body = {}
 }) => {
+  const userId = await ensureUserId(userReference);
 
-  ensureUserId(userId);
-
-  const {
-
-    conversationId,
-
-    orderId,
-
-    productId,
-
-    text,
-
-    content,
-
-    messageType,
-
-    attachments,
-
-    replyTo,
-
-    location
-
-  } = body;
-
-  const safeAttachments =
-    normalizeAttachments(
-      attachments
-    );
-
-  const finalContent =
-    sanitizeText(
-      text ||
-      content ||
-      ""
-    );
-
-  ensureConversationId(
-    conversationId
+  const safeAttachments = normalizeAttachments(body.attachments);
+  const finalContent = sanitizeText(
+    body.text || body.content || ""
   );
 
   if (
     !finalContent &&
     safeAttachments.length === 0 &&
-    !location
+    !body.location
   ) {
-    badRequest(
-      "Debes enviar texto, archivo o ubicación."
-    );
+    badRequest("Debes enviar texto, archivo o ubicación.");
   }
 
+  if (finalContent.length > 1000) {
+    badRequest("El mensaje no puede superar los 1000 caracteres.");
+  }
+
+  const requestedType = String(body.messageType || "")
+    .trim()
+    .toUpperCase();
+
   if (
-    messageType &&
-    !ALLOWED_MESSAGE_TYPES.includes(
-      messageType
+    requestedType &&
+    !ALLOWED_MESSAGE_TYPES.includes(requestedType)
+  ) {
+    badRequest("Tipo de mensaje no válido.");
+  }
+
+  const conversation = await getConversationForUser(
+    body.conversationId,
+    userId
+  );
+
+  if (
+    conversation.participants.some(
+      (membership) => membership.blocked
     )
   ) {
+    badRequest("Esta conversación está bloqueada.", 403);
+  }
+
+  const receiverMembership = conversation.participants.find(
+    (membership) => membership.userId !== userId
+  );
+
+  if (!receiverMembership) {
     badRequest(
-      "Tipo de mensaje no válido."
+      "No se pudo identificar al receptor del mensaje."
     );
   }
 
-  if (
-    finalContent.length > 1000
-  ) {
-    badRequest(
-      "El mensaje no puede superar los 1000 caracteres."
-    );
+  const receiverId = receiverMembership.userId;
+  const replyToId = body.replyTo
+    ? ensureMessageId(body.replyTo)
+    : null;
+
+  if (replyToId) {
+    const reply = await prisma.message.findFirst({
+      where: {
+        id: replyToId,
+        conversationId: conversation.id
+      },
+      select: { id: true }
+    });
+
+    if (!reply) {
+      badRequest("replyTo no pertenece a esta conversación.");
+    }
   }
 
-  if (
-    replyTo &&
-    !isValidObjectId(replyTo)
-  ) {
-    badRequest(
-      "replyTo no es válido."
-    );
+  const productId = body.productId
+    ? resolveProductId(body.productId)
+    : conversation.productId;
+
+  const orderId = body.orderId
+    ? resolveOrderId(body.orderId)
+    : conversation.orderId;
+
+  if (body.productId && !productId) {
+    badRequest("productId no es válido.");
   }
 
-  const conversation =
-    await getConversationForUser(
-      conversationId,
-      userId
-    );
-      if (
-    Array.isArray(
-      conversation.blockedBy
-    ) &&
-    conversation.blockedBy.length > 0
-  ) {
-    badRequest(
-      "Esta conversación está bloqueada.",
-      403
-    );
+  if (body.orderId && !orderId) {
+    badRequest("orderId no es válido.");
   }
 
-  const receiver =
-    conversation.participants.find(
-      (participantId) =>
-        String(participantId) !==
-        String(userId)
-    );
-
-  if (!receiver) {
-    badRequest(
-      "No se pudo identificar al receptor del mensaje.",
-      400
-    );
-  }
-
-  const securityAnalysis =
-    mapSecurityAnalysis(
-      finalContent
-    );
+  const securityAnalysis = mapSecurityAnalysis(finalContent);
 
   const resolvedMessageType =
-    messageType ||
+    requestedType ||
     safeAttachments[0]?.type ||
-    (location
-      ? "LOCATION"
-      : "TEXT");
+    (body.location ? "LOCATION" : "TEXT");
 
-  const message =
-    await Message.create({
-      conversation:
-        conversation._id,
+  const displayContent =
+    finalContent ||
+    safeAttachments[0]?.name ||
+    (body.location
+      ? "Ubicación compartida"
+      : "Archivo adjunto");
 
-      order:
-        orderId ||
-        conversation.order ||
-        null,
+  const now = new Date();
 
-      sender:
-        userId,
-
-      receiver,
-
-      product:
-        productId ||
-        conversation.product ||
-        null,
-
-      replyTo:
-        replyTo || null,
-
-      messageType:
-        resolvedMessageType,
-
-      content:
-        finalContent ||
-        safeAttachments[0]?.name ||
-        (location
-          ? "Ubicación compartida"
-          : "Archivo adjunto"),
-
-      text:
-        finalContent,
-
-      attachments:
-        safeAttachments,
-
-      location:
-        location || undefined,
-
-      isFlagged:
-        securityAnalysis.flagged,
-
-      riskLevel:
-        securityAnalysis.riskLevel,
-
-      aiReason:
-        securityAnalysis.reasonText,
-
-      securityScore:
-        securityAnalysis.score,
-
-      securityReasons:
-        securityAnalysis.reasons,
-
-      status:
-        securityAnalysis.flagged
+  const created = await prisma.$transaction(async (tx) => {
+    const message = await tx.message.create({
+      data: {
+        conversationId: conversation.id,
+        orderId,
+        senderId: userId,
+        receiverId,
+        productId,
+        replyToId,
+        messageType: resolvedMessageType,
+        content: displayContent,
+        text: finalContent,
+        attachments: safeAttachments,
+        reactions: [],
+        location:
+          body.location && typeof body.location === "object"
+            ? body.location
+            : {},
+        isFlagged: Boolean(securityAnalysis.flagged),
+        riskLevel: String(
+          securityAnalysis.riskLevel || "LOW"
+        ).toUpperCase(),
+        aiReason: securityAnalysis.reasonText,
+        securityScore: Number(securityAnalysis.score || 0),
+        securityReasons: securityAnalysis.reasonStrings,
+        status: securityAnalysis.flagged
           ? "BLOCKED"
-          : "SENT"
+          : "SENT",
+        createdAt: now,
+        updatedAt: now
+      },
+      include: messageInclude
     });
 
-  conversation.lastMessage = {
-    text:
-      securityAnalysis.flagged
-        ? "Mensaje bloqueado por seguridad"
-        : finalContent ||
-          safeAttachments[0]?.name ||
-          (location
-            ? "Ubicación compartida"
-            : "Archivo adjunto"),
-
-    sender:
-      userId,
-
-    createdAt:
-      new Date()
-  };
-
-  await conversation.save();
-
-  if (
-    securityAnalysis.flagged
-  ) {
-    await FraudAlert.create({
-      user:
-        userId,
-
-      product:
-        productId ||
-        conversation.product ||
-        null,
-
-      riskLevel:
-        securityAnalysis.riskLevel,
-
-      reason:
-        securityAnalysis.reasonText,
-
-      evidenceRequired: [
-        "Revisar conversación",
-        "Validar intento de pago fuera de QSM",
-        "Revisar historial del usuario"
-      ]
+    await tx.conversation.update({
+      where: { id: conversation.id },
+      data: {
+        lastMessageText: securityAnalysis.flagged
+          ? "Mensaje bloqueado por seguridad"
+          : displayContent,
+        lastMessageSenderId: userId,
+        lastMessageAt: now
+      }
     });
 
+    if (!securityAnalysis.flagged) {
+      await tx.conversationParticipant.update({
+        where: {
+          conversationId_userId: {
+            conversationId: conversation.id,
+            userId: receiverId
+          }
+        },
+        data: {
+          unreadCount: { increment: 1 }
+        }
+      });
+    }
+
+    return message;
+  });
+
+  await createFraudAlertSafely({
+    productId,
+    securityAnalysis
+  });
+
+  if (securityAnalysis.flagged) {
     await createNotification(
       userId,
       "SECURITY_ALERT",
       "Mensaje bloqueado por seguridad",
       "Quick Secure Market detectó contenido potencialmente riesgoso dentro del mensaje."
     );
-  } else {
+  } else if (!receiverMembership.muted) {
     await createNotification(
-      receiver,
+      receiverId,
       "NEW_MESSAGE",
       "Nuevo mensaje recibido",
       "Tienes un nuevo mensaje en Quick Secure Market."
     );
   }
 
-  const populatedMessage =
-    await populateMessage(
-      message._id
+  const serialized =
+    await signPrivateReferencesDeep(
+      serializeMessage(created)
     );
 
-  emitNewMessage(
-    io,
-    conversation._id,
-    populatedMessage
-  );
+  emitNewMessage(io, conversation.id, serialized);
+
+  if (io && !securityAnalysis.flagged) {
+    io.to(`user:${toClientUserId(receiverId)}`)
+      .except(
+        getConversationRoom(
+          conversation.id
+        )
+      )
+      .emit(
+      "message:new",
+      {
+        conversationId: String(conversation.id),
+        message: serialized,
+        sentAt: now
+      }
+    );
+  }
 
   emitConversationUpdated(
     io,
-    conversation._id,
+    conversation.id,
     "conversation:updated",
     {
-      lastMessage:
-        conversation.lastMessage
+      lastMessage: {
+        text: securityAnalysis.flagged
+          ? "Mensaje bloqueado por seguridad"
+          : displayContent,
+        sender: toClientUserId(userId),
+        createdAt: now
+      }
     }
   );
 
   return {
     success: true,
-
-    message:
-      populatedMessage,
-
+    message: serialized,
     resultado: {
-      estadoMensaje:
-        populatedMessage.status,
-
-      riesgo:
-        securityAnalysis.riskLevel,
-
-      marcadoPorIA:
-        securityAnalysis.flagged,
-
-      motivoIA:
-        securityAnalysis.reasonText,
-
-      puntuacionSeguridad:
-        securityAnalysis.score
+      estadoMensaje: serialized.status,
+      riesgo: securityAnalysis.riskLevel,
+      marcadoPorIA: Boolean(securityAnalysis.flagged),
+      motivoIA: securityAnalysis.reasonText,
+      puntuacionSeguridad: Number(securityAnalysis.score || 0)
     }
   };
 };
+
+const recalculateConversationLastMessage = async (
+  conversationId
+) => {
+  const latestMessage = await prisma.message.findFirst({
+    where: {
+      conversationId,
+      deletedForEveryone: false
+    },
+    orderBy: { createdAt: "desc" }
+  });
+
+  return prisma.conversation.update({
+    where: { id: conversationId },
+    data: latestMessage
+      ? {
+          lastMessageText:
+            latestMessage.status === "BLOCKED"
+              ? "Mensaje bloqueado por seguridad"
+              : latestMessage.content,
+          lastMessageSenderId: latestMessage.senderId,
+          lastMessageAt: latestMessage.createdAt
+        }
+      : {
+          lastMessageText: "Sin mensajes",
+          lastMessageSenderId: null,
+          lastMessageAt: null
+        }
+  });
+};
+
 const editMessage = async ({
-
   io,
-  userId,
-  messageId,
-  body
-
+  userId: userReference,
+  messageId: messageReference,
+  body = {}
 }) => {
-
-  ensureUserId(userId);
-
-  ensureMessageId(messageId);
-
-  const finalContent =
-    sanitizeText(
-      body.text ||
-      body.content ||
-      ""
-    );
+  const userId = await ensureUserId(userReference);
+  const messageId = ensureMessageId(messageReference);
+  const finalContent = sanitizeText(
+    body.text || body.content || ""
+  );
 
   if (!finalContent) {
-    badRequest(
-      "El contenido del mensaje es obligatorio."
-    );
+    badRequest("El contenido del mensaje es obligatorio.");
   }
 
-  if (
-    finalContent.length > 1000
-  ) {
-    badRequest(
-      "El mensaje no puede superar los 1000 caracteres."
-    );
+  if (finalContent.length > 1000) {
+    badRequest("El mensaje no puede superar los 1000 caracteres.");
   }
 
-  const message =
-    await Message.findById(
-      messageId
-    );
+  const current = await prisma.message.findUnique({
+    where: { id: messageId }
+  });
 
-  if (!message) {
-    badRequest(
-      "Mensaje no encontrado.",
-      404
-    );
+  if (!current) {
+    badRequest("Mensaje no encontrado.", 404);
   }
 
-  if (
-    String(message.sender) !==
-    String(userId)
-  ) {
+  if (current.senderId !== userId) {
     badRequest(
       "No puedes editar un mensaje que no es tuyo.",
       403
     );
   }
 
-  if (
-    message.deletedForEveryone
-  ) {
-    badRequest(
-      "No puedes editar un mensaje eliminado."
-    );
+  if (current.deletedForEveryone) {
+    badRequest("No puedes editar un mensaje eliminado.");
   }
 
-  const securityAnalysis =
-    mapSecurityAnalysis(
-      finalContent
-    );
+  await getConversationForUser(current.conversationId, userId);
 
-  message.content =
-    finalContent;
+  const securityAnalysis = mapSecurityAnalysis(finalContent);
+  const now = new Date();
 
-  message.text =
-    finalContent;
+  const updated = await prisma.message.update({
+    where: { id: messageId },
+    data: {
+      content: finalContent,
+      text: finalContent,
+      isEdited: true,
+      editedAt: now,
+      isFlagged: Boolean(securityAnalysis.flagged),
+      riskLevel: String(
+        securityAnalysis.riskLevel || "LOW"
+      ).toUpperCase(),
+      aiReason: securityAnalysis.reasonText,
+      securityScore: Number(securityAnalysis.score || 0),
+      securityReasons: securityAnalysis.reasonStrings,
+      status: securityAnalysis.flagged
+        ? "BLOCKED"
+        : "SENT"
+    },
+    include: messageInclude
+  });
 
-  message.isEdited =
-    true;
+  await recalculateConversationLastMessage(current.conversationId);
 
-  message.editedAt =
-    new Date();
+  await createFraudAlertSafely({
+    productId: current.productId,
+    securityAnalysis,
+    context: "MESSAGE_EDIT_SECURITY"
+  });
 
-  message.isFlagged =
-    securityAnalysis.flagged;
-
-  message.riskLevel =
-    securityAnalysis.riskLevel;
-
-  message.aiReason =
-    securityAnalysis.reasonText;
-
-  message.securityScore =
-    securityAnalysis.score;
-
-  message.securityReasons =
-    securityAnalysis.reasons;
-
-  message.status =
-    securityAnalysis.flagged
-      ? "BLOCKED"
-      : "SENT";
-
-  await message.save();
-
-  const populatedMessage =
-    await populateMessage(
-      message._id
+  const serialized =
+    await signPrivateReferencesDeep(
+      serializeMessage(updated)
     );
 
   emitMessageUpdated(
     io,
-    message.conversation,
-    populatedMessage
+    current.conversationId,
+    serialized
   );
 
-  if (
-    securityAnalysis.flagged
-  ) {
-
-    await FraudAlert.create({
-
-      user:
-        userId,
-
-      product:
-        message.product ||
-        null,
-
-      riskLevel:
-        securityAnalysis.riskLevel,
-
-      reason:
-        securityAnalysis.reasonText,
-
-      evidenceRequired: [
-
-        "Revisar edición del mensaje",
-
-        "Validar intento de fraude",
-
-        "Revisar historial del usuario"
-
-      ]
-
-    });
-
-  }
-
   return {
-
     success: true,
-
-    message:
-      populatedMessage,
-
+    message: serialized,
     resultado: {
-
-      estadoMensaje:
-        populatedMessage.status,
-
-      riesgo:
-        securityAnalysis.riskLevel,
-
-      marcadoPorIA:
-        securityAnalysis.flagged,
-
-      motivoIA:
-        securityAnalysis.reasonText,
-
-      puntuacionSeguridad:
-        securityAnalysis.score
-
+      estadoMensaje: serialized.status,
+      riesgo: securityAnalysis.riskLevel,
+      marcadoPorIA: Boolean(securityAnalysis.flagged),
+      motivoIA: securityAnalysis.reasonText,
+      puntuacionSeguridad: Number(securityAnalysis.score || 0)
     }
-
   };
-
 };
+
 const deleteMessage = async ({
   io,
-  userId,
-  messageId
+  userId: userReference,
+  messageId: messageReference
 }) => {
-  ensureUserId(userId);
+  const userId = await ensureUserId(userReference);
+  const messageId = ensureMessageId(messageReference);
 
-  ensureMessageId(messageId);
+  const current = await prisma.message.findUnique({
+    where: { id: messageId }
+  });
 
-  const message =
-    await Message.findById(
-      messageId
-    );
-
-  if (!message) {
-    badRequest(
-      "Mensaje no encontrado.",
-      404
-    );
+  if (!current) {
+    badRequest("Mensaje no encontrado.", 404);
   }
 
-  if (
-    String(message.sender) !==
-    String(userId)
-  ) {
+  if (current.senderId !== userId) {
     badRequest(
       "No puedes eliminar un mensaje que no es tuyo.",
       403
     );
   }
 
-  if (
-    message.deletedForEveryone
-  ) {
-    badRequest(
-      "Este mensaje ya fue eliminado."
-    );
+  if (current.deletedForEveryone) {
+    badRequest("Este mensaje ya fue eliminado.");
   }
 
-  message.deletedForEveryone =
-    true;
+  await getConversationForUser(current.conversationId, userId);
 
-  message.deletedAt =
-    new Date();
+  const deletedAt = new Date();
 
-  message.content =
-    "Mensaje eliminado";
+  const updated = await prisma.message.update({
+    where: { id: messageId },
+    data: {
+      deletedForEveryone: true,
+      deletedAt,
+      content: "Mensaje eliminado",
+      text: "Mensaje eliminado",
+      attachments: [],
+      reactions: [],
+      location: {},
+      isFlagged: false,
+      aiReason: "",
+      riskLevel: "LOW",
+      securityScore: 0,
+      securityReasons: [],
+      status: "SENT"
+    },
+    include: messageInclude
+  });
 
-  message.text =
-    "Mensaje eliminado";
+  const conversation = await recalculateConversationLastMessage(
+    current.conversationId
+  );
 
-  message.attachments =
-    [];
-
-  message.location =
-    undefined;
-
-  message.isFlagged =
-    false;
-
-  message.aiReason =
-    "";
-
-  message.riskLevel =
-    "LOW";
-
-  message.securityScore =
-    0;
-
-  message.securityReasons =
-    [];
-
-  message.status =
-    "SENT";
-
-  await message.save();
-
-  const conversation =
-    await Conversation.findById(
-      message.conversation
+  const serialized =
+    await signPrivateReferencesDeep(
+      serializeMessage(updated)
     );
 
-  if (conversation) {
-    const latestMessage =
-      await Message.findOne({
-        conversation:
-          conversation._id,
+  emitMessageDeleted(io, current.conversationId, {
+    _id: String(messageId),
+    id: messageId,
+    conversationId: String(current.conversationId),
+    deletedForEveryone: true,
+    deletedAt,
+    message: serialized
+  });
 
-        deletedForEveryone: {
-          $ne: true
-        }
-      })
-        .sort({
-          createdAt: -1
-        })
-        .select(
-          "text content sender createdAt attachments messageType"
-        );
-
-    if (latestMessage) {
-      conversation.lastMessage = {
-        text:
-          latestMessage.text ||
-          latestMessage.content ||
-          latestMessage
-            .attachments?.[0]
-            ?.name ||
-          "Archivo adjunto",
-
-        sender:
-          latestMessage.sender,
-
-        createdAt:
-          latestMessage.createdAt
-      };
-    } else {
-      conversation.lastMessage = {
-        text:
-          "Sin mensajes",
-
-        sender:
-          null,
-
-        createdAt:
-          new Date()
-      };
-    }
-
-    await conversation.save();
-  }
-
-  const populatedMessage =
-    await populateMessage(
-      message._id
-    );
-
-  emitMessageDeleted(
+  emitConversationUpdated(
     io,
-    message.conversation,
+    current.conversationId,
+    "conversation:updated",
     {
-      messageId:
-        message._id,
-
-      conversationId:
-        message.conversation,
-
-      deletedForEveryone:
-        true,
-
-      deletedAt:
-        message.deletedAt,
-
-      message:
-        populatedMessage
+      lastMessage: {
+        text: conversation.lastMessageText,
+        sender: conversation.lastMessageSenderId
+          ? toClientUserId(conversation.lastMessageSenderId)
+          : null,
+        createdAt: conversation.lastMessageAt
+      }
     }
   );
 
-  if (conversation) {
-    emitConversationUpdated(
-      io,
-      conversation._id,
-      "conversation:updated",
-      {
-        lastMessage:
-          conversation.lastMessage
+  return {
+    success: true,
+    message: serialized,
+    deletedMessageId: String(messageId)
+  };
+};
+
+const toggleParticipantField = async ({
+  userReference,
+  conversationReference,
+  field,
+  responseMessage
+}) => {
+  const userId = await ensureUserId(userReference);
+  const conversation = await getConversationForUser(
+    conversationReference,
+    userId
+  );
+
+  const membership = conversation.participants.find(
+    (item) => item.userId === userId
+  );
+
+  const enabled = !Boolean(membership?.[field]);
+
+  await prisma.conversationParticipant.update({
+    where: {
+      conversationId_userId: {
+        conversationId: conversation.id,
+        userId
       }
-    );
-  }
-
-  return {
-    success: true,
-
-    message:
-      populatedMessage,
-
-    deletedMessageId:
-      message._id
-  };
-};
-const muteConversation = async ({
-  userId,
-  conversationId
-}) => {
-
-  ensureUserId(userId);
-
-  const conversation =
-    await getConversationForUser(
-      conversationId,
-      userId
-    );
-
-  conversation.mutedBy =
-    toggleObjectIdInArray(
-      conversation.mutedBy || [],
-      userId
-    );
-
-  await conversation.save();
-
-  return {
-    success: true,
-    message:
-      "Estado de silencio actualizado.",
-    conversation
-  };
-
-};
-
-const archiveConversation = async ({
-  userId,
-  conversationId
-}) => {
-
-  ensureUserId(userId);
-
-  const conversation =
-    await getConversationForUser(
-      conversationId,
-      userId
-    );
-
-  conversation.archivedBy =
-    toggleObjectIdInArray(
-      conversation.archivedBy || [],
-      userId
-    );
-
-  await conversation.save();
-
-  return {
-    success: true,
-    message:
-      "Estado de archivo actualizado.",
-    conversation
-  };
-
-};
-
-const blockConversation = async ({
-  userId,
-  conversationId
-}) => {
-
-  ensureUserId(userId);
-
-  const conversation =
-    await getConversationForUser(
-      conversationId,
-      userId
-    );
-
-  conversation.blockedBy =
-    toggleObjectIdInArray(
-      conversation.blockedBy || [],
-      userId
-    );
-
-  conversation.status =
-    conversation.blockedBy.length > 0
-      ? "BLOCKED"
-      : "ACTIVE";
-
-  await conversation.save();
-
-  return {
-    success: true,
-    message:
-      "Estado de bloqueo actualizado.",
-    conversation
-  };
-
-};
-
-const favoriteConversation = async ({
-  userId,
-  conversationId
-}) => {
-
-  ensureUserId(userId);
-
-  const conversation =
-    await getConversationForUser(
-      conversationId,
-      userId
-    );
-
-  conversation.favoriteBy =
-    toggleObjectIdInArray(
-      conversation.favoriteBy || [],
-      userId
-    );
-
-  await conversation.save();
-
-  return {
-    success: true,
-    message:
-      "Favorito actualizado.",
-    conversation
-  };
-
-};
-
-const addConversationLabel = async ({
-  userId,
-  conversationId,
-  body
-}) => {
-
-  ensureUserId(userId);
-
-  const {
-    name,
-    color
-  } = body;
-
-  if (!name) {
-    badRequest(
-      "El nombre de la etiqueta es obligatorio."
-    );
-  }
-
-  const conversation =
-    await getConversationForUser(
-      conversationId,
-      userId
-    );
-
-  conversation.labels.push({
-
-    name:
-      sanitizeText(name),
-
-    color:
-      color ||
-      "#1976d2",
-
-    createdBy:
-      userId
-
+    },
+    data: { [field]: enabled }
   });
 
-  await conversation.save();
+  const refreshed = await prisma.conversation.findUnique({
+    where: { id: conversation.id },
+    include: conversationInclude
+  });
 
   return {
-
     success: true,
-
-    message:
-      "Etiqueta agregada.",
-
-    conversation
-
+    message: responseMessage,
+    conversation: serializeConversation(refreshed, userId)
   };
+};
 
+const muteConversation = ({ userId, conversationId }) =>
+  toggleParticipantField({
+    userReference: userId,
+    conversationReference: conversationId,
+    field: "muted",
+    responseMessage: "Estado de silencio actualizado."
+  });
+
+const archiveConversation = ({ userId, conversationId }) =>
+  toggleParticipantField({
+    userReference: userId,
+    conversationReference: conversationId,
+    field: "archived",
+    responseMessage: "Estado de archivo actualizado."
+  });
+
+const favoriteConversation = ({ userId, conversationId }) =>
+  toggleParticipantField({
+    userReference: userId,
+    conversationReference: conversationId,
+    field: "favorite",
+    responseMessage: "Favorito actualizado."
+  });
+
+const blockConversation = async ({
+  userId: userReference,
+  conversationId: conversationReference
+}) => {
+  const userId = await ensureUserId(userReference);
+  const conversation = await getConversationForUser(
+    conversationReference,
+    userId
+  );
+
+  const membership = conversation.participants.find(
+    (item) => item.userId === userId
+  );
+
+  await prisma.conversationParticipant.update({
+    where: {
+      conversationId_userId: {
+        conversationId: conversation.id,
+        userId
+      }
+    },
+    data: {
+      blocked: !Boolean(membership?.blocked)
+    }
+  });
+
+  const blockedCount = await prisma.conversationParticipant.count({
+    where: {
+      conversationId: conversation.id,
+      blocked: true
+    }
+  });
+
+  await prisma.conversation.update({
+    where: { id: conversation.id },
+    data: {
+      status: blockedCount > 0
+        ? "BLOCKED"
+        : "ACTIVE"
+    }
+  });
+
+  const refreshed = await prisma.conversation.findUnique({
+    where: { id: conversation.id },
+    include: conversationInclude
+  });
+
+  return {
+    success: true,
+    message: "Estado de bloqueo actualizado.",
+    conversation: serializeConversation(refreshed, userId)
+  };
+};
+
+const slugify = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+
+const addConversationLabel = async ({
+  userId: userReference,
+  conversationId: conversationReference,
+  body = {}
+}) => {
+  const userId = await ensureUserId(userReference);
+  const conversation = await getConversationForUser(
+    conversationReference,
+    userId
+  );
+
+  const name = sanitizeText(body.name || "");
+
+  if (!name) {
+    badRequest("El nombre de la etiqueta es obligatorio.");
+  }
+
+  const slug = slugify(name) || `label-${Date.now()}`;
+
+  let label = await prisma.conversationLabel.findFirst({
+    where: {
+      slug,
+      ownerId: userId
+    }
+  });
+
+  if (!label) {
+    label = await prisma.conversationLabel.create({
+      data: {
+        name,
+        slug,
+        color: String(body.color || "#1976d2"),
+        icon: String(body.icon || "tag"),
+        ownerId: userId,
+        isSystem: false,
+        isActive: true
+      }
+    });
+  } else if (!label.isActive) {
+    label = await prisma.conversationLabel.update({
+      where: { id: label.id },
+      data: { isActive: true }
+    });
+  }
+
+  await prisma.conversationLabelAssignment.upsert({
+    where: {
+      conversationId_labelId_assignedById: {
+        conversationId: conversation.id,
+        labelId: label.id,
+        assignedById: userId
+      }
+    },
+    update: { assignedAt: new Date() },
+    create: {
+      conversationId: conversation.id,
+      labelId: label.id,
+      assignedById: userId
+    }
+  });
+
+  const refreshed = await prisma.conversation.findUnique({
+    where: { id: conversation.id },
+    include: conversationInclude
+  });
+
+  return {
+    success: true,
+    message: "Etiqueta agregada.",
+    conversation: serializeConversation(refreshed, userId)
+  };
 };
 
 const pinMessage = async ({
-  userId,
-  messageId
+  userId: userReference,
+  messageId: messageReference
 }) => {
-  ensureUserId(userId);
-  ensureMessageId(messageId);
+  const userId = await ensureUserId(userReference);
+  const messageId = ensureMessageId(messageReference);
 
-  const message = await Message.findById(
-    messageId
-  );
+  const message = await prisma.message.findUnique({
+    where: { id: messageId }
+  });
 
   if (!message) {
-    badRequest(
-      "Mensaje no encontrado.",
-      404
-    );
+    badRequest("Mensaje no encontrado.", 404);
   }
 
-  const conversation =
-    await Conversation.findOne({
-      _id: message.conversation,
-      participants: userId
+  await getConversationForUser(message.conversationId, userId);
+
+  const existing = await prisma.conversationPinnedMessage.findUnique({
+    where: {
+      conversationId_messageId_pinnedById: {
+        conversationId: message.conversationId,
+        messageId,
+        pinnedById: userId
+      }
+    }
+  });
+
+  if (existing) {
+    await prisma.conversationPinnedMessage.delete({
+      where: { id: existing.id }
     });
-
-  if (!conversation) {
-    badRequest(
-      "No tienes permiso para fijar este mensaje.",
-      403
-    );
+  } else {
+    await prisma.conversationPinnedMessage.create({
+      data: {
+        conversationId: message.conversationId,
+        messageId,
+        pinnedById: userId
+      }
+    });
   }
 
-  conversation.pinnedMessages =
-    toggleObjectIdInArray(
-      conversation.pinnedMessages || [],
-      messageId
-    );
-
-  await conversation.save();
+  const refreshed = await prisma.conversation.findUnique({
+    where: { id: message.conversationId },
+    include: conversationInclude
+  });
 
   return {
     success: true,
-    message:
-      "Mensaje fijado actualizado.",
-    conversation
+    message: existing
+      ? "Mensaje desfijado."
+      : "Mensaje fijado.",
+    conversation: serializeConversation(refreshed, userId)
   };
 };
 
 const searchMessages = async ({
-  userId,
+  userId: userReference,
   query,
-  conversationId
+  conversationId: conversationReference
 }) => {
-  ensureUserId(userId);
+  const userId = await ensureUserId(userReference);
+  const safeQuery = sanitizeText(query || "");
 
-  if (
-    !query ||
-    !String(query).trim()
-  ) {
-    badRequest(
-      "Debes enviar un texto de búsqueda."
-    );
+  if (!safeQuery) {
+    badRequest("Debes enviar un texto de búsqueda.");
   }
 
-  if (
-    conversationId &&
-    !isValidObjectId(conversationId)
-  ) {
-    badRequest(
-      "conversationId no es válido."
-    );
+  const conversationId = conversationReference
+    ? ensureConversationId(conversationReference)
+    : null;
+
+  if (conversationId) {
+    await getConversationForUser(conversationId, userId);
   }
 
-  const conversations =
-    await Conversation.find({
-      participants: userId,
-
-      ...(conversationId
-        ? {
-            _id: conversationId
-          }
-        : {})
-    }).select("_id");
-
-  const conversationIds =
-    conversations.map(
-      (conversation) =>
-        conversation._id
-    );
-
-  const safeQuery =
-    sanitizeText(query);
-
-  const escapedQuery =
-    safeQuery.replace(
-      /[.*+?^${}()|[\]\\]/g,
-      "\\$&"
-    );
-
-  const messages =
-    await Message.find({
+  const messages = await prisma.message.findMany({
+    where: {
+      deletedForEveryone: false,
       conversation: {
-        $in: conversationIds
+        participants: { some: { userId } }
       },
-
-      deletedForEveryone: {
-        $ne: true
-      },
-
-      $or: [
+      ...(conversationId ? { conversationId } : {}),
+      OR: [
         {
           text: {
-            $regex: escapedQuery,
-            $options: "i"
+            contains: safeQuery,
+            mode: "insensitive"
           }
         },
         {
           content: {
-            $regex: escapedQuery,
-            $options: "i"
-          }
-        },
-        {
-          "attachments.name": {
-            $regex: escapedQuery,
-            $options: "i"
+            contains: safeQuery,
+            mode: "insensitive"
           }
         }
       ]
-    })
-      .populate(
-        "sender",
-        "firstName lastName name email"
-      )
-      .populate(
-        "receiver",
-        "firstName lastName name email"
-      )
-      .populate("replyTo")
-      .sort({
-        createdAt: -1
-      });
+    },
+    include: messageInclude,
+    orderBy: { createdAt: "desc" },
+    take: 100
+  });
 
   return {
     success: true,
     count: messages.length,
-    messages
+    messages: messages.map(serializeMessage)
   };
 };
 
 const exportConversation = async ({
-  userId,
-  conversationId
+  userId: userReference,
+  conversationId: conversationReference
 }) => {
-  ensureUserId(userId);
-
-  ensureConversationId(
-    conversationId
+  const userId = await ensureUserId(userReference);
+  const conversation = await getConversationForUser(
+    conversationReference,
+    userId
   );
 
-  const conversation =
-    await Conversation.findOne({
-      _id: conversationId,
-      participants: userId
-    })
-      .populate(
-        "participants",
-        "firstName lastName name email"
-      )
-      .populate(
-        "product",
-        "title name price"
-      )
-      .populate("order");
+  const messages = await prisma.message.findMany({
+    where: { conversationId: conversation.id },
+    include: messageInclude,
+    orderBy: { createdAt: "asc" }
+  });
 
-  if (!conversation) {
-    badRequest(
-      "Conversación no encontrada.",
-      404
-    );
-  }
-
-  const messages =
-    await Message.find({
-      conversation: conversationId
-    })
-      .populate(
-        "sender",
-        "firstName lastName name email"
-      )
-      .populate(
-        "receiver",
-        "firstName lastName name email"
-      )
-      .populate("replyTo")
-      .sort({
-        createdAt: 1
-      });
-
-  conversation.exportCount =
-    (conversation.exportCount || 0) + 1;
-
-  await conversation.save();
+  await prisma.conversation.update({
+    where: { id: conversation.id },
+    data: { exportCount: { increment: 1 } }
+  });
 
   return {
     success: true,
-
-    fileName:
-      `qsm-conversation-${conversationId}.json`,
-
-    exportedAt:
-      new Date(),
-
-    conversation,
-    messages
+    fileName: `qsm-conversation-${conversation.id}.json`,
+    exportedAt: new Date(),
+    conversation: serializeConversation(conversation, userId),
+    messages: messages.map(serializeMessage)
   };
 };
 

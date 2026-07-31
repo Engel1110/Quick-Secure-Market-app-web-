@@ -1,4 +1,5 @@
-﻿import {
+import { API_BASE_URL as QSM_RUNTIME_API_URL } from "../../../config/runtime";
+import {
   useCallback,
   useEffect,
   useMemo,
@@ -8,13 +9,9 @@
 import { useNavigate } from "react-router-dom";
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_URL ||
-  "http://localhost:5000/api";
+  QSM_RUNTIME_API_URL;
 
-const USE_MOCK_DATA =
-  String(
-    import.meta.env.VITE_USE_MOCK_ADMIN ?? "true"
-  ).toLowerCase() === "true";
+const USE_MOCK_DATA = false;
 
 const TRANSACTION_STATUS = {
   HELD: "En custodia",
@@ -1178,7 +1175,15 @@ function normalizeResponse(response) {
 
     alerts:
       Array.isArray(source.alerts)
-        ? source.alerts
+        ? source.alerts.map(
+            (alert) => ({
+              ...alert,
+              description:
+                alert.description ||
+                alert.message ||
+                ""
+            })
+          )
         : [],
 
     recentActivity:
@@ -1681,6 +1686,156 @@ const styles = `
       grid-template-columns: 1fr;
     }
   }
+
+  /* QSM_FINANCE_COMPACT_LAYOUT_V1 */
+
+  .finance-page {
+    padding: 20px 22px 32px;
+  }
+
+  .finance-container {
+    width: min(1800px, 100%);
+  }
+
+  .finance-header {
+    align-items: flex-start;
+    gap: 18px;
+    margin-bottom: 16px;
+  }
+
+  .finance-title {
+    font-size: clamp(28px, 3vw, 38px);
+  }
+
+  .finance-subtitle {
+    max-width: 900px;
+    margin-top: 8px;
+    line-height: 1.45;
+  }
+
+  .finance-header-actions {
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    padding-top: 2px;
+  }
+
+  .finance-header-actions
+  .finance-button {
+    width: auto;
+    min-width: 0;
+    min-height: 36px;
+    height: 36px;
+    padding: 0 12px;
+    border-radius: 10px;
+    font-size: 11px;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .finance-kpis {
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+
+  .finance-kpi,
+  .finance-kpi-card {
+    min-height: 100px;
+    padding: 14px;
+  }
+
+  .finance-kpi h2,
+  .finance-kpi-card h2 {
+    margin: 7px 0 3px;
+    font-size: clamp(19px, 1.7vw, 27px);
+  }
+
+  .finance-main-grid {
+    grid-template-columns:
+      minmax(0, 3.2fr)
+      minmax(300px, .9fr);
+    align-items: start;
+    gap: 14px;
+  }
+
+  .finance-card {
+    border-radius: 16px;
+  }
+
+  .finance-toolbar {
+    grid-template-columns:
+      minmax(260px, 1fr)
+      165px
+      155px;
+    gap: 8px;
+    padding: 14px 16px;
+  }
+
+  .finance-input,
+  .finance-select {
+    min-height: 38px;
+    height: 38px;
+    border-radius: 10px;
+  }
+
+  .finance-table-wrapper,
+  .finance-table-container {
+    max-height: calc(100vh - 390px);
+    overflow: auto;
+  }
+
+  .finance-table th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #0b1025;
+  }
+
+  .finance-table th,
+  .finance-table td {
+    padding: 11px 10px;
+  }
+
+  .finance-alerts,
+  .finance-alert-list,
+  .finance-alerts-list {
+    max-height: calc(100vh - 390px);
+    overflow-y: auto;
+  }
+
+  @media (max-width: 1350px)
+  and (min-width: 901px) {
+    .finance-main-grid {
+      grid-template-columns:
+        minmax(0, 2.3fr)
+        minmax(290px, .9fr);
+    }
+
+    .finance-kpis {
+      grid-template-columns:
+        repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 900px) {
+    .finance-page {
+      padding: 15px 12px 28px;
+    }
+
+    .finance-header-actions {
+      width: 100%;
+      flex-wrap: wrap;
+      justify-content: flex-start;
+    }
+
+    .finance-main-grid,
+    .finance-toolbar {
+      grid-template-columns: 1fr;
+    }
+  }
+
 `;
 
 export default FinanceDashboard;

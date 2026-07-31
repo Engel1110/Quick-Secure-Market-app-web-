@@ -12,7 +12,7 @@ const {
   resetPassword,
   changePassword
 } = require(
-  "../controllers/auth.controller"
+  "../controllers/auth-prisma.controller"
 );
 
 const authMiddleware = require(

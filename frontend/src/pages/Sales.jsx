@@ -1,3 +1,4 @@
+import { API_BASE_URL as QSM_RUNTIME_API_URL } from "../config/runtime";
 /*
 |--------------------------------------------------------------------------
 | Sales.jsx — ENTREGA 1 DE 3
@@ -174,7 +175,7 @@ function Sales() {
 
   const loadSellerOrders = async () => {
     try {
-      return await api.get("/orders/my-sales");
+      return await api.get("/orders/my-orders?type=sell");
     } catch (requestError) {
       if (requestError?.response?.status !== 404) {
         throw requestError;
@@ -235,14 +236,12 @@ function Sales() {
 
         setOrders(
           rawOrders
-            .filter((order) => isSellerOrder(order, currentUserId))
             .map(normalizeOrder)
             .filter(Boolean)
         );
 
         setProducts(
           rawProducts
-            .filter((product) => isSellerProduct(product, currentUserId))
             .map(normalizeProduct)
             .filter(Boolean)
         );
@@ -1647,10 +1646,14 @@ function SaleOrderCard({
       order?.escrowStatus
     );
 
+  const warehouseStatus =
+    normalizeStatus(
+      order?.warehouseStatus
+    );
+
   const deliveryStatus =
     normalizeStatus(
-      order?.deliveryStatus ||
-      order?.warehouseStatus
+      order?.deliveryStatus
     );
 
   const statusInfo =
@@ -1680,18 +1683,153 @@ function SaleOrderCard({
       localAction
     );
 
-  const canSendWarehouse =
+  const paymentProtected =
     [
-      "PAYMENT_CONFIRMED",
-      "WAITING_SELLER"
+      "HELD",
+      "CONFIRMED",
+      "PAID",
+      "RELEASED"
+    ].includes(paymentStatus) ||
+    [
+      "HELD",
+      "FUNDED",
+      "READY_TO_RELEASE",
+      "RELEASED"
+    ].includes(escrowStatus);
+
+  const warehouseStarted =
+    normalizeStatus(
+      order?.deliveryMethod
+    ) === "QSM_WAREHOUSE" ||
+    ![
+      "",
+      "NOT_REQUIRED"
+    ].includes(warehouseStatus);
+
+  const deliveryStarted =
+    [
+      "PICKUP_REQUESTED",
+      "PENDING_ASSIGNMENT",
+      "ASSIGNED",
+      "PICKED_UP",
+      "PRODUCT_COLLECTED",
+      "IN_TRANSIT",
+      "OUT_FOR_DELIVERY",
+      "WAITING_PIN",
+      "DELIVERED"
+    ].includes(deliveryStatus) ||
+    Boolean(
+      order?.deliveryAgentId ||
+      order?.pickupScheduledAt ||
+      order?.productCollectedAt ||
+      order?.outForDeliveryAt ||
+      order?.deliveredAt
+    );
+
+  const productReceivedByQsm =
+    Boolean(
+      order?.warehouseReceivedAt ||
+      order?.productCollectedAt
+    ) ||
+    [
+      "RECEIVED",
+      "IN_WAREHOUSE",
+      "UNDER_INSPECTION",
+      "APPROVED",
+      "READY_FOR_PICKUP"
+    ].includes(warehouseStatus) ||
+    [
+      "PICKED_UP",
+      "PRODUCT_COLLECTED",
+      "IN_TRANSIT",
+      "OUT_FOR_DELIVERY",
+      "WAITING_PIN",
+      "DELIVERED"
+    ].includes(deliveryStatus);
+
+  const verificationCompleted =
+    warehouseStarted
+      ? (
+          Boolean(
+            order?.warehouseApprovedAt
+          ) ||
+          [
+            "APPROVED",
+            "READY_FOR_PICKUP"
+          ].includes(warehouseStatus) ||
+          deliveryStarted
+        )
+      : (
+          Boolean(
+            order?.productCollectedAt
+          ) ||
+          [
+            "PICKED_UP",
+            "PRODUCT_COLLECTED",
+            "IN_TRANSIT",
+            "OUT_FOR_DELIVERY",
+            "WAITING_PIN",
+            "DELIVERED"
+          ].includes(deliveryStatus)
+        );
+
+  const productDelivered =
+    Boolean(
+      order?.deliveredAt ||
+      order?.deliveryPinVerified ||
+      order?.deliveryConfirmedByAgent
+    ) ||
+    deliveryStatus === "DELIVERED" ||
+    [
+      "DELIVERED",
+      "COMPLETED"
     ].includes(status);
 
-  const canRequestDelivery =
+  const fundsReleased =
+    paymentStatus === "RELEASED" ||
+    escrowStatus === "RELEASED" ||
+    Boolean(order?.releasedAt) ||
+    status === "COMPLETED";
+
+  const operationClosed =
+    fundsReleased ||
+    productDelivered ||
     [
-      "PAYMENT_CONFIRMED",
-      "WAITING_SELLER",
-      "READY_FOR_PICKUP"
+      "CANCELLED",
+      "REFUNDED",
+      "REJECTED"
     ].includes(status);
+
+  const sellerActionCompleted =
+    warehouseStarted ||
+    deliveryStarted ||
+    operationClosed;
+
+  const sellerActionLabel =
+    fundsReleased
+      ? "El pago ya fue liberado correctamente."
+      : productDelivered
+        ? "El producto fue entregado al comprador."
+        : [
+            "APPROVED",
+            "READY_FOR_PICKUP"
+          ].includes(warehouseStatus)
+          ? "El producto fue aprobado por el Almacén QSM."
+          : warehouseStarted
+            ? "El producto fue enviado al Almacén QSM."
+            : deliveryStarted
+              ? "La recogida por Delivery QSM fue solicitada."
+              : paymentProtected
+                ? "Selecciona c?mo entregar?s el producto."
+                : "Esperando que QSM confirme el pago protegido.";
+
+  const canSendWarehouse =
+    paymentProtected &&
+    !sellerActionCompleted;
+
+  const canRequestDelivery =
+    paymentProtected &&
+    !sellerActionCompleted;
 
   const canCancel =
     ![
@@ -1891,78 +2029,47 @@ function SaleOrderCard({
       </div>
 
       <div
+        className="sale-order-progress"
         style={saleOrderProgress}
       >
         <OrderProgressStep
-          label="Pago"
+          label="Pago protegido"
+          done={paymentProtected}
+        />
+
+        <OrderProgressStep
+          label="Acción del vendedor"
+          done={sellerActionCompleted}
+        />
+
+        <OrderProgressStep
+          label="Recibido por QSM"
           done={
-            [
-              "PAID",
-              "CONFIRMED",
-              "VERIFIED",
-              "COMPLETED"
-            ].includes(
-              paymentStatus
-            ) ||
-            [
-              "PAYMENT_CONFIRMED",
-              "WAITING_SELLER",
-              "WAITING_WAREHOUSE",
-              "IN_WAREHOUSE",
-              "UNDER_INSPECTION",
-              "READY_FOR_PICKUP",
-              "OUT_FOR_DELIVERY",
-              "WAITING_PIN",
-              "DELIVERED",
-              "COMPLETED"
-            ].includes(
-              status
-            )
+            productReceivedByQsm ||
+            productDelivered
           }
         />
 
         <OrderProgressStep
-          label="Escrow"
-          done={
-            [
-              "HELD",
-              "FUNDED",
-              "UNDER_REVIEW",
-              "READY_TO_RELEASE",
-              "RELEASED"
-            ].includes(
-              escrowStatus
-            )
+          label={
+            warehouseStarted
+              ? "Inspección"
+              : "Recogida"
           }
-        />
-
-        <OrderProgressStep
-          label="Logística"
           done={
-            [
-              "IN_WAREHOUSE",
-              "UNDER_INSPECTION",
-              "READY_FOR_PICKUP",
-              "OUT_FOR_DELIVERY",
-              "WAITING_PIN",
-              "DELIVERED",
-              "COMPLETED"
-            ].includes(
-              status
-            )
+            verificationCompleted ||
+            productDelivered
           }
         />
 
         <OrderProgressStep
           label="Entrega"
-          done={
-            [
-              "DELIVERED",
-              "COMPLETED"
-            ].includes(
-              status
-            )
-          }
+          done={productDelivered}
+        />
+
+        <OrderProgressStep
+          label="Pago liberado"
+          done={fundsReleased}
         />
       </div>
 
@@ -2115,7 +2222,7 @@ function SaleOrderCard({
                 {localAction ===
                 "warehouse"
                   ? "Registrando..."
-                  : "Enviar a almacén"}
+                  : "Entregar en Almacén QSM"}
               </button>
             )}
 
@@ -2131,9 +2238,49 @@ function SaleOrderCard({
                 {localAction ===
                 "delivery"
                   ? "Solicitando..."
-                  : "Solicitar delivery"}
+                  : "Solicitar recogida Delivery"}
               </button>
             )}
+
+            {!canSendWarehouse &&
+              !canRequestDelivery && (
+                <div
+                  style={{
+                    gridColumn:
+                      "1 / -1",
+                    display:
+                      "grid",
+                    gap:
+                      "4px",
+                    padding:
+                      "11px 13px",
+                    color:
+                      sellerActionCompleted
+                        ? "#6ee7b7"
+                        : "var(--sales-muted)",
+                    background:
+                      sellerActionCompleted
+                        ? "rgba(16,185,129,.09)"
+                        : "rgba(2,6,23,.20)",
+                    border:
+                      sellerActionCompleted
+                        ? "1px solid rgba(16,185,129,.30)"
+                        : "1px solid var(--sales-border)",
+                    borderRadius:
+                      "12px"
+                  }}
+                >
+                  <strong>
+                    {sellerActionCompleted
+                      ? "? Acción del vendedor completada"
+                      : "? Acción pendiente"}
+                  </strong>
+
+                  <span>
+                    {sellerActionLabel}
+                  </span>
+                </div>
+              )}
 
             {canCancel && (
               <button
@@ -2957,7 +3104,7 @@ const SALES_API_ORIGIN =
   String(
     import.meta.env
       .VITE_API_URL ||
-    "http://localhost:5000/api"
+    QSM_RUNTIME_API_URL
   ).replace(
     /\/api\/?$/,
     ""
@@ -3842,7 +3989,7 @@ const saleOrderBuyer = {
 const saleOrderProgress = {
   display: "grid",
   gridTemplateColumns:
-    "repeat(4, minmax(0, 1fr))",
+    "repeat(6, minmax(0, 1fr))",
   gap: "7px",
   marginBottom: "14px"
 };

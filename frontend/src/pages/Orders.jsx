@@ -1,3 +1,4 @@
+import { API_BASE_URL as QSM_RUNTIME_API_URL } from "../config/runtime";
 import {
   useEffect,
   useMemo,
@@ -161,7 +162,7 @@ function Orders() {
 
       const response =
         await api.get(
-          "/orders/my-orders"
+          "/orders/my-orders?type=buy"
         );
 
       const backendOrders =
@@ -177,16 +178,7 @@ function Orders() {
           ? backendOrders
           : [];
 
-      const buyerOrders =
-        normalizedOrders.filter(
-          (order) =>
-            isBuyerOrder(
-              order,
-              currentUserId
-            )
-        );
-
-      setOrders(buyerOrders);
+      setOrders(normalizedOrders);
     } catch (err) {
       console.error(
         "Error cargando compras:",
@@ -1397,10 +1389,7 @@ function PurchaseCard({
     disputeLoading;
 
   const trackingSteps =
-    getTrackingSteps(
-      status,
-      deliveryMethod
-    );
+    getTrackingSteps(order);
 
   return (
     <article style={purchaseCard}>
@@ -2362,255 +2351,371 @@ function getApiOrigin() {
   const configuredUrl =
     import.meta.env
       .VITE_API_URL ||
-    "http://localhost:5000/api";
+    QSM_RUNTIME_API_URL;
 
   return configuredUrl
     .replace(/\/api\/?$/, "")
     .replace(/\/$/, "");
 }
 
-function getTrackingSteps(
-  status,
-  deliveryMethod
-) {
-  const normalized =
-    normalizeStatus(status);
+function getTrackingSteps(order) {
+  const rawStatus = (value) =>
+    String(value || "")
+      .trim()
+      .toUpperCase();
 
-  const orderedStatuses = [
-    "PENDING",
-    "WAITING_PAYMENT",
-    "PAYMENT_UNDER_REVIEW",
-    "PAYMENT_CONFIRMED",
-    "WAITING_SELLER",
-    "WAITING_WAREHOUSE",
-    "IN_WAREHOUSE",
-    "UNDER_INSPECTION",
-    "READY_FOR_PICKUP",
-    "OUT_FOR_DELIVERY",
-    "WAITING_PIN",
-    "DELIVERED",
-    "COMPLETED"
-  ];
+  const status =
+    normalizeStatus(order?.status);
 
-  const currentIndex =
-    orderedStatuses.indexOf(
-      normalized
+  const paymentStatus =
+    rawStatus(order?.paymentStatus);
+
+  const escrowStatus =
+    rawStatus(order?.escrowStatus);
+
+  const warehouseStatus =
+    rawStatus(order?.warehouseStatus);
+
+  const deliveryStatus =
+    rawStatus(order?.deliveryStatus);
+
+  const deliveryMethod =
+    rawStatus(order?.deliveryMethod);
+
+  const timeline =
+    Array.isArray(order?.timeline)
+      ? order.timeline
+      : [];
+
+  const timelineCodes =
+    new Set(
+      timeline
+        .map((event) =>
+          rawStatus(
+            event?.status ||
+            event?.code ||
+            event?.event
+          )
+        )
+        .filter(Boolean)
     );
 
-  const hasReached = (
-    targetStatus
-  ) => {
-    const targetIndex =
-      orderedStatuses.indexOf(
-        targetStatus
-      );
-
-    if (
-      normalized ===
-        "CANCELLED" ||
-      normalized ===
-        "REJECTED" ||
-      normalized ===
-        "REFUNDED" ||
-      normalized ===
-        "DISPUTED"
-    ) {
-      return false;
-    }
-
-    return (
-      currentIndex >= targetIndex &&
-      targetIndex >= 0
+  const hasEvent = (...codes) =>
+    codes.some((code) =>
+      timelineCodes.has(code)
     );
-  };
 
-  const warehouseDelivery =
+  const paymentProtected =
+    [
+      "HELD",
+      "CONFIRMED",
+      "PAID",
+      "RELEASED"
+    ].includes(paymentStatus) ||
+    [
+      "HELD",
+      "FUNDED",
+      "READY_TO_RELEASE",
+      "RELEASED"
+    ].includes(escrowStatus) ||
+    hasEvent(
+      "PAYMENT_CONFIRMED",
+      "PAYMENT_HELD",
+      "ESCROW_FUNDED"
+    );
+
+  const delivered =
+    Boolean(
+      order?.deliveredAt ||
+      order?.deliveryPinVerified ||
+      order?.deliveryConfirmedByAgent
+    ) ||
+    [
+      "DELIVERED",
+      "COMPLETED"
+    ].includes(status) ||
+    deliveryStatus === "DELIVERED" ||
+    hasEvent(
+      "DELIVERY_PIN_VERIFIED",
+      "DELIVERED"
+    );
+
+  const fundsReleased =
+    paymentStatus === "RELEASED" ||
+    escrowStatus === "RELEASED" ||
+    Boolean(order?.releasedAt) ||
+    status === "COMPLETED" ||
+    hasEvent(
+      "PAYMENT_RELEASED",
+      "ESCROW_RELEASED"
+    );
+
+  const pickedUp =
+    Boolean(
+      order?.productCollectedAt
+    ) ||
+    [
+      "PICKED_UP",
+      "PRODUCT_COLLECTED",
+      "IN_TRANSIT",
+      "OUT_FOR_DELIVERY",
+      "WAITING_PIN",
+      "DELIVERED"
+    ].includes(deliveryStatus) ||
+    delivered ||
+    hasEvent(
+      "PRODUCT_COLLECTED",
+      "DELIVERY_PICKED_UP"
+    );
+
+  const inRoute =
+    Boolean(order?.outForDeliveryAt) ||
+    [
+      "IN_TRANSIT",
+      "OUT_FOR_DELIVERY",
+      "WAITING_PIN",
+      "DELIVERED"
+    ].includes(deliveryStatus) ||
+    delivered ||
+    hasEvent(
+      "OUT_FOR_DELIVERY",
+      "DELIVERY_IN_TRANSIT"
+    );
+
+  const warehouseFlow =
     deliveryMethod ===
-    "QSM_WAREHOUSE";
+      "QSM_WAREHOUSE" ||
+    ![
+      "",
+      "NOT_REQUIRED"
+    ].includes(warehouseStatus);
+
+  const warehouseRequested =
+    warehouseFlow &&
+    (
+      [
+        "WAITING_RECEPTION",
+        "RECEIVED",
+        "IN_WAREHOUSE",
+        "UNDER_INSPECTION",
+        "APPROVED",
+        "READY_FOR_PICKUP"
+      ].includes(warehouseStatus) ||
+      Boolean(order?.warehouseReceivedAt) ||
+      hasEvent(
+        "WAREHOUSE_REQUESTED",
+        "WAREHOUSE_RECEIVED"
+      )
+    );
+
+  const warehouseReceived =
+    Boolean(order?.warehouseReceivedAt) ||
+    [
+      "RECEIVED",
+      "IN_WAREHOUSE",
+      "UNDER_INSPECTION",
+      "APPROVED",
+      "READY_FOR_PICKUP"
+    ].includes(warehouseStatus) ||
+    hasEvent("WAREHOUSE_RECEIVED");
+
+  const inspectionApproved =
+    Boolean(order?.warehouseApprovedAt) ||
+    [
+      "APPROVED",
+      "READY_FOR_PICKUP"
+    ].includes(warehouseStatus) ||
+    pickedUp ||
+    delivered ||
+    hasEvent("WAREHOUSE_APPROVED");
+
+  const pickupRequested =
+    Boolean(
+      order?.pickupScheduledAt ||
+      order?.deliveryAgentId
+    ) ||
+    [
+      "PENDING_ASSIGNMENT",
+      "ASSIGNED",
+      "PICKED_UP",
+      "PRODUCT_COLLECTED",
+      "IN_TRANSIT",
+      "OUT_FOR_DELIVERY",
+      "WAITING_PIN",
+      "DELIVERED"
+    ].includes(deliveryStatus) ||
+    hasEvent(
+      "DELIVERY_AGENT_ASSIGNED",
+      "PICKUP_REQUESTED"
+    );
 
   const steps = [
     {
       code: "ORDER_CREATED",
-      icon: "✓",
+      icon: "?",
       title: "Compra creada",
       text:
         "La orden fue registrada correctamente.",
-      active: true,
-      current:
-        normalized ===
-        "PENDING"
+      active: true
     },
     {
-      code: "PAYMENT",
-      icon: "✓",
-      title: "Pago registrado",
+      code: "PAYMENT_PROTECTED",
+      icon: "?",
+      title: "Pago protegido",
       text:
-        "QSM registró el método de pago seleccionado.",
-      active:
-        hasReached(
-          "WAITING_PAYMENT"
-        ) ||
-        hasReached(
-          "PAYMENT_CONFIRMED"
-        ),
-      current:
-        [
-          "WAITING_PAYMENT",
-          "PAYMENT_UNDER_REVIEW",
-          "PAYMENT_CONFIRMED"
-        ].includes(
-          normalized
-        )
-    },
-    {
-      code: "SELLER",
-      icon: "✓",
-      title: "Vendedor notificado",
-      text:
-        "El vendedor recibió las instrucciones de la compra.",
-      active:
-        hasReached(
-          "WAITING_SELLER"
-        ) ||
-        hasReached(
-          "WAITING_WAREHOUSE"
-        ),
-      current:
-        normalized ===
-        "WAITING_SELLER"
-    },
-    {
-      code: "LOGISTICS",
-      icon: warehouseDelivery
-        ? "🏬"
-        : "🚚",
-      title: warehouseDelivery
-        ? "Proceso de almacén"
-        : "Recogida por delivery",
-      text: warehouseDelivery
-        ? "El producto será recibido y revisado por QSM."
-        : "Un agente QSM recogerá y verificará el producto.",
-      active:
-        hasReached(
-          "IN_WAREHOUSE"
-        ) ||
-        hasReached(
-          "OUT_FOR_DELIVERY"
-        ),
-      current:
-        [
-          "WAITING_WAREHOUSE",
-          "IN_WAREHOUSE",
-          "UNDER_INSPECTION"
-        ].includes(
-          normalized
-        )
-    },
-    {
-      code: "READY",
-      icon: "📦",
-      title: "Listo para entrega",
-      text:
-        "El producto fue aprobado para continuar.",
-      active:
-        hasReached(
-          "READY_FOR_PICKUP"
-        ),
-      current:
-        normalized ===
-        "READY_FOR_PICKUP"
-    },
-    {
-      code: "PIN",
-      icon: "🔐",
-      title: "Entrega mediante PIN",
-      text:
-        "El PIN valida la entrega final al comprador.",
-      active:
-        hasReached(
-          "WAITING_PIN"
-        ) ||
-        hasReached(
-          "DELIVERED"
-        ),
-      current:
-        normalized ===
-        "WAITING_PIN"
-    },
-    {
-      code: "COMPLETED",
-      icon: "✓",
-      title: "Compra completada",
-      text:
-        "La operación fue cerrada correctamente.",
-      active:
-        normalized ===
-          "DELIVERED" ||
-        normalized ===
-          "COMPLETED",
-      current:
-        normalized ===
-        "DELIVERED"
+        "Los fondos est?n protegidos por QSM.",
+      active: paymentProtected
     }
   ];
 
-  if (
-    normalized === "DISPUTED"
+  if (warehouseFlow) {
+    steps.push(
+      {
+        code: "WAREHOUSE_REQUESTED",
+        icon: "?",
+        title:
+          "Producto entregado por el vendedor",
+        text:
+          "El producto fue enviado al Almac?n QSM.",
+        active: warehouseRequested
+      },
+      {
+        code: "WAREHOUSE_RECEIVED",
+        icon: "?",
+        title: "Recibido en Almac?n",
+        text:
+          "QSM confirm? la recepci?n f?sica del producto.",
+        active: warehouseReceived
+      },
+      {
+        code: "WAREHOUSE_APPROVED",
+        icon: "?",
+        title: "Inspecci?n aprobada",
+        text:
+          "El producto fue verificado y aprobado.",
+        active: inspectionApproved
+      }
+    );
+  } else if (
+    deliveryMethod ===
+    "QSM_VERIFIED_DELIVERY"
   ) {
     steps.push({
-      code: "DISPUTED",
-      icon: "⚠",
-      title: "Compra en reclamo",
+      code: "PICKUP_REQUESTED",
+      icon: "?",
+      title: "Recogida solicitada",
       text:
-        "QSM está revisando el caso antes de continuar.",
-      active: true,
-      current: true
+        "Delivery QSM recibi? la solicitud de recogida.",
+      active: pickupRequested
+    });
+  } else {
+    steps.push({
+      code: "SELLER_COORDINATION",
+      icon: "?",
+      title: "Entrega coordinada",
+      text:
+        "El vendedor recibi? las instrucciones de entrega.",
+      active:
+        pickedUp ||
+        inRoute ||
+        delivered
     });
   }
 
   if (
-    normalized === "CANCELLED"
+    deliveryMethod !==
+    "DIRECT_DELIVERY"
   ) {
-    steps.push({
-      code: "CANCELLED",
-      icon: "✕",
-      title: "Compra cancelada",
-      text:
-        "La operación fue cancelada y no continuará.",
-      active: true,
-      current: true
-    });
+    steps.push(
+      {
+        code: "PRODUCT_COLLECTED",
+        icon: "?",
+        title: "Recogido por Delivery",
+        text:
+          "El agente confirm? que recibi? el producto.",
+        active: pickedUp
+      },
+      {
+        code: "OUT_FOR_DELIVERY",
+        icon: "?",
+        title: "Producto en ruta",
+        text:
+          "La entrega est? en camino hacia el comprador.",
+        active: inRoute
+      }
+    );
   }
 
-  if (
-    normalized === "REFUNDED"
-  ) {
-    steps.push({
-      code: "REFUNDED",
-      icon: "↩",
-      title: "Compra reembolsada",
+  steps.push(
+    {
+      code: "DELIVERED",
+      icon: "?",
+      title: "Entregado mediante PIN",
       text:
-        "El reembolso de la operación fue registrado.",
-      active: true,
-      current: true
-    });
-  }
+        "La entrega fue validada de forma segura.",
+      active: delivered
+    },
+    {
+      code: "PAYMENT_RELEASED",
+      icon: "?",
+      title: "Pago liberado",
+      text:
+        "Los fondos fueron liberados al vendedor.",
+      active: fundsReleased
+    }
+  );
 
-  if (
-    normalized === "REJECTED"
-  ) {
+  const interrupted =
+    [
+      "CANCELLED",
+      "REJECTED",
+      "REFUNDED",
+      "DISPUTED"
+    ].includes(status) ||
+    paymentStatus === "REFUNDED" ||
+    escrowStatus === "REFUNDED";
+
+  if (interrupted) {
     steps.push({
-      code: "REJECTED",
+      code: "INTERRUPTED",
       icon: "!",
-      title: "Producto rechazado",
+      title:
+        status === "DISPUTED"
+          ? "Operaci?n en disputa"
+          : "Operaci?n interrumpida",
       text:
-        "El producto no superó el proceso de verificación.",
+        status === "DISPUTED"
+          ? "Los fondos permanecen protegidos mientras QSM revisa el caso."
+          : "La operaci?n fue cancelada, rechazada o reembolsada.",
       active: true,
       current: true
     });
   }
 
-  return steps;
+  const firstPendingIndex =
+    steps.findIndex(
+      (step) => !step.active
+    );
+
+  return steps.map(
+    (step, index) => ({
+      ...step,
+
+      current:
+        step.current ||
+        (
+          !interrupted &&
+          (
+            firstPendingIndex === index ||
+            (
+              firstPendingIndex === -1 &&
+              index ===
+                steps.length - 1
+            )
+          )
+        )
+    })
+  );
 }
 const page = {
   minHeight: "100vh",

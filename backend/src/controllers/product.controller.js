@@ -1,11 +1,9 @@
-const mongoose = require("mongoose");
 const validator = require("validator");
-
-const Product = require("../models/Product");
+const prisma = require("../utils/prisma");
 
 /*
 |--------------------------------------------------------------------------
-| Valores permitidos
+| Configuración y valores permitidos
 |--------------------------------------------------------------------------
 */
 
@@ -78,11 +76,13 @@ const ALLOWED_AUTHENTICITY_STATUS = [
   "REPLICA"
 ];
 
-/*
-|--------------------------------------------------------------------------
-| Configuración de riesgo por categoría
-|--------------------------------------------------------------------------
-*/
+const ALLOWED_RISK_LEVELS = [
+  "LOW",
+  "MEDIUM",
+  "HIGH",
+  "CRITICAL",
+  "UNCLASSIFIED"
+];
 
 const CATEGORY_RISK_CONFIG = {
   Moda: {
@@ -91,55 +91,60 @@ const CATEGORY_RISK_CONFIG = {
     baseScore: 15,
     verificationMode: "BASIC"
   },
-
   Hogar: {
     level: "LOW",
     label: "Riesgo bajo",
     baseScore: 20,
     verificationMode: "BASIC"
   },
-
   Gaming: {
     level: "MEDIUM",
     label: "Riesgo medio",
     baseScore: 45,
     verificationMode: "RECOMMENDED"
   },
-
   Tecnología: {
     level: "MEDIUM",
     label: "Riesgo medio",
     baseScore: 50,
     verificationMode: "RECOMMENDED"
   },
-
   Laptops: {
     level: "HIGH",
     label: "Riesgo alto",
     baseScore: 68,
     verificationMode: "ENHANCED"
   },
-
   Celulares: {
     level: "HIGH",
     label: "Riesgo alto",
     baseScore: 75,
     verificationMode: "ENHANCED"
   },
-
   Vehículos: {
     level: "CRITICAL",
     label: "Riesgo crítico",
     baseScore: 92,
     verificationMode: "PHYSICAL"
   },
-
   Otros: {
     level: "UNCLASSIFIED",
     label: "Riesgo por determinar",
     baseScore: 40,
     verificationMode: "REVIEW"
   }
+};
+
+const SELLER_SELECT = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  email: true,
+  trustScore: true,
+  isVerified: true,
+  role: true,
+  sellerEnabled: true,
+  status: true
 };
 
 /*
@@ -166,16 +171,28 @@ const clampNumber = (
   );
 };
 
+const parsePositiveInt = (value) => {
+  const parsed = Number(value);
+
+  if (
+    !Number.isInteger(parsed) ||
+    parsed <= 0
+  ) {
+    return null;
+  }
+
+  return parsed;
+};
+
 const sanitizeText = (
   value,
   maxLength = 2000
 ) => {
-  return validator
-    .escape(
-      String(value || "")
-        .trim()
-        .slice(0, maxLength)
-    );
+  return validator.escape(
+    String(value || "")
+      .trim()
+      .slice(0, maxLength)
+  );
 };
 
 const sanitizePlainIdentifier = (
@@ -198,30 +215,108 @@ const cleanFilePath = (value) => {
     .replaceAll("&amp;", "&");
 };
 
-const isValidObjectId = (id) => {
-  return mongoose.Types.ObjectId.isValid(id);
-};
-
-const getUserId = (req) => {
-  return (
-    req.user?._id ||
-    req.user?.id ||
-    req.user?.userId ||
-    ""
-  );
-};
-
 const isUserAdmin = (req) => {
   return [
     "ADMIN",
-    "SENIOR_ADMIN"
+    "SENIOR_ADMIN",
+    "SUPER_ADMIN"
   ].includes(req.user?.role) ||
     req.user?.isAdmin === true;
 };
 
 /*
 |--------------------------------------------------------------------------
-| Normalizar imágenes
+| Puente temporal de identidad
+|--------------------------------------------------------------------------
+|
+| Auth todavía obtiene el usuario desde MongoDB.
+| Product ya trabaja con PostgreSQL/Supabase.
+|
+| Primero intenta un ID entero y, si req.user contiene un ObjectId de Mongo,
+| busca el usuario equivalente de Supabase mediante el correo.
+|--------------------------------------------------------------------------
+*/
+
+const resolvePrismaUser = async (req) => {
+  const possibleIds = [
+    req.user?.id,
+    req.user?.userId,
+    req.user?._id
+  ];
+
+  for (const possibleId of possibleIds) {
+    const numericId = parsePositiveInt(possibleId);
+
+    if (numericId) {
+      const userById = await prisma.user.findUnique({
+        where: {
+          id: numericId
+        }
+      });
+
+      if (userById) {
+        return userById;
+      }
+    }
+  }
+
+  const email = String(
+    req.user?.email || ""
+  )
+    .trim()
+    .toLowerCase();
+
+  if (!email) {
+    return null;
+  }
+
+  return prisma.user.findUnique({
+    where: {
+      email
+    }
+  });
+};
+
+const serializeSeller = (seller) => {
+  if (!seller) {
+    return null;
+  }
+
+  return {
+    ...seller,
+    _id: String(seller.id),
+    profilePhoto: null,
+    avatar: null,
+    verificationStatus:
+      seller.isVerified
+        ? "APPROVED"
+        : "PENDING"
+  };
+};
+
+const serializeProduct = (product) => {
+  if (!product) {
+    return null;
+  }
+
+  return {
+    ...product,
+    _id: String(product.id),
+    seller: serializeSeller(
+      product.seller
+    )
+  };
+};
+
+const createProductInclude = {
+  seller: {
+    select: SELLER_SELECT
+  }
+};
+
+/*
+|--------------------------------------------------------------------------
+| Normalización
 |--------------------------------------------------------------------------
 */
 
@@ -243,16 +338,11 @@ const normalizeImages = (images) => {
   ].slice(0, 8);
 };
 
-/*
-|--------------------------------------------------------------------------
-| Normalizar video
-|--------------------------------------------------------------------------
-*/
-
 const normalizeVideo = (video) => {
   if (
     !video ||
-    typeof video !== "object"
+    typeof video !== "object" ||
+    Array.isArray(video)
   ) {
     return {
       url: "",
@@ -275,18 +365,13 @@ const normalizeVideo = (video) => {
   };
 };
 
-/*
-|--------------------------------------------------------------------------
-| Normalizar datos de vehículo
-|--------------------------------------------------------------------------
-*/
-
 const normalizeVehicleDetails = (
   vehicleDetails
 ) => {
   const source =
     vehicleDetails &&
-    typeof vehicleDetails === "object"
+    typeof vehicleDetails === "object" &&
+    !Array.isArray(vehicleDetails)
       ? vehicleDetails
       : {};
 
@@ -321,18 +406,13 @@ const normalizeVehicleDetails = (
   };
 };
 
-/*
-|--------------------------------------------------------------------------
-| Normalizar datos de moda
-|--------------------------------------------------------------------------
-*/
-
 const normalizeClothingDetails = (
   clothingDetails
 ) => {
   const source =
     clothingDetails &&
-    typeof clothingDetails === "object"
+    typeof clothingDetails === "object" &&
+    !Array.isArray(clothingDetails)
       ? clothingDetails
       : {};
 
@@ -356,16 +436,11 @@ const normalizeClothingDetails = (
   };
 };
 
-/*
-|--------------------------------------------------------------------------
-| Normalizar evidencias
-|--------------------------------------------------------------------------
-*/
-
 const normalizeEvidence = (evidence) => {
   const source =
     evidence &&
-    typeof evidence === "object"
+    typeof evidence === "object" &&
+    !Array.isArray(evidence)
       ? evidence
       : {};
 
@@ -379,13 +454,21 @@ const normalizeEvidence = (evidence) => {
     acceptsPhysicalInspection:
       Boolean(
         source.acceptsPhysicalInspection
+      ),
+
+    evidenceScore:
+      clampNumber(
+        source.evidenceScore,
+        0,
+        100,
+        0
       )
   };
 };
 
 /*
 |--------------------------------------------------------------------------
-| Validación técnica según categoría
+| Validaciones y análisis
 |--------------------------------------------------------------------------
 */
 
@@ -475,12 +558,6 @@ const validateTechnicalFields = ({
   return errors;
 };
 
-/*
-|--------------------------------------------------------------------------
-| Calcular riesgo real del tipo de producto
-|--------------------------------------------------------------------------
-*/
-
 const calculateCategoryRisk = ({
   category,
   price
@@ -549,12 +626,6 @@ const calculateCategoryRisk = ({
   };
 };
 
-/*
-|--------------------------------------------------------------------------
-| Calcular puntuación técnica
-|--------------------------------------------------------------------------
-*/
-
 const calculateTechnicalScore = ({
   brand,
   model,
@@ -603,12 +674,6 @@ const calculateTechnicalScore = ({
   );
 };
 
-/*
-|--------------------------------------------------------------------------
-| Calcular puntuación de evidencia
-|--------------------------------------------------------------------------
-*/
-
 const calculateEvidenceScore = ({
   evidence,
   serialNumber,
@@ -650,12 +715,6 @@ const calculateEvidenceScore = ({
     0
   );
 };
-
-/*
-|--------------------------------------------------------------------------
-| Calcular calidad y confianza de la publicación
-|--------------------------------------------------------------------------
-*/
 
 const calculatePublicationAnalysis = ({
   title,
@@ -943,7 +1002,7 @@ const calculatePublicationAnalysis = ({
 
 /*
 |--------------------------------------------------------------------------
-| Buscar identificadores duplicados
+| Identificadores y código QSM
 |--------------------------------------------------------------------------
 */
 
@@ -969,8 +1028,10 @@ const findIdentifierConflicts = async ({
 
   if (vin) {
     clauses.push({
-      "vehicleDetails.vin":
-        vin
+      vehicleDetails: {
+        path: ["vin"],
+        equals: vin
+      }
     });
   }
 
@@ -978,25 +1039,156 @@ const findIdentifierConflicts = async ({
     return [];
   }
 
-  const query = {
+  const where = {
     status: {
-      $ne: "DISABLED"
+      not: "DISABLED"
     },
-
-    $or: clauses
+    OR: clauses
   };
 
-  if (excludeProductId) {
-    query._id = {
-      $ne: excludeProductId
+  const excludedId =
+    parsePositiveInt(
+      excludeProductId
+    );
+
+  if (excludedId) {
+    where.id = {
+      not: excludedId
     };
   }
 
-  return Product.find(query)
-    .select(
-      "_id title imei serialNumber vehicleDetails.vin seller status"
+  return prisma.product.findMany({
+    where,
+    select: {
+      id: true,
+      title: true,
+      imei: true,
+      serialNumber: true,
+      vehicleDetails: true,
+      sellerId: true,
+      status: true
+    }
+  });
+};
+
+const createQsmCodePrefix = (
+  category
+) => {
+  const normalized = String(
+    category || "QSM"
+  )
+    .normalize("NFD")
+    .replace(
+      /[\u0300-\u036f]/g,
+      ""
     )
-    .lean();
+    .replace(
+      /[^a-zA-Z0-9]/g,
+      ""
+    )
+    .toUpperCase();
+
+  return (
+    normalized.slice(0, 4) ||
+    "QSM"
+  );
+};
+
+const generateUniqueQsmCode = async (
+  category
+) => {
+  const prefix =
+    createQsmCodePrefix(category);
+
+  for (
+    let attempt = 0;
+    attempt < 10;
+    attempt += 1
+  ) {
+    const code = [
+      "QSM",
+      prefix,
+      Date.now()
+        .toString(36)
+        .toUpperCase(),
+      Math.random()
+        .toString(36)
+        .slice(2, 7)
+        .toUpperCase()
+    ].join("-");
+
+    const exists =
+      await prisma.product.findUnique({
+        where: {
+          qsmCode: code
+        },
+        select: {
+          id: true
+        }
+      });
+
+    if (!exists) {
+      return code;
+    }
+  }
+
+  throw new Error(
+    "No se pudo generar un código QSM único."
+  );
+};
+
+/*
+|--------------------------------------------------------------------------
+| Respuestas de error Prisma
+|--------------------------------------------------------------------------
+*/
+
+const sendControllerError = (
+  res,
+  error,
+  defaultMessage
+) => {
+  console.error(
+    defaultMessage,
+    error
+  );
+
+  if (error?.code === "P2002") {
+    return res.status(409).json({
+      success: false,
+      message:
+        "Ya existe un producto con uno de los identificadores proporcionados.",
+      fields:
+        error?.meta?.target || []
+    });
+  }
+
+  if (error?.code === "P2025") {
+    return res.status(404).json({
+      success: false,
+      message:
+        "Producto no encontrado."
+    });
+  }
+
+  if (error?.code === "P2003") {
+    return res.status(409).json({
+      success: false,
+      message:
+        "La operación viola una relación existente del producto."
+    });
+  }
+
+  return res.status(500).json({
+    success: false,
+    message:
+      defaultMessage,
+    error:
+      process.env.NODE_ENV ===
+      "production"
+        ? undefined
+        : error.message
+  });
 };
 
 /*
@@ -1010,17 +1202,24 @@ const createProduct = async (
   res
 ) => {
   try {
-    const userId =
-      getUserId(req);
+    const prismaUser =
+      await resolvePrismaUser(req);
 
-    if (
-      !userId ||
-      !isValidObjectId(userId)
-    ) {
+    if (!prismaUser) {
       return res.status(401).json({
         success: false,
         message:
-          "No se pudo identificar al vendedor."
+          "El usuario autenticado todavía no existe en Supabase."
+      });
+    }
+
+    if (
+      prismaUser.sellerEnabled === false
+    ) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Tu cuenta no tiene habilitada la función de vendedor."
       });
     }
 
@@ -1054,8 +1253,9 @@ const createProduct = async (
       specialPriceExplanation,
 
       images,
-      video
-    } = req.body;
+      video,
+      photoHash
+    } = req.body || {};
 
     const safeTitle =
       sanitizeText(
@@ -1104,10 +1304,21 @@ const createProduct = async (
       });
     }
 
+    const safeCondition =
+      condition || "USED_GOOD";
+
+    const safeQuality =
+      quality || "UNKNOWN";
+
+    const safeDeliveryMethod =
+      deliveryMethod || "";
+
+    const safeSpecialPriceReason =
+      specialPriceReason || "NONE";
+
     if (
-      condition &&
       !ALLOWED_CONDITIONS.includes(
-        condition
+        safeCondition
       )
     ) {
       return res.status(400).json({
@@ -1118,9 +1329,8 @@ const createProduct = async (
     }
 
     if (
-      quality &&
       !ALLOWED_QUALITIES.includes(
-        quality
+        safeQuality
       )
     ) {
       return res.status(400).json({
@@ -1131,9 +1341,8 @@ const createProduct = async (
     }
 
     if (
-      deliveryMethod &&
       !ALLOWED_DELIVERY_METHODS.includes(
-        deliveryMethod
+        safeDeliveryMethod
       )
     ) {
       return res.status(400).json({
@@ -1144,9 +1353,8 @@ const createProduct = async (
     }
 
     if (
-      specialPriceReason &&
       !ALLOWED_SPECIAL_PRICE_REASONS.includes(
-        specialPriceReason
+        safeSpecialPriceReason
       )
     ) {
       return res.status(400).json({
@@ -1209,6 +1417,54 @@ const createProduct = async (
         evidence
       );
 
+    const safeStorageCapacity =
+      sanitizeText(
+        storageCapacity,
+        80
+      );
+
+    const safeRamMemory =
+      sanitizeText(
+        ramMemory,
+        60
+      );
+
+    const safeBatteryHealth =
+      sanitizeText(
+        batteryHealth,
+        60
+      );
+
+    const safeDimensions =
+      sanitizeText(
+        dimensions,
+        100
+      );
+
+    const safeAccessoriesIncluded =
+      sanitizeText(
+        accessoriesIncluded,
+        300
+      );
+
+    const safeLocation =
+      sanitizeText(
+        location,
+        160
+      );
+
+    const safeWarranty =
+      sanitizeText(
+        warranty,
+        160
+      );
+
+    const safeSpecialPriceExplanation =
+      sanitizeText(
+        specialPriceExplanation,
+        500
+      );
+
     const technicalErrors =
       validateTechnicalFields({
         category:
@@ -1257,11 +1513,16 @@ const createProduct = async (
           safeSerialNumber,
         imei:
           safeImei,
-        storageCapacity,
-        ramMemory,
-        batteryHealth,
-        dimensions,
-        accessoriesIncluded,
+        storageCapacity:
+          safeStorageCapacity,
+        ramMemory:
+          safeRamMemory,
+        batteryHealth:
+          safeBatteryHealth,
+        dimensions:
+          safeDimensions,
+        accessoriesIncluded:
+          safeAccessoriesIncluded,
         vehicleDetails:
           safeVehicleDetails,
         clothingDetails:
@@ -1304,26 +1565,19 @@ const createProduct = async (
         price:
           numericPrice,
         quality:
-          quality || "UNKNOWN",
+          safeQuality,
         warranty:
-          sanitizeText(
-            warranty,
-            160
-          ),
+          safeWarranty,
         specialPriceReason:
-          specialPriceReason ||
-          "NONE",
+          safeSpecialPriceReason,
         specialPriceExplanation:
-          sanitizeText(
-            specialPriceExplanation,
-            500
-          ),
+          safeSpecialPriceExplanation,
         sellerTrustScore:
-          req.user?.trustScore ||
+          prismaUser.trustScore ||
           50,
         sellerVerified:
           Boolean(
-            req.user?.isVerified
+            prismaUser.isVerified
           ),
         technicalScore,
         evidenceScore
@@ -1353,167 +1607,176 @@ const createProduct = async (
         analysis.confidenceScore;
     }
 
-    let status =
-      "ACTIVE";
-
-    if (
+    const status =
       conflicts.length > 0 ||
       risk.riskLevel ===
         "CRITICAL"
-    ) {
-      status =
-        "UNDER_REVIEW";
-    }
+        ? "UNDER_REVIEW"
+        : "ACTIVE";
+
+    const qsmCode =
+      await generateUniqueQsmCode(
+        safeCategory
+      );
 
     const product =
-      await Product.create({
-        title:
-          safeTitle,
+      await prisma.product.create({
+        data: {
+          title:
+            safeTitle,
 
-        description:
-          safeDescription,
+          description:
+            safeDescription,
 
-        price:
-          numericPrice,
+          price:
+            numericPrice,
 
-        category:
-          safeCategory,
+          category:
+            safeCategory,
 
-        condition:
-          condition ||
-          "USED_GOOD",
+          condition:
+            safeCondition,
 
-        quality:
-          quality ||
-          "UNKNOWN",
+          quality:
+            safeQuality,
 
-        brand:
-          safeBrand,
+          brand:
+            safeBrand,
 
-        model:
-          safeModel,
+          model:
+            safeModel,
 
-        serialNumber:
-          safeSerialNumber,
+          serialNumber:
+            safeSerialNumber,
 
-        imei:
-          safeImei,
+          imei:
+            safeImei,
 
-        storageCapacity:
-          sanitizeText(
-            storageCapacity,
-            80
-          ),
+          storageCapacity:
+            safeStorageCapacity,
 
-        ramMemory:
-          sanitizeText(
-            ramMemory,
-            60
-          ),
+          ramMemory:
+            safeRamMemory,
 
-        batteryHealth:
-          sanitizeText(
-            batteryHealth,
-            60
-          ),
+          batteryHealth:
+            safeBatteryHealth,
 
-        dimensions:
-          sanitizeText(
-            dimensions,
-            100
-          ),
+          dimensions:
+            safeDimensions,
 
-        accessoriesIncluded:
-          sanitizeText(
-            accessoriesIncluded,
-            300
-          ),
+          accessoriesIncluded:
+            safeAccessoriesIncluded,
 
-        vehicleDetails:
-          safeVehicleDetails,
+          vehicleDetails:
+            safeVehicleDetails,
 
-        clothingDetails:
-          safeClothingDetails,
+          clothingDetails:
+            safeClothingDetails,
 
-        evidence:
-          safeEvidence,
+          evidence:
+            safeEvidence,
 
-        location:
-          sanitizeText(
-            location,
-            160
-          ),
+          evidenceRequired: [
+            ...new Set(
+              analysis.evidenceRequired
+            )
+          ],
 
-        warranty:
-          sanitizeText(
-            warranty,
-            160
-          ),
+          location:
+            safeLocation,
 
-        deliveryMethod:
-          deliveryMethod ||
-          "",
+          warranty:
+            safeWarranty,
 
-        specialPriceReason:
-          specialPriceReason ||
-          "NONE",
+          deliveryMethod:
+            safeDeliveryMethod,
 
-        specialPriceExplanation:
-          sanitizeText(
-            specialPriceExplanation,
-            500
-          ),
+          specialPriceReason:
+            safeSpecialPriceReason,
 
-        images:
-          safeImages,
+          specialPriceExplanation:
+            safeSpecialPriceExplanation,
 
-        video:
-          safeVideo,
+          imageUrl:
+            safeImages[0] || null,
 
-        seller:
-          userId,
+          images:
+            safeImages,
 
-        status,
+          video:
+            safeVideo,
 
-        riskLevel:
-          risk.riskLevel,
+          photoHash:
+            photoHash
+              ? sanitizePlainIdentifier(
+                  photoHash,
+                  255
+                )
+              : null,
 
-        riskLabel:
-          risk.riskLabel,
+          qsmCode,
 
-        riskScore:
-          risk.riskScore,
+          verificationStatus:
+            "PENDING",
 
-        verificationMode:
-          risk.verificationMode,
+          verificationMode:
+            risk.verificationMode,
 
-        publicationScore:
-          analysis.publicationScore,
+          cameraRequired:
+            true,
 
-        publicationLevel:
-          analysis.publicationLevel,
+          certified:
+            false,
 
-        confidenceScore:
-          analysis.confidenceScore,
+          isQsmVerified:
+            analysis.confidenceScore >=
+              85 &&
+            conflicts.length === 0 &&
+            risk.riskLevel !==
+              "CRITICAL",
 
-        saleProbability:
-          analysis.saleProbability,
+          status,
 
-        estimatedSaleTime:
-          analysis.estimatedSaleTime,
+          riskLevel:
+            risk.riskLevel,
 
-        aiAnalysis:
-          analysis.aiAnalysis,
+          riskLabel:
+            risk.riskLabel,
 
-        evidenceRequired:
-          analysis.evidenceRequired,
+          riskScore:
+            Math.round(
+              risk.riskScore
+            ),
 
-        isQsmVerified:
-          analysis.confidenceScore >=
-            85 &&
-          conflicts.length === 0 &&
-          risk.riskLevel !==
-            "CRITICAL"
+          publicationScore:
+            Math.round(
+              analysis.publicationScore
+            ),
+
+          publicationLevel:
+            analysis.publicationLevel,
+
+          confidenceScore:
+            Math.round(
+              analysis.confidenceScore
+            ),
+
+          saleProbability:
+            Math.round(
+              analysis.saleProbability
+            ),
+
+          estimatedSaleTime:
+            analysis.estimatedSaleTime,
+
+          aiAnalysis:
+            analysis.aiAnalysis,
+
+          sellerId:
+            prismaUser.id
+        },
+        include:
+          createProductInclude
       });
 
     return res.status(201).json({
@@ -1524,7 +1787,8 @@ const createProduct = async (
           ? "Producto creado y enviado a revisión QSM."
           : "Producto creado correctamente.",
 
-      product,
+      product:
+        serializeProduct(product),
 
       analysis: {
         identifierConflict:
@@ -1544,45 +1808,11 @@ const createProduct = async (
       }
     });
   } catch (error) {
-    console.error(
-      "Error creando producto:",
-      error
+    return sendControllerError(
+      res,
+      error,
+      "Error creando producto."
     );
-
-    if (
-      error?.name ===
-      "ValidationError"
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          Object.values(
-            error.errors
-          )[0]?.message ||
-          "Los datos del producto no son válidos."
-      });
-    }
-
-    if (
-      error?.code === 11000
-    ) {
-      return res.status(409).json({
-        success: false,
-        message:
-          "Ya existe un producto con uno de los identificadores proporcionados."
-      });
-    }
-
-    return res.status(500).json({
-      success: false,
-      message:
-        "Error creando producto.",
-      error:
-        process.env.NODE_ENV ===
-        "production"
-          ? undefined
-          : error.message
-    });
   }
 };
 
@@ -1597,9 +1827,9 @@ const getProducts = async (
   res
 ) => {
   try {
-    const filter = {
+    const where = {
       status: {
-        $in: [
+        in: [
           "ACTIVE",
           "SOLD"
         ]
@@ -1612,54 +1842,48 @@ const getProducts = async (
         req.query.category
       )
     ) {
-      filter.category =
+      where.category =
         req.query.category;
     }
 
     if (
       req.query.riskLevel &&
-      [
-        "LOW",
-        "MEDIUM",
-        "HIGH",
-        "CRITICAL",
-        "UNCLASSIFIED"
-      ].includes(
+      ALLOWED_RISK_LEVELS.includes(
         req.query.riskLevel
       )
     ) {
-      filter.riskLevel =
+      where.riskLevel =
         req.query.riskLevel;
     }
 
     const products =
-      await Product.find(filter)
-        .populate(
-          "seller",
-          "firstName lastName email trustScore isVerified profilePhoto avatar verificationStatus"
-        )
-        .sort({
-          createdAt: -1
-        })
-        .lean();
+      await prisma.product.findMany({
+        where,
+        orderBy: {
+          createdAt: "desc"
+        },
+        include:
+          createProductInclude
+      });
+
+    const serializedProducts =
+      products.map(
+        serializeProduct
+      );
 
     return res.json({
       success: true,
       count:
-        products.length,
-      products
+        serializedProducts.length,
+      products:
+        serializedProducts
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message:
-        "Error obteniendo productos.",
-      error:
-        process.env.NODE_ENV ===
-        "production"
-          ? undefined
-          : error.message
-    });
+    return sendControllerError(
+      res,
+      error,
+      "Error obteniendo productos."
+    );
   }
 };
 
@@ -1674,58 +1898,54 @@ const getMyProducts = async (
   res
 ) => {
   try {
-    const userId =
-      getUserId(req);
+    const prismaUser =
+      await resolvePrismaUser(req);
 
-    if (
-      !userId ||
-      !isValidObjectId(userId)
-    ) {
+    if (!prismaUser) {
       return res.status(401).json({
         success: false,
         message:
-          "Usuario no autenticado."
+          "El usuario autenticado todavía no existe en Supabase."
       });
     }
 
     const products =
-      await Product.find({
-        seller:
-          userId,
+      await prisma.product.findMany({
+        where: {
+          sellerId:
+            prismaUser.id,
+          status: {
+            not:
+              "DISABLED"
+          }
+        },
+        orderBy: {
+          createdAt: "desc"
+        },
+        include:
+          createProductInclude
+      });
 
-        status: {
-          $ne:
-            "DISABLED"
-        }
-      })
-        .populate(
-          "seller",
-          "firstName lastName email trustScore isVerified profilePhoto avatar verificationStatus"
-        )
-        .sort({
-          createdAt: -1
-        })
-        .lean();
+    const serializedProducts =
+      products.map(
+        serializeProduct
+      );
 
     return res.json({
       success: true,
       count:
-        products.length,
-      products,
+        serializedProducts.length,
+      products:
+        serializedProducts,
       myProducts:
-        products
+        serializedProducts
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message:
-        "Error obteniendo tus productos.",
-      error:
-        process.env.NODE_ENV ===
-        "production"
-          ? undefined
-          : error.message
-    });
+    return sendControllerError(
+      res,
+      error,
+      "Error obteniendo tus productos."
+    );
   }
 };
 
@@ -1740,10 +1960,12 @@ const getProductById = async (
   res
 ) => {
   try {
-    const { id } =
-      req.params;
+    const id =
+      parsePositiveInt(
+        req.params.id
+      );
 
-    if (!isValidObjectId(id)) {
+    if (!id) {
       return res.status(400).json({
         success: false,
         message:
@@ -1752,12 +1974,13 @@ const getProductById = async (
     }
 
     const product =
-      await Product.findById(id)
-        .populate(
-          "seller",
-          "firstName lastName email trustScore isVerified profilePhoto avatar verificationStatus"
-        )
-        .lean();
+      await prisma.product.findUnique({
+        where: {
+          id
+        },
+        include:
+          createProductInclude
+      });
 
     if (
       !product ||
@@ -1773,31 +1996,21 @@ const getProductById = async (
 
     return res.json({
       success: true,
-      product
+      product:
+        serializeProduct(product)
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message:
-        "Error obteniendo producto.",
-      error:
-        process.env.NODE_ENV ===
-        "production"
-          ? undefined
-          : error.message
-    });
+    return sendControllerError(
+      res,
+      error,
+      "Error obteniendo producto."
+    );
   }
 };
 
 /*
 |--------------------------------------------------------------------------
 | Actualizar producto completo
-|--------------------------------------------------------------------------
-|
-| Seguridad:
-| - Solo propietario o administrador.
-| - No permite cambiar seller, campos QSM, auditoría ni análisis desde cliente.
-| - Recalcula riesgo, score, confianza, evidencias y estado de revisión.
 |--------------------------------------------------------------------------
 */
 
@@ -1806,74 +2019,99 @@ const updateProduct = async (
   res
 ) => {
   try {
-    const { id } = req.params;
+    const id =
+      parsePositiveInt(
+        req.params.id
+      );
 
-    if (!isValidObjectId(id)) {
+    if (!id) {
       return res.status(400).json({
         success: false,
-        message: "ID de producto no válido."
+        message:
+          "ID de producto no válido."
       });
     }
 
-    const userId = getUserId(req);
+    const prismaUser =
+      await resolvePrismaUser(req);
 
-    if (!userId || !isValidObjectId(userId)) {
+    if (!prismaUser) {
       return res.status(401).json({
         success: false,
-        message: "Usuario no autenticado."
+        message:
+          "El usuario autenticado todavía no existe en Supabase."
       });
     }
 
-    const product = await Product.findById(id).populate(
-      "seller",
-      "_id trustScore isVerified role"
-    );
-
-    if (!product || product.status === "DISABLED") {
-      return res.status(404).json({
-        success: false,
-        message: "Producto no encontrado."
+    const product =
+      await prisma.product.findUnique({
+        where: {
+          id
+        },
+        include:
+          createProductInclude
       });
-    }
-
-    const sellerId = product.seller?._id || product.seller;
 
     if (
-      String(sellerId) !== String(userId) &&
+      !product ||
+      product.status ===
+        "DISABLED"
+    ) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Producto no encontrado."
+      });
+    }
+
+    if (
+      product.sellerId !==
+        prismaUser.id &&
       !isUserAdmin(req)
     ) {
       return res.status(403).json({
         success: false,
-        message: "No tienes permiso para editar esta publicación."
+        message:
+          "No tienes permiso para editar esta publicación."
       });
     }
 
-    const body = req.body && typeof req.body === "object"
-      ? req.body
-      : {};
+    const body =
+      req.body &&
+      typeof req.body === "object"
+        ? req.body
+        : {};
 
-    const safeTitle = sanitizeText(
-      body.title !== undefined ? body.title : product.title,
-      120
-    );
+    const safeTitle =
+      sanitizeText(
+        body.title !== undefined
+          ? body.title
+          : product.title,
+        120
+      );
 
-    const safeDescription = sanitizeText(
-      body.description !== undefined
-        ? body.description
-        : product.description,
-      2000
-    );
+    const safeDescription =
+      sanitizeText(
+        body.description !== undefined
+          ? body.description
+          : product.description,
+        2000
+      );
 
-    const numericPrice = Number(
-      body.price !== undefined ? body.price : product.price
-    );
+    const numericPrice =
+      Number(
+        body.price !== undefined
+          ? body.price
+          : product.price
+      );
 
-    const safeCategory = sanitizePlainIdentifier(
-      body.category !== undefined
-        ? body.category
-        : product.category,
-      50
-    );
+    const safeCategory =
+      sanitizePlainIdentifier(
+        body.category !== undefined
+          ? body.category
+          : product.category,
+        50
+      );
 
     const safeCondition =
       body.condition !== undefined
@@ -1898,49 +2136,77 @@ const updateProduct = async (
     if (safeTitle.length < 5) {
       return res.status(400).json({
         success: false,
-        message: "El título debe tener al menos 5 caracteres."
+        message:
+          "El título debe tener al menos 5 caracteres."
       });
     }
 
-    if (safeDescription.length < 40) {
+    if (
+      safeDescription.length < 40
+    ) {
       return res.status(400).json({
         success: false,
-        message: "La descripción debe tener al menos 40 caracteres."
+        message:
+          "La descripción debe tener al menos 40 caracteres."
       });
     }
 
-    if (!Number.isFinite(numericPrice) || numericPrice <= 0) {
+    if (
+      !Number.isFinite(numericPrice) ||
+      numericPrice <= 0
+    ) {
       return res.status(400).json({
         success: false,
-        message: "El precio debe ser mayor que cero."
+        message:
+          "El precio debe ser mayor que cero."
       });
     }
 
-    if (!ALLOWED_CATEGORIES.includes(safeCategory)) {
+    if (
+      !ALLOWED_CATEGORIES.includes(
+        safeCategory
+      )
+    ) {
       return res.status(400).json({
         success: false,
-        message: "Categoría del producto no válida."
+        message:
+          "Categoría del producto no válida."
       });
     }
 
-    if (!ALLOWED_CONDITIONS.includes(safeCondition)) {
+    if (
+      !ALLOWED_CONDITIONS.includes(
+        safeCondition
+      )
+    ) {
       return res.status(400).json({
         success: false,
-        message: "Condición del producto no válida."
+        message:
+          "Condición del producto no válida."
       });
     }
 
-    if (!ALLOWED_QUALITIES.includes(safeQuality)) {
+    if (
+      !ALLOWED_QUALITIES.includes(
+        safeQuality
+      )
+    ) {
       return res.status(400).json({
         success: false,
-        message: "Calidad del producto no válida."
+        message:
+          "Calidad del producto no válida."
       });
     }
 
-    if (!ALLOWED_DELIVERY_METHODS.includes(safeDeliveryMethod)) {
+    if (
+      !ALLOWED_DELIVERY_METHODS.includes(
+        safeDeliveryMethod
+      )
+    ) {
       return res.status(400).json({
         success: false,
-        message: "Método de entrega no válido."
+        message:
+          "Método de entrega no válido."
       });
     }
 
@@ -1951,347 +2217,507 @@ const updateProduct = async (
     ) {
       return res.status(400).json({
         success: false,
-        message: "Motivo de precio especial no válido."
+        message:
+          "Motivo de precio especial no válido."
       });
     }
 
     const safeImages =
       body.images !== undefined
-        ? normalizeImages(body.images)
-        : normalizeImages(product.images);
+        ? normalizeImages(
+            body.images
+          )
+        : normalizeImages(
+            product.images
+          );
 
     if (safeImages.length === 0) {
       return res.status(400).json({
         success: false,
-        message: "El producto debe conservar al menos una imagen."
+        message:
+          "El producto debe conservar al menos una imagen."
       });
     }
 
     const safeVideo =
       body.video !== undefined
-        ? normalizeVideo(body.video)
-        : normalizeVideo(product.video);
+        ? normalizeVideo(
+            body.video
+          )
+        : normalizeVideo(
+            product.video
+          );
 
-    const safeBrand = sanitizeText(
-      body.brand !== undefined ? body.brand : product.brand,
-      80
-    );
+    const safeBrand =
+      sanitizeText(
+        body.brand !== undefined
+          ? body.brand
+          : product.brand,
+        80
+      );
 
-    const safeModel = sanitizeText(
-      body.model !== undefined ? body.model : product.model,
-      100
-    );
+    const safeModel =
+      sanitizeText(
+        body.model !== undefined
+          ? body.model
+          : product.model,
+        100
+      );
 
-    const safeSerialNumber = sanitizePlainIdentifier(
-      body.serialNumber !== undefined
-        ? body.serialNumber
-        : product.serialNumber,
-      120
-    );
+    const safeSerialNumber =
+      sanitizePlainIdentifier(
+        body.serialNumber !== undefined
+          ? body.serialNumber
+          : product.serialNumber,
+        120
+      );
 
-    const safeImei = String(
-      body.imei !== undefined ? body.imei : product.imei || ""
-    )
-      .replace(/\s+/g, "")
-      .trim()
-      .slice(0, 17);
+    const safeImei =
+      String(
+        body.imei !== undefined
+          ? body.imei
+          : product.imei || ""
+      )
+        .replace(/\s+/g, "")
+        .trim()
+        .slice(0, 17);
 
-    const safeVehicleDetails = normalizeVehicleDetails(
-      body.vehicleDetails !== undefined
-        ? body.vehicleDetails
-        : product.vehicleDetails
-    );
+    const safeVehicleDetails =
+      normalizeVehicleDetails(
+        body.vehicleDetails !== undefined
+          ? body.vehicleDetails
+          : product.vehicleDetails
+      );
 
-    const safeClothingDetails = normalizeClothingDetails(
-      body.clothingDetails !== undefined
-        ? body.clothingDetails
-        : product.clothingDetails
-    );
+    const safeClothingDetails =
+      normalizeClothingDetails(
+        body.clothingDetails !== undefined
+          ? body.clothingDetails
+          : product.clothingDetails
+      );
 
-    const currentEvidence = product.evidence?.toObject
-      ? product.evidence.toObject()
-      : product.evidence || {};
+    const safeEvidence =
+      normalizeEvidence(
+        body.evidence !== undefined
+          ? body.evidence
+          : product.evidence
+      );
 
-    const safeEvidence = normalizeEvidence(
-      body.evidence !== undefined
-        ? body.evidence
-        : currentEvidence
-    );
+    const safeLocation =
+      sanitizeText(
+        body.location !== undefined
+          ? body.location
+          : product.location,
+        160
+      );
 
-    const technicalErrors = validateTechnicalFields({
-      category: safeCategory,
-      brand: safeBrand,
-      model: safeModel,
-      imei: safeImei,
-      vehicleDetails: safeVehicleDetails,
-      clothingDetails: safeClothingDetails
-    });
+    const safeWarranty =
+      sanitizeText(
+        body.warranty !== undefined
+          ? body.warranty
+          : product.warranty,
+        160
+      );
 
-    if (technicalErrors.length > 0) {
+    const safeSpecialPriceExplanation =
+      sanitizeText(
+        body.specialPriceExplanation !==
+          undefined
+          ? body.specialPriceExplanation
+          : product.specialPriceExplanation,
+        500
+      );
+
+    const safeStorageCapacity =
+      sanitizeText(
+        body.storageCapacity !== undefined
+          ? body.storageCapacity
+          : product.storageCapacity,
+        80
+      );
+
+    const safeRamMemory =
+      sanitizeText(
+        body.ramMemory !== undefined
+          ? body.ramMemory
+          : product.ramMemory,
+        60
+      );
+
+    const safeBatteryHealth =
+      sanitizeText(
+        body.batteryHealth !== undefined
+          ? body.batteryHealth
+          : product.batteryHealth,
+        60
+      );
+
+    const safeDimensions =
+      sanitizeText(
+        body.dimensions !== undefined
+          ? body.dimensions
+          : product.dimensions,
+        100
+      );
+
+    const safeAccessoriesIncluded =
+      sanitizeText(
+        body.accessoriesIncluded !==
+          undefined
+          ? body.accessoriesIncluded
+          : product.accessoriesIncluded,
+        300
+      );
+
+    const technicalErrors =
+      validateTechnicalFields({
+        category:
+          safeCategory,
+        brand:
+          safeBrand,
+        model:
+          safeModel,
+        imei:
+          safeImei,
+        vehicleDetails:
+          safeVehicleDetails,
+        clothingDetails:
+          safeClothingDetails
+      });
+
+    if (
+      technicalErrors.length > 0
+    ) {
       return res.status(400).json({
         success: false,
-        message: technicalErrors[0],
-        errors: technicalErrors
+        message:
+          technicalErrors[0],
+        errors:
+          technicalErrors
       });
     }
 
-    const conflicts = await findIdentifierConflicts({
-      imei: safeImei,
-      serialNumber: safeSerialNumber,
-      vin: safeVehicleDetails.vin,
-      excludeProductId: product._id
-    });
+    const conflicts =
+      await findIdentifierConflicts({
+        imei:
+          safeImei,
+        serialNumber:
+          safeSerialNumber,
+        vin:
+          safeVehicleDetails.vin,
+        excludeProductId:
+          product.id
+      });
 
-    const safeLocation = sanitizeText(
-      body.location !== undefined ? body.location : product.location,
-      160
-    );
+    const technicalScore =
+      calculateTechnicalScore({
+        brand:
+          safeBrand,
+        model:
+          safeModel,
+        serialNumber:
+          safeSerialNumber,
+        imei:
+          safeImei,
+        storageCapacity:
+          safeStorageCapacity,
+        ramMemory:
+          safeRamMemory,
+        batteryHealth:
+          safeBatteryHealth,
+        dimensions:
+          safeDimensions,
+        accessoriesIncluded:
+          safeAccessoriesIncluded,
+        vehicleDetails:
+          safeVehicleDetails,
+        clothingDetails:
+          safeClothingDetails
+      });
 
-    const safeWarranty = sanitizeText(
-      body.warranty !== undefined ? body.warranty : product.warranty,
-      160
-    );
+    const evidenceScore =
+      calculateEvidenceScore({
+        evidence:
+          safeEvidence,
+        serialNumber:
+          safeSerialNumber,
+        imei:
+          safeImei,
+        vin:
+          safeVehicleDetails.vin
+      });
 
-    const safeSpecialPriceExplanation = sanitizeText(
-      body.specialPriceExplanation !== undefined
-        ? body.specialPriceExplanation
-        : product.specialPriceExplanation,
-      500
-    );
+    safeEvidence.evidenceScore =
+      evidenceScore;
 
-    const safeStorageCapacity = sanitizeText(
-      body.storageCapacity !== undefined
-        ? body.storageCapacity
-        : product.storageCapacity,
-      80
-    );
+    const risk =
+      calculateCategoryRisk({
+        category:
+          safeCategory,
+        price:
+          numericPrice
+      });
 
-    const safeRamMemory = sanitizeText(
-      body.ramMemory !== undefined
-        ? body.ramMemory
-        : product.ramMemory,
-      60
-    );
+    const analysis =
+      calculatePublicationAnalysis({
+        title:
+          safeTitle,
+        description:
+          safeDescription,
+        images:
+          safeImages,
+        video:
+          safeVideo,
+        price:
+          numericPrice,
+        quality:
+          safeQuality,
+        warranty:
+          safeWarranty,
+        specialPriceReason:
+          safeSpecialPriceReason,
+        specialPriceExplanation:
+          safeSpecialPriceExplanation,
+        sellerTrustScore:
+          product.seller?.trustScore ??
+          prismaUser.trustScore ??
+          50,
+        sellerVerified:
+          Boolean(
+            product.seller?.isVerified ??
+            prismaUser.isVerified
+          ),
+        technicalScore,
+        evidenceScore
+      });
 
-    const safeBatteryHealth = sanitizeText(
-      body.batteryHealth !== undefined
-        ? body.batteryHealth
-        : product.batteryHealth,
-      60
-    );
-
-    const safeDimensions = sanitizeText(
-      body.dimensions !== undefined
-        ? body.dimensions
-        : product.dimensions,
-      100
-    );
-
-    const safeAccessoriesIncluded = sanitizeText(
-      body.accessoriesIncluded !== undefined
-        ? body.accessoriesIncluded
-        : product.accessoriesIncluded,
-      300
-    );
-
-    const technicalScore = calculateTechnicalScore({
-      brand: safeBrand,
-      model: safeModel,
-      serialNumber: safeSerialNumber,
-      imei: safeImei,
-      storageCapacity: safeStorageCapacity,
-      ramMemory: safeRamMemory,
-      batteryHealth: safeBatteryHealth,
-      dimensions: safeDimensions,
-      accessoriesIncluded: safeAccessoriesIncluded,
-      vehicleDetails: safeVehicleDetails,
-      clothingDetails: safeClothingDetails
-    });
-
-    const evidenceScore = calculateEvidenceScore({
-      evidence: safeEvidence,
-      serialNumber: safeSerialNumber,
-      imei: safeImei,
-      vin: safeVehicleDetails.vin
-    });
-
-    safeEvidence.evidenceScore = evidenceScore;
-
-    const risk = calculateCategoryRisk({
-      category: safeCategory,
-      price: numericPrice
-    });
-
-    const sellerTrustScore =
-      product.seller?.trustScore ?? req.user?.trustScore ?? 50;
-
-    const sellerVerified = Boolean(
-      product.seller?.isVerified ?? req.user?.isVerified
-    );
-
-    const analysis = calculatePublicationAnalysis({
-      title: safeTitle,
-      description: safeDescription,
-      images: safeImages,
-      video: safeVideo,
-      price: numericPrice,
-      quality: safeQuality,
-      warranty: safeWarranty,
-      specialPriceReason: safeSpecialPriceReason,
-      specialPriceExplanation: safeSpecialPriceExplanation,
-      sellerTrustScore,
-      sellerVerified,
-      technicalScore,
-      evidenceScore
-    });
-
-    if (conflicts.length > 0) {
+    if (
+      conflicts.length > 0
+    ) {
       analysis.evidenceRequired.push(
         "Revisión manual: existe otro producto con un identificador coincidente."
       );
 
-      analysis.confidenceScore = clampNumber(
-        analysis.confidenceScore - 20,
-        0,
-        100,
-        0
-      );
+      analysis.confidenceScore =
+        clampNumber(
+          analysis.confidenceScore -
+            20,
+          0,
+          100,
+          0
+        );
 
       analysis.aiAnalysis.confidenceScore =
         analysis.confidenceScore;
 
       analysis.aiAnalysis.fraudRiskScore =
-        100 - analysis.confidenceScore;
+        100 -
+        analysis.confidenceScore;
     }
 
-    product.title = safeTitle;
-    product.description = safeDescription;
-    product.price = numericPrice;
-    product.category = safeCategory;
-    product.condition = safeCondition;
-    product.quality = safeQuality;
+    let nextStatus =
+      product.status;
 
-    product.brand = safeBrand;
-    product.model = safeModel;
-    product.serialNumber = safeSerialNumber;
-    product.imei = safeImei;
-    product.storageCapacity = safeStorageCapacity;
-    product.ramMemory = safeRamMemory;
-    product.batteryHealth = safeBatteryHealth;
-    product.dimensions = safeDimensions;
-    product.accessoriesIncluded = safeAccessoriesIncluded;
-
-    product.vehicleDetails = safeVehicleDetails;
-    product.clothingDetails = safeClothingDetails;
-    product.evidence = safeEvidence;
-
-    product.location = safeLocation;
-    product.warranty = safeWarranty;
-    product.deliveryMethod = safeDeliveryMethod;
-
-    product.specialPriceReason = safeSpecialPriceReason;
-    product.specialPriceExplanation = safeSpecialPriceExplanation;
-
-    product.images = safeImages;
-    product.video = safeVideo;
-
-    product.riskLevel = risk.riskLevel;
-    product.riskLabel = risk.riskLabel;
-    product.riskScore = risk.riskScore;
-    product.verificationMode = risk.verificationMode;
-
-    product.publicationScore = analysis.publicationScore;
-    product.publicationLevel = analysis.publicationLevel;
-    product.confidenceScore = analysis.confidenceScore;
-    product.saleProbability = analysis.saleProbability;
-    product.estimatedSaleTime = analysis.estimatedSaleTime;
-    product.aiAnalysis = analysis.aiAnalysis;
-    product.evidenceRequired = [...new Set(analysis.evidenceRequired)];
-
-    product.isQsmVerified =
-      analysis.confidenceScore >= 85 &&
-      conflicts.length === 0 &&
-      risk.riskLevel !== "CRITICAL";
-
-    /*
-    |--------------------------------------------------------------------------
-    | No reactivar automáticamente productos vendidos o desactivados.
-    | Solo ACTIVE/PENDING/UNDER_REVIEW se recalculan.
-    |--------------------------------------------------------------------------
-    */
-
-    if (["ACTIVE", "PENDING", "UNDER_REVIEW"].includes(product.status)) {
-      product.status =
-        conflicts.length > 0 || risk.riskLevel === "CRITICAL"
+    if (
+      [
+        "ACTIVE",
+        "PENDING",
+        "UNDER_REVIEW"
+      ].includes(product.status)
+    ) {
+      nextStatus =
+        conflicts.length > 0 ||
+        risk.riskLevel ===
+          "CRITICAL"
           ? "UNDER_REVIEW"
           : "ACTIVE";
     }
 
-    product.lastEditedAt = new Date();
-    product.lastEditedBy = userId;
+    const updatedProduct =
+      await prisma.product.update({
+        where: {
+          id
+        },
+        data: {
+          title:
+            safeTitle,
 
-    await product.save();
+          description:
+            safeDescription,
 
-    const populatedProduct = await Product.findById(product._id)
-      .populate(
-        "seller",
-        "firstName lastName email trustScore isVerified profilePhoto avatar verificationStatus"
-      )
-      .lean();
+          price:
+            numericPrice,
+
+          category:
+            safeCategory,
+
+          condition:
+            safeCondition,
+
+          quality:
+            safeQuality,
+
+          brand:
+            safeBrand,
+
+          model:
+            safeModel,
+
+          serialNumber:
+            safeSerialNumber,
+
+          imei:
+            safeImei,
+
+          storageCapacity:
+            safeStorageCapacity,
+
+          ramMemory:
+            safeRamMemory,
+
+          batteryHealth:
+            safeBatteryHealth,
+
+          dimensions:
+            safeDimensions,
+
+          accessoriesIncluded:
+            safeAccessoriesIncluded,
+
+          vehicleDetails:
+            safeVehicleDetails,
+
+          clothingDetails:
+            safeClothingDetails,
+
+          evidence:
+            safeEvidence,
+
+          evidenceRequired: [
+            ...new Set(
+              analysis.evidenceRequired
+            )
+          ],
+
+          location:
+            safeLocation,
+
+          warranty:
+            safeWarranty,
+
+          deliveryMethod:
+            safeDeliveryMethod,
+
+          specialPriceReason:
+            safeSpecialPriceReason,
+
+          specialPriceExplanation:
+            safeSpecialPriceExplanation,
+
+          imageUrl:
+            safeImages[0] || null,
+
+          images:
+            safeImages,
+
+          video:
+            safeVideo,
+
+          riskLevel:
+            risk.riskLevel,
+
+          riskLabel:
+            risk.riskLabel,
+
+          riskScore:
+            Math.round(
+              risk.riskScore
+            ),
+
+          verificationMode:
+            risk.verificationMode,
+
+          publicationScore:
+            Math.round(
+              analysis.publicationScore
+            ),
+
+          publicationLevel:
+            analysis.publicationLevel,
+
+          confidenceScore:
+            Math.round(
+              analysis.confidenceScore
+            ),
+
+          saleProbability:
+            Math.round(
+              analysis.saleProbability
+            ),
+
+          estimatedSaleTime:
+            analysis.estimatedSaleTime,
+
+          aiAnalysis:
+            analysis.aiAnalysis,
+
+          isQsmVerified:
+            analysis.confidenceScore >=
+              85 &&
+            conflicts.length === 0 &&
+            risk.riskLevel !==
+              "CRITICAL",
+
+          status:
+            nextStatus,
+
+          lastEditedAt:
+            new Date(),
+
+          lastEditedBy:
+            prismaUser.id
+        },
+        include:
+          createProductInclude
+      });
 
     return res.json({
       success: true,
+
       message:
-        product.status === "UNDER_REVIEW"
+        updatedProduct.status ===
+        "UNDER_REVIEW"
           ? "Producto actualizado y enviado a revisión QSM."
           : "Producto actualizado correctamente.",
-      product: populatedProduct,
+
+      product:
+        serializeProduct(
+          updatedProduct
+        ),
+
       analysis: {
-        identifierConflict: conflicts.length > 0,
-        conflictCount: conflicts.length,
-        riskLevel: product.riskLevel,
-        confidenceScore: product.confidenceScore,
-        publicationScore: product.publicationScore
+        identifierConflict:
+          conflicts.length > 0,
+
+        conflictCount:
+          conflicts.length,
+
+        riskLevel:
+          updatedProduct.riskLevel,
+
+        confidenceScore:
+          updatedProduct.confidenceScore,
+
+        publicationScore:
+          updatedProduct.publicationScore
       }
     });
   } catch (error) {
-    console.error("Error actualizando producto:", error);
-
-    if (error?.name === "ValidationError") {
-      const errors = Object.values(error.errors || {})
-        .map((item) => item?.message)
-        .filter(Boolean);
-
-      return res.status(400).json({
-        success: false,
-        message: errors[0] || "Los datos del producto no son válidos.",
-        errors
-      });
-    }
-
-    if (error?.name === "CastError") {
-      return res.status(400).json({
-        success: false,
-        message: `El campo ${error.path || "indicado"} contiene un valor inválido.`
-      });
-    }
-
-    if (error?.code === 11000) {
-      return res.status(409).json({
-        success: false,
-        message: "Ya existe un producto con uno de los identificadores proporcionados.",
-        field: Object.keys(error.keyPattern || {})[0] || ""
-      });
-    }
-
-    return res.status(500).json({
-      success: false,
-      message: "Error actualizando el producto.",
-      error:
-        process.env.NODE_ENV === "production"
-          ? undefined
-          : error.message
-    });
+    return sendControllerError(
+      res,
+      error,
+      "Error actualizando el producto."
+    );
   }
 };
 
@@ -2306,15 +2732,12 @@ const improveProductEvidence = async (
   res
 ) => {
   try {
-    const {
-      productId
-    } = req.params;
+    const productId =
+      parsePositiveInt(
+        req.params.productId
+      );
 
-    if (
-      !isValidObjectId(
-        productId
-      )
-    ) {
+    if (!productId) {
       return res.status(400).json({
         success: false,
         message:
@@ -2322,15 +2745,32 @@ const improveProductEvidence = async (
       });
     }
 
-    const product =
-      await Product.findById(
-        productId
-      ).populate(
-        "seller",
-        "trustScore isVerified"
-      );
+    const prismaUser =
+      await resolvePrismaUser(req);
 
-    if (!product) {
+    if (!prismaUser) {
+      return res.status(401).json({
+        success: false,
+        message:
+          "El usuario autenticado todavía no existe en Supabase."
+      });
+    }
+
+    const product =
+      await prisma.product.findUnique({
+        where: {
+          id:
+            productId
+        },
+        include:
+          createProductInclude
+      });
+
+    if (
+      !product ||
+      product.status ===
+        "DISABLED"
+    ) {
       return res.status(404).json({
         success: false,
         message:
@@ -2338,16 +2778,9 @@ const improveProductEvidence = async (
       });
     }
 
-    const userId =
-      getUserId(req);
-
-    const sellerId =
-      product.seller?._id ||
-      product.seller;
-
     if (
-      String(sellerId) !==
-        String(userId) &&
+      product.sellerId !==
+        prismaUser.id &&
       !isUserAdmin(req)
     ) {
       return res.status(403).json({
@@ -2366,112 +2799,127 @@ const improveProductEvidence = async (
       serialNumber,
       imei,
       vehicleDetails
-    } = req.body;
+    } = req.body || {};
 
-    if (images !== undefined) {
-      const safeImages =
-        normalizeImages(images);
+    const nextImages =
+      images !== undefined
+        ? normalizeImages(images)
+        : normalizeImages(
+            product.images
+          );
 
-      if (
-        safeImages.length === 0
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "El producto debe conservar al menos una imagen."
-        });
-      }
-
-      product.images =
-        safeImages;
+    if (nextImages.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "El producto debe conservar al menos una imagen."
+      });
     }
 
-    if (video !== undefined) {
-      product.video =
-        normalizeVideo(video);
-    }
+    const nextVideo =
+      video !== undefined
+        ? normalizeVideo(video)
+        : normalizeVideo(
+            product.video
+          );
 
-    if (quality !== undefined) {
-      if (
-        !ALLOWED_QUALITIES.includes(
-          quality
-        )
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Calidad del producto no válida."
-        });
-      }
-
-      product.quality =
-        quality;
-    }
-
-    if (warranty !== undefined) {
-      product.warranty =
-        sanitizeText(
-          warranty,
-          160
-        );
-    }
+    const nextQuality =
+      quality !== undefined
+        ? quality
+        : product.quality;
 
     if (
+      !ALLOWED_QUALITIES.includes(
+        nextQuality
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Calidad del producto no válida."
+      });
+    }
+
+    const nextWarranty =
+      warranty !== undefined
+        ? sanitizeText(
+            warranty,
+            160
+          )
+        : product.warranty;
+
+    const nextSerialNumber =
       serialNumber !== undefined
-    ) {
-      product.serialNumber =
-        sanitizePlainIdentifier(
-          serialNumber,
-          120
-        );
-    }
+        ? sanitizePlainIdentifier(
+            serialNumber,
+            120
+          )
+        : product.serialNumber;
 
-    if (imei !== undefined) {
-      const safeImei =
-        String(imei || "")
-          .replace(/\s+/g, "")
-          .trim()
-          .slice(0, 17);
-
-      if (
-        safeImei &&
-        !/^[0-9]{14,17}$/.test(
-          safeImei
-        )
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "El IMEI debe contener entre 14 y 17 dígitos."
-        });
-      }
-
-      product.imei =
-        safeImei;
-    }
+    const nextImei =
+      String(
+        imei !== undefined
+          ? imei
+          : product.imei || ""
+      )
+        .replace(/\s+/g, "")
+        .trim()
+        .slice(0, 17);
 
     if (
-      vehicleDetails !== undefined
+      nextImei &&
+      !/^[0-9]{14,17}$/.test(
+        nextImei
+      )
     ) {
-      product.vehicleDetails =
-        normalizeVehicleDetails(
-          vehicleDetails
-        );
+      return res.status(400).json({
+        success: false,
+        message:
+          "El IMEI debe contener entre 14 y 17 dígitos."
+      });
     }
 
-    if (evidence !== undefined) {
-      const safeEvidence =
-        normalizeEvidence(evidence);
+    const nextVehicleDetails =
+      vehicleDetails !== undefined
+        ? normalizeVehicleDetails(
+            vehicleDetails
+          )
+        : normalizeVehicleDetails(
+            product.vehicleDetails
+          );
 
-      product.evidence.hasInvoice =
-        safeEvidence.hasInvoice;
+    const currentEvidence =
+      normalizeEvidence(
+        product.evidence
+      );
 
-      product.evidence.hasOriginalBox =
-        safeEvidence.hasOriginalBox;
+    const submittedEvidence =
+      evidence !== undefined
+        ? normalizeEvidence(evidence)
+        : currentEvidence;
 
-      product.evidence.acceptsPhysicalInspection =
-        safeEvidence.acceptsPhysicalInspection;
-    }
+    const nextEvidence = {
+      ...currentEvidence,
+      hasInvoice:
+        submittedEvidence.hasInvoice,
+      hasOriginalBox:
+        submittedEvidence.hasOriginalBox,
+      acceptsPhysicalInspection:
+        submittedEvidence
+          .acceptsPhysicalInspection
+    };
+
+    const conflicts =
+      await findIdentifierConflicts({
+        imei:
+          nextImei,
+        serialNumber:
+          nextSerialNumber,
+        vin:
+          nextVehicleDetails.vin,
+        excludeProductId:
+          product.id
+      });
 
     const technicalScore =
       calculateTechnicalScore({
@@ -2480,9 +2928,9 @@ const improveProductEvidence = async (
         model:
           product.model,
         serialNumber:
-          product.serialNumber,
+          nextSerialNumber,
         imei:
-          product.imei,
+          nextImei,
         storageCapacity:
           product.storageCapacity,
         ramMemory:
@@ -2494,7 +2942,7 @@ const improveProductEvidence = async (
         accessoriesIncluded:
           product.accessoriesIncluded,
         vehicleDetails:
-          product.vehicleDetails,
+          nextVehicleDetails,
         clothingDetails:
           product.clothingDetails
       });
@@ -2502,17 +2950,16 @@ const improveProductEvidence = async (
     const evidenceScore =
       calculateEvidenceScore({
         evidence:
-          product.evidence,
+          nextEvidence,
         serialNumber:
-          product.serialNumber,
+          nextSerialNumber,
         imei:
-          product.imei,
+          nextImei,
         vin:
-          product.vehicleDetails
-            ?.vin
+          nextVehicleDetails.vin
       });
 
-    product.evidence.evidenceScore =
+    nextEvidence.evidenceScore =
       evidenceScore;
 
     const risk =
@@ -2530,89 +2977,191 @@ const improveProductEvidence = async (
         description:
           product.description,
         images:
-          product.images,
+          nextImages,
         video:
-          product.video,
+          nextVideo,
         price:
           product.price,
         quality:
-          product.quality,
+          nextQuality,
         warranty:
-          product.warranty,
+          nextWarranty,
         specialPriceReason:
           product.specialPriceReason,
         specialPriceExplanation:
           product.specialPriceExplanation,
         sellerTrustScore:
-          product.seller
-            ?.trustScore ||
+          product.seller?.trustScore ||
           50,
         sellerVerified:
           Boolean(
-            product.seller
-              ?.isVerified
+            product.seller?.isVerified
           ),
         technicalScore,
         evidenceScore
       });
 
-    product.riskLevel =
-      risk.riskLevel;
+    if (
+      conflicts.length > 0
+    ) {
+      analysis.evidenceRequired.push(
+        "Revisión manual: existe otro producto con un identificador coincidente."
+      );
 
-    product.riskLabel =
-      risk.riskLabel;
+      analysis.confidenceScore =
+        clampNumber(
+          analysis.confidenceScore -
+            20,
+          0,
+          100,
+          0
+        );
 
-    product.riskScore =
-      risk.riskScore;
+      analysis.aiAnalysis.confidenceScore =
+        analysis.confidenceScore;
 
-    product.verificationMode =
-      risk.verificationMode;
+      analysis.aiAnalysis.fraudRiskScore =
+        100 -
+        analysis.confidenceScore;
+    }
 
-    product.publicationScore =
-      analysis.publicationScore;
+    let nextStatus =
+      product.status;
 
-    product.publicationLevel =
-      analysis.publicationLevel;
+    if (
+      [
+        "ACTIVE",
+        "PENDING",
+        "UNDER_REVIEW"
+      ].includes(product.status)
+    ) {
+      nextStatus =
+        conflicts.length > 0 ||
+        risk.riskLevel ===
+          "CRITICAL"
+          ? "UNDER_REVIEW"
+          : "ACTIVE";
+    }
 
-    product.confidenceScore =
-      analysis.confidenceScore;
+    const updatedProduct =
+      await prisma.product.update({
+        where: {
+          id:
+            productId
+        },
+        data: {
+          images:
+            nextImages,
 
-    product.saleProbability =
-      analysis.saleProbability;
+          imageUrl:
+            nextImages[0] || null,
 
-    product.estimatedSaleTime =
-      analysis.estimatedSaleTime;
+          video:
+            nextVideo,
 
-    product.aiAnalysis =
-      analysis.aiAnalysis;
+          quality:
+            nextQuality,
 
-    product.evidenceRequired =
-      analysis.evidenceRequired;
+          warranty:
+            nextWarranty,
 
-    product.isQsmVerified =
-      analysis.confidenceScore >= 85 &&
-      risk.riskLevel !==
-        "CRITICAL";
+          serialNumber:
+            nextSerialNumber,
 
-    await product.save();
+          imei:
+            nextImei,
+
+          vehicleDetails:
+            nextVehicleDetails,
+
+          evidence:
+            nextEvidence,
+
+          riskLevel:
+            risk.riskLevel,
+
+          riskLabel:
+            risk.riskLabel,
+
+          riskScore:
+            Math.round(
+              risk.riskScore
+            ),
+
+          verificationMode:
+            risk.verificationMode,
+
+          publicationScore:
+            Math.round(
+              analysis.publicationScore
+            ),
+
+          publicationLevel:
+            analysis.publicationLevel,
+
+          confidenceScore:
+            Math.round(
+              analysis.confidenceScore
+            ),
+
+          saleProbability:
+            Math.round(
+              analysis.saleProbability
+            ),
+
+          estimatedSaleTime:
+            analysis.estimatedSaleTime,
+
+          aiAnalysis:
+            analysis.aiAnalysis,
+
+          evidenceRequired: [
+            ...new Set(
+              analysis.evidenceRequired
+            )
+          ],
+
+          isQsmVerified:
+            analysis.confidenceScore >=
+              85 &&
+            conflicts.length === 0 &&
+            risk.riskLevel !==
+              "CRITICAL",
+
+          status:
+            nextStatus,
+
+          lastEditedAt:
+            new Date(),
+
+          lastEditedBy:
+            prismaUser.id
+        },
+        include:
+          createProductInclude
+      });
 
     return res.json({
       success: true,
       message:
         "Evidencias actualizadas correctamente.",
-      product
+      product:
+        serializeProduct(
+          updatedProduct
+        ),
+      analysis: {
+        identifierConflict:
+          conflicts.length > 0,
+        conflictCount:
+          conflicts.length
+      }
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message:
-        "Error actualizando evidencias.",
-      error:
-        process.env.NODE_ENV ===
-        "production"
-          ? undefined
-          : error.message
-    });
+    return sendControllerError(
+      res,
+      error,
+      "Error actualizando evidencias."
+    );
   }
 };
 
@@ -2627,10 +3176,12 @@ const deleteProduct = async (
   res
 ) => {
   try {
-    const { id } =
-      req.params;
+    const id =
+      parsePositiveInt(
+        req.params.id
+      );
 
-    if (!isValidObjectId(id)) {
+    if (!id) {
       return res.status(400).json({
         success: false,
         message:
@@ -2638,8 +3189,23 @@ const deleteProduct = async (
       });
     }
 
+    const prismaUser =
+      await resolvePrismaUser(req);
+
+    if (!prismaUser) {
+      return res.status(401).json({
+        success: false,
+        message:
+          "El usuario autenticado todavía no existe en Supabase."
+      });
+    }
+
     const product =
-      await Product.findById(id);
+      await prisma.product.findUnique({
+        where: {
+          id
+        }
+      });
 
     if (
       !product ||
@@ -2653,16 +3219,9 @@ const deleteProduct = async (
       });
     }
 
-    const userId =
-      getUserId(req);
-
-    const sellerId =
-      product.seller?._id ||
-      product.seller;
-
     if (
-      String(sellerId) !==
-        String(userId) &&
+      product.sellerId !==
+        prismaUser.id &&
       !isUserAdmin(req)
     ) {
       return res.status(403).json({
@@ -2672,16 +3231,19 @@ const deleteProduct = async (
       });
     }
 
-    product.status =
-      "DISABLED";
-
-    product.deletedAt =
-      new Date();
-
-    product.deletedBy =
-      userId;
-
-    await product.save();
+    await prisma.product.update({
+      where: {
+        id
+      },
+      data: {
+        status:
+          "DISABLED",
+        deletedAt:
+          new Date(),
+        deletedBy:
+          prismaUser.id
+      }
+    });
 
     return res.json({
       success: true,
@@ -2691,16 +3253,11 @@ const deleteProduct = async (
         id
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message:
-        "Error eliminando la publicación.",
-      error:
-        process.env.NODE_ENV ===
-        "production"
-          ? undefined
-          : error.message
-    });
+    return sendControllerError(
+      res,
+      error,
+      "Error eliminando la publicación."
+    );
   }
 };
 

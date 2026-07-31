@@ -16,9 +16,7 @@ const rateLimit = require("express-rate-limit");
 const hpp = require("hpp");
 const path = require("path");
 const http = require("http");
-const mongoose = require("mongoose");
-
-const connectDB = require("./config/db");
+const prisma = require("./utils/prisma");
 
 const {
   initializeSocket,
@@ -48,7 +46,6 @@ const reviewRoutes = require("./routes/review.routes");
 const warehouseRoutes = require("./routes/warehouse.routes");
 const fraudRoutes = require("./routes/fraud.routes");
 const disputeRoutes = require("./routes/dispute.routes");
-const kycRoutes = require("./routes/kyc.routes");
 const verificationRoutes = require("./routes/verification.routes");
 const securityRoutes = require("./routes/security.routes");
 const vehicleRoutes = require("./routes/vehicle.routes");
@@ -69,6 +66,12 @@ const notificationRoutes = require(
 
 const shippingRoutes = require("./routes/shipping.routes");
 const paymentRoutes = require("./routes/payment.routes");
+const financeAdminRoutes = require("./routes/finance-admin.routes");
+const operationsAdminRoutes = require("./routes/operations-admin.routes");
+const moderationAdminRoutes = require("./routes/moderation-admin.routes");
+const securityAdminRoutes = require("./routes/security-admin.routes");
+const auditAdminRoutes = require("./routes/audit-admin.routes");
+const supportAdminRoutes = require("./routes/support-admin.routes");
 const uploadRoutes = require("./routes/upload.routes");
 
 /*
@@ -296,6 +299,14 @@ const authLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 
+  // AUTH_ME_RATE_LIMIT_SKIP
+  skip(req) {
+    return (
+      req.method === "GET" &&
+      req.path === "/me"
+    );
+  },
+
   message: {
     success: false,
     message:
@@ -330,21 +341,16 @@ app.get("/", (req, res) => {
 |--------------------------------------------------------------------------
 */
 
-app.get("/api/health", (req, res) => {
-  const databaseStates = {
-    0: "disconnected",
-    1: "connected",
-    2: "connecting",
-    3: "disconnecting"
-  };
+app.get("/api/health", async (req, res) => {
+  let databaseConnected = false;
+  let databaseError = "";
 
-  const databaseStatus =
-    databaseStates[
-      mongoose.connection.readyState
-    ] || "unknown";
-
-  const databaseConnected =
-    mongoose.connection.readyState === 1;
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    databaseConnected = true;
+  } catch (error) {
+    databaseError = error?.message || "No disponible";
+  }
 
   const io = app.get("io");
 
@@ -352,23 +358,13 @@ app.get("/api/health", (req, res) => {
     .status(databaseConnected ? 200 : 503)
     .json({
       success: databaseConnected,
-
-      status: databaseConnected
-        ? "healthy"
-        : "degraded",
-
-      database: databaseStatus,
-
-      socket: io
-        ? "active"
-        : "inactive",
-
-      environment:
-        process.env.NODE_ENV ||
-        "development",
-
-      timestamp:
-        new Date().toISOString()
+      status: databaseConnected ? "healthy" : "degraded",
+      database: databaseConnected ? "connected" : "disconnected",
+      databaseProvider: "postgresql",
+      databaseError: process.env.NODE_ENV === "production" ? undefined : databaseError,
+      socket: io ? "active" : "inactive",
+      environment: process.env.NODE_ENV || "development",
+      timestamp: new Date().toISOString()
     });
 });
 
@@ -394,6 +390,11 @@ app.use(
   settingsRoutes
 );
 
+app.use(
+  "/api/verifications",
+  verificationRoutes
+);
+
 /*
 |--------------------------------------------------------------------------
 | Administración
@@ -403,6 +404,36 @@ app.use(
 app.use(
   "/api/admin/system-settings",
   adminSystemSettingRoutes
+);
+
+app.use(
+  "/api/admin/finance",
+  financeAdminRoutes
+);
+
+app.use(
+  "/api/admin/moderation",
+  moderationAdminRoutes
+);
+
+app.use(
+  "/api/admin/security",
+  securityAdminRoutes
+);
+
+app.use(
+  "/api/admin/audit",
+  auditAdminRoutes
+);
+
+app.use(
+  "/api/admin/support",
+  supportAdminRoutes
+);
+
+app.use(
+  "/api/admin",
+  operationsAdminRoutes
 );
 
 app.use(
@@ -457,15 +488,6 @@ app.use(
   disputeRoutes
 );
 
-app.use(
-  "/api/kyc",
-  kycRoutes
-);
-
-app.use(
-  "/api/verifications",
-  verificationRoutes
-);
 
 app.use(
   "/api/security",
@@ -634,56 +656,35 @@ app.use(
 
     /*
     |--------------------------------------------------------------------------
-    | Error de validación Mongoose
+    | Errores Prisma/PostgreSQL
     |--------------------------------------------------------------------------
     */
 
-    if (
-      error?.name ===
-      "ValidationError"
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "Los datos enviados no son válidos.",
-        errors:
-          process.env.NODE_ENV ===
-          "production"
-            ? undefined
-            : error.errors
-      });
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | ObjectId inválido
-    |--------------------------------------------------------------------------
-    */
-
-    if (
-      error?.name ===
-      "CastError"
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "El identificador enviado no es válido."
-      });
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Clave duplicada MongoDB
-    |--------------------------------------------------------------------------
-    */
-
-    if (
-      Number(error?.code) === 11000
-    ) {
+    if (error?.code === "P2002") {
       return res.status(409).json({
         success: false,
-        message:
-          "Ya existe un registro con esos datos."
+        message: "Ya existe un registro con esos datos."
+      });
+    }
+
+    if (error?.code === "P2025") {
+      return res.status(404).json({
+        success: false,
+        message: "El registro solicitado no fue encontrado."
+      });
+    }
+
+    if (error?.code === "P2003") {
+      return res.status(409).json({
+        success: false,
+        message: "La operación entra en conflicto con registros relacionados."
+      });
+    }
+
+    if (error?.name === "PrismaClientValidationError") {
+      return res.status(400).json({
+        success: false,
+        message: "Los datos enviados no son válidos."
       });
     }
 
@@ -750,88 +751,28 @@ const PORT =
 
 const startServer = async () => {
   try {
-    /*
-    |--------------------------------------------------------------------------
-    | Variables obligatorias
-    |--------------------------------------------------------------------------
-    */
-
-    if (
-      !process.env.MONGODB_URI &&
-      !process.env.MONGO_URI
-    ) {
-      throw new Error(
-        "No se encontró MONGODB_URI ni MONGO_URI en backend/.env."
-      );
+    if (!process.env.DATABASE_URL) {
+      throw new Error("No se encontró DATABASE_URL en backend/.env.");
     }
 
-    if (
-      !process.env.JWT_SECRET &&
-      !process.env.JWT_ACCESS_SECRET
-    ) {
-      throw new Error(
-        "No se encontró JWT_SECRET ni JWT_ACCESS_SECRET en backend/.env."
-      );
+    if (!process.env.JWT_SECRET && !process.env.JWT_ACCESS_SECRET) {
+      throw new Error("No se encontró JWT_SECRET ni JWT_ACCESS_SECRET en backend/.env.");
     }
 
-    console.log(
-      "Conectando con MongoDB..."
-    );
+    console.log("Conectando con PostgreSQL/Supabase...");
+    await prisma.$queryRaw`SELECT 1`;
 
-    await connectDB();
-
-    if (
-      mongoose.connection.readyState !== 1
-    ) {
-      throw new Error(
-        "connectDB terminó, pero Mongoose no quedó conectado."
-      );
-    }
-
-    server.listen(
-      PORT,
-      "0.0.0.0",
-      () => {
-        console.log(
-          `Servidor ejecutándose en puerto ${PORT}`
-        );
-
-        console.log(
-          "MongoDB conectado"
-        );
-
-        console.log(
-          "Socket.IO activo"
-        );
-
-        console.log(
-          `Entorno: ${
-            process.env.NODE_ENV ||
-            "development"
-          }`
-        );
-
-        console.log(
-          `Uploads disponibles en: ${uploadsPath}`
-        );
-
-        console.log(
-          `Orígenes permitidos: ${
-            allowedOrigins.join(", ")
-          }`
-        );
-      }
-    );
+    server.listen(PORT, "0.0.0.0", () => {
+      console.log(`Servidor ejecutándose en puerto ${PORT}`);
+      console.log("PostgreSQL/Supabase conectado");
+      console.log("Socket.IO activo");
+      console.log(`Entorno: ${process.env.NODE_ENV || "development"}`);
+      console.log(`Uploads disponibles en: ${uploadsPath}`);
+      console.log(`Orígenes permitidos: ${allowedOrigins.join(", ")}`);
+    });
   } catch (error) {
-    console.error(
-      "No se pudo iniciar el servidor:"
-    );
-
-    console.error(
-      error?.message ||
-      error
-    );
-
+    console.error("No se pudo iniciar el servidor:");
+    console.error(error?.message || error);
     process.exit(1);
   }
 };
@@ -842,7 +783,9 @@ const startServer = async () => {
 |--------------------------------------------------------------------------
 */
 
-startServer();
+if (require.main === module) {
+  startServer();
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -877,11 +820,7 @@ const closeSocketServer = async () => {
 };
 
 const closeDatabase = async () => {
-  if (
-    mongoose.connection.readyState !== 0
-  ) {
-    await mongoose.connection.close();
-  }
+  await prisma.$disconnect();
 };
 
 const shutdown = async (
@@ -926,11 +865,11 @@ const shutdown = async (
         await closeDatabase();
 
         console.log(
-          "MongoDB desconectado."
+          "PostgreSQL/Supabase desconectado."
         );
       } catch (databaseError) {
         console.error(
-          "Error cerrando MongoDB:",
+          "Error cerrando PostgreSQL/Supabase:",
           databaseError.message
         );
       }

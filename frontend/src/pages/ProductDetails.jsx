@@ -1,3 +1,4 @@
+import { API_BASE_URL as QSM_RUNTIME_API_URL } from "../config/runtime";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import api from "../api/axios";
@@ -6,8 +7,7 @@ import Topbar from "../components/Topbar";
 import AiAssistant from "../components/AiAssistant";
 
 const API_ORIGIN = String(
-  import.meta.env.VITE_API_URL ||
-  "http://localhost:5000/api"
+  QSM_RUNTIME_API_URL
 ).replace(/\/api\/?$/, "");
 
 function ProductDetails() {

@@ -3,7 +3,7 @@
 
 /*
 |--------------------------------------------------------------------------
-| FASE 3 — EXPERIENCIA PROFESIONAL
+| FASE 3 ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â EXPERIENCIA PROFESIONAL
 |--------------------------------------------------------------------------
 */
 
@@ -580,8 +580,8 @@
 
 /*
 |--------------------------------------------------------------------------
-| QSM MESSAGES — REDISEÑO VISUAL FASE 1 COMPLETA
-| Hero, tipografía, protección, contenedores y layout principal
+| QSM MESSAGES ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â REDISEÃƒÆ’Ã¢â‚¬ËœO VISUAL FASE 1 COMPLETA
+| Hero, tipografÃƒÆ’Ã‚Â­a, protecciÃƒÆ’Ã‚Â³n, contenedores y layout principal
 |--------------------------------------------------------------------------
 */
 
@@ -1454,7 +1454,7 @@
 }
 
 /* =========================================================
-   QSM COMPOSER — CORRECCIÓN DEFINITIVA
+   QSM COMPOSER ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â CORRECCIÃƒÆ’Ã¢â‚¬Å“N DEFINITIVA
 ========================================================= */
 
 .qsm-composer{
@@ -1715,7 +1715,258 @@
     }
 
     .qsm-send-button::after{
-        content:"➤";
+        content:"ÃƒÂ¢Ã…Â¾Ã‚Â¤";
         font-size:16px;
     }
 }
+
+/* QSM CHAT PUBLIC PROFILE LINK */
+.qsm-chat-profile-link {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  border-radius: 14px;
+  color: inherit;
+  text-decoration: none;
+}
+
+a.qsm-chat-profile-link {
+  padding: 4px;
+  transition:
+    background .18s ease,
+    transform .18s ease;
+}
+
+a.qsm-chat-profile-link:hover {
+  background: rgba(53, 208, 195, .08);
+  transform: translateY(-1px);
+}
+
+.qsm-chat-profile-link h2,
+.qsm-chat-profile-link p {
+  margin-left: 0;
+}
+
+.qsm-details-profile-link {
+  display: inline-flex;
+  justify-content: center;
+  margin-top: 11px;
+  padding: 9px 13px;
+  border: 1px solid rgba(53, 208, 195, .28);
+  border-radius: 11px;
+  background: rgba(53, 208, 195, .08);
+  color: #67e8f9;
+  font-size: 9px;
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.qsm-details-profile-link:hover {
+  background: rgba(53, 208, 195, .14);
+}
+
+
+/* =========================================================
+   QSM CHAT ACTION STATES
+========================================================= */
+
+.qsm-details-section button.is-active {
+  border-color:
+    rgba(45, 212, 191, 0.52);
+  background:
+    rgba(13, 148, 136, 0.16);
+  color:
+    #99f6e4;
+  box-shadow:
+    inset 0 0 0 1px
+    rgba(45, 212, 191, 0.08);
+}
+
+.qsm-details-section button.is-active:hover {
+  border-color:
+    rgba(94, 234, 212, 0.72);
+  background:
+    rgba(13, 148, 136, 0.24);
+}
+
+.qsm-details-section button:disabled {
+  cursor: wait;
+  opacity: 0.68;
+}
+
+/* QSM CHAT SCROLL REAL - START */
+
+@media (min-width: 900px) {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    overflow: hidden;
+  }
+
+  .qsm-messages-page {
+    width: 100%;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .qsm-messages-shell {
+    width: 100%;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .qsm-messages-main {
+    height: 100dvh;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding-bottom: 18px;
+  }
+
+  .qsm-messages-title,
+  .qsm-chat-alert {
+    flex: 0 0 auto;
+  }
+
+  .qsm-messages-layout,
+  .qsm-messages-layout.has-details {
+    flex: 1 1 auto;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    align-items: stretch;
+    overflow: hidden;
+  }
+
+  .qsm-conversations,
+  .qsm-chat-window,
+  .qsm-conversation-details {
+    height: 100%;
+    min-height: 0 !important;
+    max-height: none;
+  }
+
+  .qsm-conversations {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .qsm-conversation-list {
+    flex: 1 1 auto;
+    min-height: 0 !important;
+    overflow-x: hidden;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+
+  .qsm-chat-window {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .qsm-chat-header,
+  .qsm-security-banner,
+  .qsm-composer,
+  .qsm-chat-search {
+    flex: 0 0 auto;
+  }
+
+  .qsm-message-list {
+    flex: 1 1 auto;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow-x: hidden;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+
+  .qsm-conversation-details {
+    align-self: stretch;
+    overflow-x: hidden;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+}
+
+@media (max-width: 899px) {
+  .qsm-chat-window {
+    display: flex;
+    flex-direction: column;
+    height: 72dvh;
+    min-height: 500px;
+    overflow: hidden;
+  }
+
+  .qsm-message-list {
+    flex: 1 1 auto;
+    min-height: 0 !important;
+    overflow-x: hidden;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+  }
+
+  .qsm-conversation-list {
+    max-height: 52dvh;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+  }
+
+  .qsm-conversation-details {
+    max-height: 72dvh;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+  }
+}
+
+.qsm-message-list,
+.qsm-conversation-list,
+.qsm-conversation-details {
+  scrollbar-width: thin;
+  scrollbar-color:
+    rgba(56, 189, 248, 0.75)
+    rgba(15, 23, 42, 0.34);
+}
+
+.qsm-message-list::-webkit-scrollbar,
+.qsm-conversation-list::-webkit-scrollbar,
+.qsm-conversation-details::-webkit-scrollbar {
+  width: 9px;
+}
+
+.qsm-message-list::-webkit-scrollbar-track,
+.qsm-conversation-list::-webkit-scrollbar-track,
+.qsm-conversation-details::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.34);
+  border-radius: 999px;
+}
+
+.qsm-message-list::-webkit-scrollbar-thumb,
+.qsm-conversation-list::-webkit-scrollbar-thumb,
+.qsm-conversation-details::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background:
+    linear-gradient(
+      180deg,
+      #22d3c5,
+      #38bdf8,
+      #8b5cf6
+    )
+    padding-box;
+}
+
+/* QSM CHAT SCROLL REAL - END */

@@ -1,57 +1,73 @@
 const jwt = require("jsonwebtoken");
-const User = require("../models/User");
+const prisma = require("../utils/prisma");
 
-const FACE_CHECK_INTERVAL_HOURS = 72;
+const {
+  normalizeUpper,
+  resolveUserFromDecoded,
+  shouldRequirePeriodicFaceCheck,
+  toRequestUser
+} = require(
+  "../services/auth/prisma-auth.helpers"
+);
 
-const shouldRequirePeriodicFaceCheck = (user) => {
-  if (!user.isVerified) {
-    return false;
-  }
-
-  if (!user.lastFaceVerification) {
-    return true;
-  }
-
-  const lastFaceTime = new Date(user.lastFaceVerification).getTime();
-  const now = Date.now();
-
-  const hoursSinceLastFaceCheck =
-    (now - lastFaceTime) / (1000 * 60 * 60);
-
-  return hoursSinceLastFaceCheck >= FACE_CHECK_INTERVAL_HOURS;
-};
-
-const authMiddleware = async (req, res, next) => {
+const authMiddleware = async (
+  req,
+  res,
+  next
+) => {
   try {
-    const authHeader = req.headers.authorization;
+    const authHeader =
+      req.headers.authorization;
 
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    if (
+      !authHeader ||
+      !authHeader.startsWith(
+        "Bearer "
+      )
+    ) {
       return res.status(401).json({
         success: false,
-        message: "Acceso denegado. Token no enviado."
+        message:
+          "Acceso denegado. Token no enviado."
       });
     }
 
-    const token = authHeader.split(" ")[1];
+    if (!process.env.JWT_SECRET) {
+      throw new Error(
+        "JWT_SECRET no está definido."
+      );
+    }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const token =
+      authHeader.slice(7).trim();
 
-    const user = await User.findById(decoded.id).select("-password");
+    const decoded =
+      jwt.verify(
+        token,
+        process.env.JWT_SECRET
+      );
+
+    let user =
+      await resolveUserFromDecoded(
+        decoded
+      );
 
     if (!user) {
       return res.status(401).json({
         success: false,
-        message: "Usuario no encontrado."
+        message:
+          "Usuario no encontrado."
       });
     }
 
-    /*
-    =====================================================
-    INVALIDAR TOKENS ANTIGUOS
-    =====================================================
-    */
-
-    if ((decoded.passwordVersion || 0) !== (user.passwordVersion || 0)) {
+    if (
+      Number(
+        decoded.passwordVersion || 0
+      ) !==
+      Number(
+        user.passwordVersion || 0
+      )
+    ) {
       return res.status(401).json({
         success: false,
         message:
@@ -59,63 +75,68 @@ const authMiddleware = async (req, res, next) => {
       });
     }
 
-    /*
-    =====================================================
-    CUENTA SUSPENDIDA
-    =====================================================
-    */
+    const status =
+      normalizeUpper(user.status);
 
     if (
-      user.status === "BANNED" ||
-      user.status === "SUSPENDED"
+      [
+        "SUSPENDED",
+        "BANNED",
+        "DELETED"
+      ].includes(status)
     ) {
       return res.status(403).json({
         success: false,
-        message: "Cuenta suspendida o bloqueada."
+        message:
+          "Cuenta suspendida o bloqueada."
       });
     }
 
-    /*
-    =====================================================
-    CUENTA BLOQUEADA
-    =====================================================
-    */
-
     if (
       user.accountLockedUntil &&
-      user.accountLockedUntil > new Date()
+      new Date(
+        user.accountLockedUntil
+      ) > new Date()
     ) {
       return res.status(423).json({
         success: false,
         message:
           "Cuenta bloqueada temporalmente por seguridad.",
-        accountLockedUntil: user.accountLockedUntil
+        accountLockedUntil:
+          user.accountLockedUntil
       });
     }
 
-    /*
-    =====================================================
-    FACE CHECK
-    =====================================================
-    */
-
     if (
-      shouldRequirePeriodicFaceCheck(user) &&
+      shouldRequirePeriodicFaceCheck(
+        user
+      ) &&
       !user.requireFaceCheck
     ) {
-      user.requireFaceCheck = true;
-      user.securityLevel = "ELEVATED";
-
-      await user.save();
+      user =
+        await prisma.user.update({
+          where: {
+            id: user.id
+          },
+          data: {
+            requireFaceCheck: true,
+            securityLevel:
+              "ELEVATED"
+          }
+        });
     }
 
-    req.user = user;
+    req.user =
+      toRequestUser(user);
 
-    next();
+    req.prismaUser = user;
+
+    return next();
   } catch (error) {
     return res.status(401).json({
       success: false,
-      message: "Token inválido o expirado."
+      message:
+        "Token inválido o expirado."
     });
   }
 };

@@ -1,28 +1,34 @@
 const bcrypt = require("bcryptjs");
-
-const User = require("../models/User");
-const Product = require("../models/Product");
-const Order = require("../models/Order");
-const Dispute = require("../models/Dispute");
-const FraudAlert = require("../models/FraudAlert");
-const SecurityAlert = require("../models/SecurityAlert");
-const Payment = require("../models/Payment");
-const AuditLog = require("../models/AuditLog");
-
+const { prisma, parsePositiveInt, getRequestUserId, sanitizeUser } = require("../utils/prismaCompat");
 const { createAuditLog } = require("../services/audit.service");
 
-const getAdminDashboard = async (req, res) => {
-  try {
-    const users = await User.countDocuments();
-    const verifiedUsers = await User.countDocuments({ isVerified: true });
-    const products = await Product.countDocuments();
-    const orders = await Order.countDocuments();
-    const disputes = await Dispute.countDocuments();
-    const fraudAlerts = await FraudAlert.countDocuments();
-    const securityAlerts = await SecurityAlert.countDocuments();
-    const paymentsHeld = await Payment.countDocuments({ status: "HELD" });
+function serializeProduct(product) {
+  return { ...product, _id: String(product.id), seller: product.seller ? { ...product.seller, _id: String(product.seller.id) } : product.sellerId };
+}
 
-    res.json({
+function serializeAudit(log) {
+  return {
+    ...log,
+    _id: String(log.id),
+    actor: log.actor ? { ...log.actor, _id: String(log.actor.id) } : log.actorId,
+    targetType: log.entityType,
+    targetId: log.entityId
+  };
+}
+
+async function getAdminDashboard(_req, res) {
+  try {
+    const [users, verifiedUsers, products, orders, disputes, fraudAlerts, securityAlerts, paymentsHeld] = await Promise.all([
+      prisma.user.count(),
+      prisma.user.count({ where: { isVerified: true } }),
+      prisma.product.count(),
+      prisma.order.count(),
+      prisma.dispute.count(),
+      prisma.fraudAlert.count(),
+      prisma.securityAlert.count(),
+      prisma.payment.count({ where: { status: { in: ["HELD", "PENDING"] } } })
+    ]);
+    return res.json({
       message: "Dashboard administrativo obtenido correctamente",
       resumen: {
         usuariosTotales: users,
@@ -36,283 +42,129 @@ const getAdminDashboard = async (req, res) => {
       }
     });
   } catch (error) {
-    res.status(500).json({
-      message: "Error obteniendo dashboard administrativo",
-      error: error.message
-    });
+    return res.status(500).json({ message: "Error obteniendo dashboard administrativo", error: error.message });
   }
-};
+}
 
-const getAllUsers = async (req, res) => {
+async function getAllUsers(_req, res) {
   try {
-    const users = await User.find()
-      .select("-password")
-      .sort({ createdAt: -1 });
-
-    res.json({
-      message: "Usuarios obtenidos correctamente",
-      count: users.length,
-      users
-    });
+    const users = await prisma.user.findMany({ orderBy: { createdAt: "desc" } });
+    return res.json({ message: "Usuarios obtenidos correctamente", count: users.length, users: users.map(sanitizeUser) });
   } catch (error) {
-    res.status(500).json({
-      message: "Error obteniendo usuarios",
-      error: error.message
-    });
+    return res.status(500).json({ message: "Error obteniendo usuarios", error: error.message });
   }
-};
+}
 
-const getAllProducts = async (req, res) => {
+async function getAllProducts(_req, res) {
   try {
-    const products = await Product.find()
-      .populate("seller", "firstName lastName email trustScore isVerified")
-      .sort({ createdAt: -1 });
-
-    res.json({
-      message: "Productos obtenidos correctamente",
-      count: products.length,
-      products
+    const products = await prisma.product.findMany({
+      include: { seller: { select: { id: true, firstName: true, lastName: true, email: true, trustScore: true, isVerified: true } } },
+      orderBy: { createdAt: "desc" }
     });
+    return res.json({ message: "Productos obtenidos correctamente", count: products.length, products: products.map(serializeProduct) });
   } catch (error) {
-    res.status(500).json({
-      message: "Error obteniendo productos",
-      error: error.message
-    });
+    return res.status(500).json({ message: "Error obteniendo productos", error: error.message });
   }
-};
+}
 
-const suspendUser = async (req, res) => {
+async function suspendUser(req, res) {
   try {
-    const { userId } = req.params;
-    const { reason } = req.body;
-
-    const user = await User.findById(userId);
-
-    if (!user) {
-      return res.status(404).json({ message: "Usuario no encontrado" });
-    }
-
-    user.status = "SUSPENDED";
-    user.securityLevel = "LOCKED";
-    user.accountLockedUntil = null;
-
-    await user.save();
-
-    await createAuditLog({
-      req,
-      action: "SUSPEND_USER",
-      targetType: "USER",
-      targetId: user._id.toString(),
-      description: `Usuario suspendido. Motivo: ${reason || "No especificado"}`
+    const id = parsePositiveInt(req.params.userId);
+    if (!id) return res.status(400).json({ message: "Identificador de usuario no válido" });
+    const actorId = await getRequestUserId(req);
+    const reason = String(req.body?.reason || "No especificado").trim();
+    const existing = await prisma.user.findUnique({ where: { id } });
+    if (!existing) return res.status(404).json({ message: "Usuario no encontrado" });
+    const user = await prisma.user.update({
+      where: { id },
+      data: { status: "SUSPENDED", securityLevel: "LOCKED", accountLockedUntil: null, suspensionReason: reason, suspendedAt: new Date(), suspendedById: actorId, activeSessions: 0, passwordVersion: { increment: 1 } }
     });
-
-    res.json({
-      message: "Usuario suspendido correctamente",
-      reason: reason || "No especificado",
-      user
-    });
+    await createAuditLog({ req, action: "SUSPEND_USER", targetType: "USER", targetId: id, description: `Usuario suspendido. Motivo: ${reason}` });
+    return res.json({ message: "Usuario suspendido correctamente", reason, user: sanitizeUser(user) });
   } catch (error) {
-    res.status(500).json({
-      message: "Error suspendiendo usuario",
-      error: error.message
-    });
+    return res.status(500).json({ message: "Error suspendiendo usuario", error: error.message });
   }
-};
+}
 
-const activateUser = async (req, res) => {
+async function activateUser(req, res) {
   try {
-    const { userId } = req.params;
-
-    const user = await User.findById(userId);
-
-    if (!user) {
-      return res.status(404).json({ message: "Usuario no encontrado" });
-    }
-
-    user.status = "ACTIVE";
-    user.securityLevel = "NORMAL";
-    user.accountLockedUntil = null;
-
-    await user.save();
-
-    await createAuditLog({
-      req,
-      action: "ACTIVATE_USER",
-      targetType: "USER",
-      targetId: user._id.toString(),
-      description: "Usuario activado nuevamente"
+    const id = parsePositiveInt(req.params.userId);
+    if (!id) return res.status(400).json({ message: "Identificador de usuario no válido" });
+    const existing = await prisma.user.findUnique({ where: { id } });
+    if (!existing) return res.status(404).json({ message: "Usuario no encontrado" });
+    const user = await prisma.user.update({
+      where: { id },
+      data: { status: "ACTIVE", securityLevel: "NORMAL", accountLockedUntil: null, suspensionReason: "", suspendedAt: null, suspendedById: null, bannedAt: null, bannedById: null, deletedAt: null, deletedById: null }
     });
-
-    res.json({
-      message: "Usuario activado correctamente",
-      user
-    });
+    await createAuditLog({ req, action: "ACTIVATE_USER", targetType: "USER", targetId: id, description: "Usuario activado nuevamente" });
+    return res.json({ message: "Usuario activado correctamente", user: sanitizeUser(user) });
   } catch (error) {
-    res.status(500).json({
-      message: "Error activando usuario",
-      error: error.message
-    });
+    return res.status(500).json({ message: "Error activando usuario", error: error.message });
   }
-};
+}
 
-const disableProduct = async (req, res) => {
+async function disableProduct(req, res) {
   try {
-    const { productId } = req.params;
-    const { reason } = req.body;
-
-    const product = await Product.findById(productId);
-
-    if (!product) {
-      return res.status(404).json({ message: "Producto no encontrado" });
-    }
-
-    product.status = "DISABLED";
-    product.disabledAt = new Date();
-    product.disabledBy = req.user?._id || req.user?.id;
-
-    await product.save();
-
-    await createAuditLog({
-      req,
-      action: "DISABLE_PRODUCT",
-      targetType: "PRODUCT",
-      targetId: product._id.toString(),
-      description: `Producto deshabilitado. Motivo: ${reason || "No especificado"}`
-    });
-
-    res.json({
-      message: "Producto deshabilitado correctamente",
-      reason: reason || "No especificado",
-      product
-    });
+    const id = parsePositiveInt(req.params.productId);
+    if (!id) return res.status(400).json({ message: "Identificador de producto no válido" });
+    const actorId = await getRequestUserId(req);
+    const reason = String(req.body?.reason || "No especificado").trim();
+    const existing = await prisma.product.findUnique({ where: { id } });
+    if (!existing) return res.status(404).json({ message: "Producto no encontrado" });
+    const product = await prisma.product.update({ where: { id }, data: { status: "DISABLED", deletedAt: new Date(), deletedBy: actorId, lastEditedAt: new Date(), lastEditedBy: actorId } });
+    await createAuditLog({ req, action: "DISABLE_PRODUCT", targetType: "PRODUCT", targetId: id, description: `Producto deshabilitado. Motivo: ${reason}` });
+    return res.json({ message: "Producto deshabilitado correctamente", reason, product: { ...product, _id: String(product.id) } });
   } catch (error) {
-    res.status(500).json({
-      message: "Error deshabilitando producto",
-      error: error.message
-    });
+    return res.status(500).json({ message: "Error deshabilitando producto", error: error.message });
   }
-};
+}
 
-const getAuditLogs = async (req, res) => {
+async function getAuditLogs(_req, res) {
   try {
-    const logs = await AuditLog.find()
-      .populate("actor", "firstName lastName email role")
-      .sort({ createdAt: -1 });
-
-    res.json({
-      message: "Logs de auditoría obtenidos correctamente",
-      count: logs.length,
-      logs
+    const logs = await prisma.auditLog.findMany({
+      include: { actor: { select: { id: true, firstName: true, lastName: true, email: true, role: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 500
     });
+    return res.json({ message: "Logs de auditoría obtenidos correctamente", count: logs.length, logs: logs.map(serializeAudit) });
   } catch (error) {
-    res.status(500).json({
-      message: "Error obteniendo logs de auditoría",
-      error: error.message
-    });
+    return res.status(500).json({ message: "Error obteniendo logs de auditoría", error: error.message });
   }
-};
+}
 
-const updateUserRole = async (req, res) => {
+async function updateUserRole(req, res) {
   try {
-    const { userId } = req.params;
-    const { role } = req.body;
-
-    const allowedRoles = [
-      "USER",
-      "ADMIN",
-      "SENIOR_ADMIN",
-      "AUDITOR",
-      "VERIFICATION_AGENT"
-    ];
-
-    if (!role || !allowedRoles.includes(role)) {
-      return res.status(400).json({ message: "Rol no válido" });
-    }
-
-    const user = await User.findById(userId);
-
-    if (!user) {
-      return res.status(404).json({ message: "Usuario no encontrado" });
-    }
-
-    user.role = role;
-    await user.save();
-
-    await createAuditLog({
-      req,
-      action: "UPDATE_USER_ROLE",
-      targetType: "USER",
-      targetId: user._id.toString(),
-      description: `Rol actualizado a ${role}`
-    });
-
-    res.json({
-      message: "Rol de usuario actualizado correctamente",
-      user
-    });
+    const id = parsePositiveInt(req.params.userId);
+    const role = String(req.body?.role || "").trim().toUpperCase();
+    const allowedRoles = ["USER", "ADMIN", "SENIOR_ADMIN", "AUDITOR", "VERIFICATION_AGENT"];
+    if (!id || !allowedRoles.includes(role)) return res.status(400).json({ message: "Rol no válido" });
+    const existing = await prisma.user.findUnique({ where: { id } });
+    if (!existing) return res.status(404).json({ message: "Usuario no encontrado" });
+    const user = await prisma.user.update({ where: { id }, data: { role, passwordVersion: { increment: 1 } } });
+    await createAuditLog({ req, action: "UPDATE_USER_ROLE", targetType: "USER", targetId: id, description: `Rol actualizado a ${role}` });
+    return res.json({ message: "Rol de usuario actualizado correctamente", user: sanitizeUser(user) });
   } catch (error) {
-    res.status(500).json({
-      message: "Error actualizando rol de usuario",
-      error: error.message
-    });
+    return res.status(500).json({ message: "Error actualizando rol de usuario", error: error.message });
   }
-};
+}
 
-const resetUserPassword = async (req, res) => {
+async function resetUserPassword(req, res) {
   try {
-    const { userId } = req.params;
-    const { newPassword } = req.body;
-
-    if (!newPassword || newPassword.length < 8) {
-      return res.status(400).json({
-        message: "La contraseña debe tener mínimo 8 caracteres"
-      });
-    }
-
-    const user = await User.findById(userId);
-
-    if (!user) {
-      return res.status(404).json({ message: "Usuario no encontrado" });
-    }
-
-    user.password = await bcrypt.hash(newPassword, 10);
-    await user.save();
-
-    await createAuditLog({
-      req,
-      action: "RESET_USER_PASSWORD",
-      targetType: "USER",
-      targetId: user._id.toString(),
-      description: `Contraseña reseteada para el usuario ${user.email}`
+    const id = parsePositiveInt(req.params.userId);
+    const newPassword = String(req.body?.newPassword || "");
+    if (!id) return res.status(400).json({ message: "Identificador de usuario no válido" });
+    if (newPassword.length < 8) return res.status(400).json({ message: "La contraseña debe tener mínimo 8 caracteres" });
+    const existing = await prisma.user.findUnique({ where: { id } });
+    if (!existing) return res.status(404).json({ message: "Usuario no encontrado" });
+    const user = await prisma.user.update({
+      where: { id },
+      data: { password: await bcrypt.hash(newPassword, 12), passwordChangedAt: new Date(), passwordVersion: { increment: 1 }, failedLoginAttempts: 0, accountLockedUntil: null, activeSessions: 0 }
     });
-
-    res.json({
-      message: "Contraseña reseteada correctamente",
-      user: {
-        _id: user._id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        role: user.role,
-        status: user.status
-      }
-    });
+    await createAuditLog({ req, action: "RESET_USER_PASSWORD", targetType: "USER", targetId: id, description: `Contraseña reseteada para el usuario ${user.email}` });
+    return res.json({ message: "Contraseña reseteada correctamente", user: { _id: String(user.id), id: user.id, firstName: user.firstName, lastName: user.lastName, email: user.email, role: user.role, status: user.status } });
   } catch (error) {
-    res.status(500).json({
-      message: "Error reseteando contraseña",
-      error: error.message
-    });
+    return res.status(500).json({ message: "Error reseteando contraseña", error: error.message });
   }
-};
+}
 
-module.exports = {
-  getAdminDashboard,
-  getAllUsers,
-  getAllProducts,
-  suspendUser,
-  activateUser,
-  disableProduct,
-  getAuditLogs,
-  updateUserRole,
-  resetUserPassword
-};
+module.exports = { getAdminDashboard, getAllUsers, getAllProducts, suspendUser, activateUser, disableProduct, getAuditLogs, updateUserRole, resetUserPassword };

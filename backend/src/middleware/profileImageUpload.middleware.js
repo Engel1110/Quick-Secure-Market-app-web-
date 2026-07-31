@@ -2,90 +2,14 @@ const fs = require("fs");
 const path = require("path");
 const multer = require("multer");
 
-const PROFILE_UPLOAD_DIR = path.join(
-  __dirname,
-  "..",
-  "..",
-  "uploads",
-  "profiles"
-);
-
-/*
-|--------------------------------------------------------------------------
-| Crear carpeta automáticamente
-|--------------------------------------------------------------------------
-*/
-
-if (!fs.existsSync(PROFILE_UPLOAD_DIR)) {
-  fs.mkdirSync(PROFILE_UPLOAD_DIR, {
-    recursive: true
-  });
-}
-
-/*
-|--------------------------------------------------------------------------
-| Generar nombre seguro
-|--------------------------------------------------------------------------
-*/
-
-const sanitizeFileName = (value) => {
-  return String(value || "profile")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-zA-Z0-9._-]/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "")
-    .toLowerCase();
-};
-
-const storage = multer.diskStorage({
-  destination: (
-    req,
-    file,
-    callback
-  ) => {
-    callback(
-      null,
-      PROFILE_UPLOAD_DIR
-    );
-  },
-
-  filename: (
-    req,
-    file,
-    callback
-  ) => {
-    const extension =
-      path.extname(
-        file.originalname || ""
-      ).toLowerCase();
-
-    const userId =
-      req.user?._id ||
-      req.user?.id ||
-      req.user?.userId ||
-      "anonymous";
-
-    const safeUserId =
-      sanitizeFileName(userId);
-
-    const uniqueSuffix =
-      `${Date.now()}-${Math.round(
-        Math.random() * 1e9
-      )}`;
-
-    callback(
-      null,
-      `profile-${safeUserId}-${uniqueSuffix}${extension}`
-    );
-  }
-});
-
-/*
-|--------------------------------------------------------------------------
-| Tipos permitidos
-|--------------------------------------------------------------------------
-*/
+const PROFILE_UPLOAD_DIR =
+  path.join(
+    __dirname,
+    "..",
+    "..",
+    "uploads",
+    "profiles"
+  );
 
 const allowedMimeTypes = [
   "image/jpeg",
@@ -95,7 +19,7 @@ const allowedMimeTypes = [
 ];
 
 const fileFilter = (
-  req,
+  _req,
   file,
   callback
 ) => {
@@ -118,33 +42,28 @@ const fileFilter = (
     );
   }
 
-  callback(null, true);
+  return callback(
+    null,
+    true
+  );
 };
 
-/*
-|--------------------------------------------------------------------------
-| Middleware principal
-|--------------------------------------------------------------------------
-*/
+const profileImageUpload =
+  multer({
+    storage:
+      multer.memoryStorage(),
 
-const profileImageUpload = multer({
-  storage,
+    limits: {
+      fileSize:
+        5 *
+        1024 *
+        1024,
 
-  limits: {
-    fileSize:
-      5 * 1024 * 1024,
+      files: 1
+    },
 
-    files: 1
-  },
-
-  fileFilter
-});
-
-/*
-|--------------------------------------------------------------------------
-| Limpiar archivo temporal si algo falla
-|--------------------------------------------------------------------------
-*/
+    fileFilter
+  });
 
 const removeUploadedFile = (
   filePath
@@ -155,44 +74,26 @@ const removeUploadedFile = (
 
   try {
     if (
-      fs.existsSync(
-        filePath
-      )
+      fs.existsSync(filePath)
     ) {
-      fs.unlinkSync(
-        filePath
-      );
+      fs.unlinkSync(filePath);
     }
   } catch (error) {
     console.error(
-      "No se pudo eliminar el archivo temporal:",
+      "No se pudo eliminar el archivo local:",
       error.message
     );
   }
 };
 
-/*
-|--------------------------------------------------------------------------
-| Manejo de errores de Multer
-|--------------------------------------------------------------------------
-*/
-
 const handleProfileUploadError = (
   error,
-  req,
+  _req,
   res,
   next
 ) => {
   if (!error) {
     return next();
-  }
-
-  if (
-    req.file?.path
-  ) {
-    removeUploadedFile(
-      req.file.path
-    );
   }
 
   if (
@@ -245,12 +146,6 @@ const handleProfileUploadError = (
     });
 };
 
-/*
-|--------------------------------------------------------------------------
-| Middleware listo para usar en rutas
-|--------------------------------------------------------------------------
-*/
-
 const uploadProfileImage = [
   (
     req,
@@ -272,7 +167,7 @@ const uploadProfileImage = [
           );
         }
 
-        next();
+        return next();
       }
     );
   }

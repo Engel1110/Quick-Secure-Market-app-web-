@@ -1,174 +1,129 @@
-const Shipping = require("../models/Shipping");
-const Order = require("../models/Order");
-
+const { prisma, getRequestUserId, parsePositiveInt } = require("../utils/prismaCompat");
 const { createNotification } = require("../services/notification.service");
 
-const generateTrackingCode = () => {
-  return "QSM-" + Date.now().toString().slice(-8);
+const ALLOWED_STATUS = ["PENDING", "PICKED_UP", "IN_TRANSIT", "DELIVERED", "FAILED", "RETURNED"];
+const generateTrackingCode = () => `QSM-${Date.now().toString().slice(-8)}-${Math.floor(Math.random() * 90 + 10)}`;
+
+function person(user) {
+  return user ? { ...user, _id: String(user.id) } : user;
+}
+
+function serialize(shipping) {
+  return {
+    ...shipping,
+    _id: String(shipping.id),
+    order: shipping.order ? { ...shipping.order, _id: String(shipping.order.id) } : shipping.orderId,
+    product: shipping.product ? { ...shipping.product, _id: String(shipping.product.id) } : shipping.productId,
+    buyer: shipping.buyer ? person(shipping.buyer) : shipping.buyerId,
+    seller: shipping.seller ? person(shipping.seller) : shipping.sellerId
+  };
+}
+
+const include = {
+  order: true,
+  product: { select: { id: true, title: true, price: true, category: true } },
+  buyer: { select: { id: true, firstName: true, lastName: true, email: true } },
+  seller: { select: { id: true, firstName: true, lastName: true, email: true } }
 };
 
-const createShipping = async (req, res) => {
+async function createShipping(req, res) {
   try {
-    const { orderId, deliveryAddress, originAddress, deliveryNotes, carrier } = req.body;
+    const actorId = await getRequestUserId(req);
+    const orderId = parsePositiveInt(req.body?.orderId);
+    const deliveryAddress = String(req.body?.deliveryAddress || "").trim();
+    if (!orderId || !deliveryAddress) return res.status(400).json({ message: "orderId y deliveryAddress son obligatorios" });
 
-    if (!orderId || !deliveryAddress) {
-      return res.status(400).json({
-        message: "orderId y deliveryAddress son obligatorios"
+    const order = await prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) return res.status(404).json({ message: "Orden no encontrada" });
+    if (order.sellerId !== actorId) return res.status(403).json({ message: "Solo el vendedor puede crear el envío" });
+
+    const existing = await prisma.shipping.findUnique({ where: { orderId } });
+    if (existing) return res.status(400).json({ message: "Esta orden ya tiene un envío creado" });
+
+    const shipping = await prisma.$transaction(async (tx) => {
+      const created = await tx.shipping.create({
+        data: {
+          orderId,
+          buyerId: order.buyerId,
+          sellerId: order.sellerId,
+          productId: order.productId,
+          trackingCode: generateTrackingCode(),
+          carrier: String(req.body?.carrier || "QSM Delivery").trim(),
+          originAddress: String(req.body?.originAddress || "").trim(),
+          deliveryAddress,
+          deliveryNotes: String(req.body?.deliveryNotes || "").trim(),
+          status: "PENDING"
+        }
       });
-    }
-
-    const order = await Order.findById(orderId);
-
-    if (!order) {
-      return res.status(404).json({
-        message: "Orden no encontrada"
+      await tx.order.update({
+        where: { id: orderId },
+        data: {
+          status: "SHIPPED",
+          deliveryStatus: "PENDING",
+          trackingNumber: created.trackingCode,
+          trackingCompany: created.carrier,
+          deliveryAddress
+        }
       });
-    }
-
-    if (order.seller.toString() !== req.user._id.toString()) {
-      return res.status(403).json({
-        message: "Solo el vendedor puede crear el envío"
-      });
-    }
-
-    const existingShipping = await Shipping.findOne({ order: orderId });
-
-    if (existingShipping) {
-      return res.status(400).json({
-        message: "Esta orden ya tiene un envío creado"
-      });
-    }
-
-    const shipping = await Shipping.create({
-      order: order._id,
-      buyer: order.buyer,
-      seller: order.seller,
-      product: order.product,
-      trackingCode: generateTrackingCode(),
-      carrier: carrier || "QSM Delivery",
-      originAddress: originAddress || "",
-      deliveryAddress,
-      deliveryNotes: deliveryNotes || "",
-      status: "PENDING"
+      return tx.shipping.findUnique({ where: { id: created.id }, include });
     });
 
-    order.status = "SHIPPED";
-    await order.save();
-
-    await createNotification(
-      order.buyer,
-      "ORDER_SHIPPED",
-      "Orden en proceso de envío",
-      "El vendedor creó el envío de tu producto. Ya puedes consultar el tracking."
-    );
-
-    res.status(201).json({
-      message: "Envío creado correctamente",
-      shipping
-    });
+    await createNotification(order.buyerId, "ORDER_SHIPPED", "Orden en proceso de envío", "El vendedor creó el envío de tu producto. Ya puedes consultar el tracking.");
+    return res.status(201).json({ message: "Envío creado correctamente", shipping: serialize(shipping) });
   } catch (error) {
-    res.status(500).json({
-      message: "Error creando envío",
-      error: error.message
-    });
+    console.error("Error creando envío:", error);
+    return res.status(500).json({ message: "Error creando envío", error: error.message });
   }
-};
+}
 
-const updateShippingStatus = async (req, res) => {
+async function updateShippingStatus(req, res) {
   try {
-    const { shippingId } = req.params;
-    const { status } = req.body;
+    const id = parsePositiveInt(req.params.shippingId);
+    const status = String(req.body?.status || "").toUpperCase();
+    if (!id) return res.status(400).json({ message: "Identificador de envío no válido" });
+    if (!ALLOWED_STATUS.includes(status)) return res.status(400).json({ message: "Estado de envío no válido" });
 
-    const allowedStatus = [
-      "PENDING",
-      "PICKED_UP",
-      "IN_TRANSIT",
-      "DELIVERED",
-      "FAILED",
-      "RETURNED"
-    ];
+    const current = await prisma.shipping.findUnique({ where: { id } });
+    if (!current) return res.status(404).json({ message: "Envío no encontrado" });
 
-    if (!allowedStatus.includes(status)) {
-      return res.status(400).json({
-        message: "Estado de envío no válido"
-      });
-    }
-
-    const shipping = await Shipping.findById(shippingId);
-
-    if (!shipping) {
-      return res.status(404).json({
-        message: "Envío no encontrado"
-      });
-    }
-
-    shipping.status = status;
+    const deliveredAt = status === "DELIVERED" ? new Date() : current.deliveredAt;
+    const shipping = await prisma.$transaction(async (tx) => {
+      await tx.shipping.update({ where: { id }, data: { status, deliveredAt } });
+      const orderData = {
+        deliveryStatus: status,
+        ...(status === "DELIVERED" ? { status: "DELIVERED", deliveredAt } : {})
+      };
+      await tx.order.update({ where: { id: current.orderId }, data: orderData });
+      return tx.shipping.findUnique({ where: { id }, include });
+    });
 
     if (status === "DELIVERED") {
-      shipping.deliveredAt = new Date();
-
-      const order = await Order.findById(shipping.order);
-
-      if (order) {
-        order.status = "DELIVERED";
-        await order.save();
-
-        await createNotification(
-          order.buyer,
-          "ORDER_DELIVERED",
-          "Orden entregada",
-          "Tu orden fue marcada como entregada. Revisa el producto antes de confirmar."
-        );
-
-        await createNotification(
-          order.seller,
-          "ORDER_DELIVERED",
-          "Producto entregado",
-          "El producto fue marcado como entregado al comprador."
-        );
-      }
+      await Promise.all([
+        createNotification(current.buyerId, "ORDER_DELIVERED", "Orden entregada", "Tu orden fue marcada como entregada. Revisa el producto antes de confirmar."),
+        createNotification(current.sellerId, "ORDER_DELIVERED", "Producto entregado", "El producto fue marcado como entregado al comprador.")
+      ]);
     }
-
-    await shipping.save();
-
-    res.json({
-      message: "Estado de envío actualizado correctamente",
-      shipping
-    });
+    return res.json({ message: "Estado de envío actualizado correctamente", shipping: serialize(shipping) });
   } catch (error) {
-    res.status(500).json({
-      message: "Error actualizando envío",
-      error: error.message
-    });
+    console.error("Error actualizando envío:", error);
+    return res.status(500).json({ message: "Error actualizando envío", error: error.message });
   }
-};
+}
 
-const getMyShippings = async (req, res) => {
+async function getMyShippings(req, res) {
   try {
-    const shippings = await Shipping.find({
-      $or: [{ buyer: req.user._id }, { seller: req.user._id }]
-    })
-      .populate("order")
-      .populate("product", "title price category")
-      .populate("buyer", "firstName lastName email")
-      .populate("seller", "firstName lastName email")
-      .sort({ createdAt: -1 });
-
-    res.json({
-      message: "Envíos obtenidos correctamente",
-      count: shippings.length,
-      shippings
+    const userId = await getRequestUserId(req);
+    if (!userId) return res.status(401).json({ message: "Usuario no autenticado" });
+    const shippings = await prisma.shipping.findMany({
+      where: { OR: [{ buyerId: userId }, { sellerId: userId }] },
+      include,
+      orderBy: { createdAt: "desc" }
     });
+    return res.json({ message: "Envíos obtenidos correctamente", count: shippings.length, shippings: shippings.map(serialize) });
   } catch (error) {
-    res.status(500).json({
-      message: "Error obteniendo envíos",
-      error: error.message
-    });
+    console.error("Error obteniendo envíos:", error);
+    return res.status(500).json({ message: "Error obteniendo envíos", error: error.message });
   }
-};
+}
 
-module.exports = {
-  createShipping,
-  updateShippingStatus,
-  getMyShippings
-};
+module.exports = { createShipping, updateShippingStatus, getMyShippings };

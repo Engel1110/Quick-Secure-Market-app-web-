@@ -1,4 +1,5 @@
-﻿import {
+import { API_BASE_URL as QSM_RUNTIME_API_URL } from "../../../config/runtime";
+import {
   useCallback,
   useEffect,
   useMemo,
@@ -10,24 +11,26 @@ import {
 } from "react-router-dom";
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_URL ||
-  "http://localhost:5000/api";
+  QSM_RUNTIME_API_URL;
 
-const USE_MOCK_DATA =
-  String(
-    import.meta.env.VITE_USE_MOCK_ADMIN ??
-      "true"
-  ).toLowerCase() === "true";
+const USE_MOCK_DATA = false;
 
 const DISPUTE_STATUS = {
   OPEN: "Abierta",
+  IN_REVIEW: "En investigación",
   UNDER_REVIEW: "En investigación",
+  WAITING_EVIDENCE: "Esperando evidencia",
   WAITING_BUYER: "Esperando comprador",
   WAITING_SELLER: "Esperando vendedor",
+  WAITING_QSM: "Esperando QSM",
   ESCALATED: "Escalada",
-  RESOLVED_BUYER: "Resuelta a favor del comprador",
-  RESOLVED_SELLER: "Resuelta a favor del vendedor",
+  RESOLVED: "Resuelta",
+  RESOLVED_BUYER:
+    "Resuelta a favor del comprador",
+  RESOLVED_SELLER:
+    "Resuelta a favor del vendedor",
   REFUNDED: "Reembolsada",
+  REJECTED: "Rechazada",
   CLOSED: "Cerrada"
 };
 
@@ -365,7 +368,7 @@ function DisputesDashboard() {
           );
 
         const response = await fetch(
-          `${API_BASE_URL}/admin/disputes/dashboard`,
+          `${API_BASE_URL}/disputes/admin/all`,
           {
             method: "GET",
             headers: {
@@ -443,9 +446,9 @@ function DisputesDashboard() {
               .includes(
                 normalizedSearch
               ) ||
-            dispute.orderId
-              ?.toLower
-                .includes(
+            String(dispute.orderId || "")
+              .toLowerCase()
+              .includes(
                 normalizedSearch
               ) ||
             dispute.product?.name
@@ -505,86 +508,263 @@ function DisputesDashboard() {
     setIsSaving(true);
 
     try {
-      if (!USE_MOCK_DATA) {
-        const token =
-          localStorage.getItem(
-            "qsm_admin_token"
-          ) ||
-          sessionStorage.getItem(
-            "qsm_admin_token"
+      const currentDispute =
+        (
+          dashboardData?.disputes ||
+          []
+        ).find(
+          (item) =>
+            item.id === disputeId ||
+            item.apiId === disputeId
+        );
+
+      if (!currentDispute) {
+        throw new Error(
+          "No se encontró la disputa seleccionada."
+        );
+      }
+
+      const apiId =
+        currentDispute.apiId ||
+        disputeId;
+
+      const token =
+        localStorage.getItem(
+          "qsm_admin_token"
+        ) ||
+        sessionStorage.getItem(
+          "qsm_admin_token"
+        );
+
+      if (!token) {
+        throw new Error(
+          "No se encontró la sesión administrativa."
+        );
+      }
+
+      /*
+      |--------------------------------------------------------------------------
+      | Resolución final
+      |--------------------------------------------------------------------------
+      */
+
+      if (resolution) {
+        const resolutionLabels = {
+          REFUND_BUYER:
+            "reembolsar al comprador",
+
+          RELEASE_TO_SELLER:
+            "liberar el pago al vendedor"
+        };
+
+        const actionLabel =
+          resolutionLabels[
+            resolution
+          ];
+
+        if (!actionLabel) {
+          throw new Error(
+            "La acción de resolución no es válida."
+          );
+        }
+
+        const amount = Number(
+          currentDispute.amount || 0
+        ).toLocaleString(
+          "es-US"
+        );
+
+        const firstConfirmation =
+          window.confirm(
+            `Vas a ${actionLabel}.
+
+Caso: ${currentDispute.id}
+Producto: ${currentDispute.product?.name || "Producto QSM"}
+Monto protegido: RD${amount}
+
+¿Deseas continuar?`
           );
 
+        if (!firstConfirmation) {
+          return;
+        }
+
+        const adminNotes =
+          window.prompt(
+            "Escribe la justificación administrativa de esta decisión:"
+          )?.trim();
+
+        if (!adminNotes) {
+          window.alert(
+            "La resolución requiere una justificación administrativa."
+          );
+
+          return;
+        }
+
+        const finalConfirmation =
+          window.confirm(
+            `CONFIRMACIÓN FINAL
+
+Se procederá a ${actionLabel}.
+
+Esta acción actualizará la disputa, la orden, el escrow y el pago.
+
+¿Confirmas la resolución?`
+          );
+
+        if (!finalConfirmation) {
+          return;
+        }
+
         const response = await fetch(
-          `${API_BASE_URL}/admin/disputes/${disputeId}/status`,
+          `${API_BASE_URL}/disputes/admin/${apiId}/resolve`,
           {
-            method: "PATCH",
+            method: "PUT",
+
             headers: {
               "Content-Type":
                 "application/json",
-              Authorization: token
-                ? `Bearer ${token}`
-                : ""
+
+              Accept:
+                "application/json",
+
+              Authorization:
+                `Bearer ${token}`
             },
+
             body: JSON.stringify({
-              status: newStatus,
-              resolution
+              action:
+                resolution,
+
+              adminNotes
             })
           }
         );
 
-        if (!response.ok) {
-          const result =
-            await response
-              .json()
-              .catch(() => null);
+        const result =
+          await response
+            .json()
+            .catch(() => null);
 
+        if (!response.ok) {
           throw new Error(
             result?.message ||
-              "No fue posible actualizar la disputa."
+            "No fue posible resolver la disputa."
           );
         }
+
+        await loadDashboard();
+
+        setSelectedDispute(
+          null
+        );
+
+        window.alert(
+          result?.message ||
+          "La disputa fue resuelta correctamente."
+        );
+
+        return;
       }
 
-      setDashboardData(
-        (currentData) => ({
-          ...currentData,
-          disputes:
-            currentData.disputes.map(
-              (dispute) =>
-                dispute.id ===
-                disputeId
-                  ? {
-                      ...dispute,
-                      status: newStatus,
-                      resolution,
-                      lastUpdate:
-                        "Actualizado ahora",
-                      escrowStatus:
-                        getEscrowStatusForResolution(
-                          newStatus
-                        )
-                    }
-                  : dispute
-            )
-        })
+      /*
+      |--------------------------------------------------------------------------
+      | Estados intermedios
+      |--------------------------------------------------------------------------
+      */
+
+      const statusMap = {
+        UNDER_REVIEW:
+          "IN_REVIEW"
+      };
+
+      const normalizedStatus =
+        statusMap[newStatus] ||
+        newStatus;
+
+      const allowedStatuses = [
+        "IN_REVIEW",
+        "WAITING_BUYER",
+        "WAITING_SELLER"
+      ];
+
+      const statusNotes = {
+        IN_REVIEW:
+          "Investigación iniciada desde BackOffice.",
+
+        WAITING_BUYER:
+          "QSM solicitó información o evidencia adicional al comprador.",
+
+        WAITING_SELLER:
+          "QSM solicitó información o evidencia adicional al vendedor."
+      };
+
+      if (
+        !allowedStatuses.includes(
+          normalizedStatus
+        )
+      ) {
+        window.alert(
+          "Esta acción todavía no está habilitada."
+        );
+
+        return;
+      }
+
+      const response = await fetch(
+        `${API_BASE_URL}/disputes/${apiId}/status`,
+        {
+          method: "PATCH",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+
+            Accept:
+              "application/json",
+
+            Authorization:
+              `Bearer ${token}`
+          },
+
+          body: JSON.stringify({
+            status:
+              normalizedStatus,
+
+            note:
+              statusNotes[
+                normalizedStatus
+              ] ||
+              "Estado actualizado desde BackOffice."
+          })
+        }
       );
 
+      const result =
+        await response
+          .json()
+          .catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(
+          result?.message ||
+          "No fue posible actualizar la disputa."
+        );
+      }
+
+      await loadDashboard();
+
       setSelectedDispute(
-        (currentDispute) =>
-          currentDispute?.id ===
-          disputeId
-            ? {
-                ...currentDispute,
-                status: newStatus,
-                resolution,
-                lastUpdate:
-                  "Actualizado ahora",
-                escrowStatus:
-                  getEscrowStatusForResolution(
-                    newStatus
-                  )
-              }
-            : currentDispute
+        null
+      );
+
+      window.alert(
+        result?.message ||
+        statusNotes[
+          normalizedStatus
+        ] ||
+        "Estado actualizado correctamente."
       );
     } catch (updateError) {
       window.alert(
@@ -2478,93 +2658,479 @@ function PartyCard({
   );
 }
 
+function normalizePerson(
+  person,
+  fallbackName
+) {
+  const source =
+    person &&
+    typeof person === "object"
+      ? person
+      : {};
+
+  const id =
+    source._id ??
+    source.id ??
+    null;
+
+  const fullName = [
+    source.firstName,
+    source.lastName
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+
+  return {
+    ...source,
+
+    id:
+      id === null
+        ? null
+        : String(id),
+
+    name:
+      fullName ||
+      source.name ||
+      source.email ||
+      fallbackName,
+
+    email:
+      source.email || "",
+
+    trustScore:
+      Number(
+        source.trustScore || 0
+      ),
+
+    disputes:
+      Number(
+        source.disputes ||
+        source.disputeCount ||
+        0
+      )
+  };
+}
+
+function normalizeDispute(
+  rawDispute = {}
+) {
+  const source =
+    rawDispute &&
+    typeof rawDispute === "object"
+      ? rawDispute
+      : {};
+
+  const order =
+    source.order &&
+    typeof source.order === "object"
+      ? source.order
+      : {};
+
+  const product =
+    source.product &&
+    typeof source.product === "object"
+      ? source.product
+      : {};
+
+  const buyer =
+    source.buyer &&
+    typeof source.buyer === "object"
+      ? source.buyer
+      : {};
+
+  const seller =
+    source.seller &&
+    typeof source.seller === "object"
+      ? source.seller
+      : {};
+
+  const assignedAgent =
+    source.assignedAdminUser ||
+    source.assignedAdmin ||
+    source.assignedAgent ||
+    null;
+
+  const apiId =
+    source._id ??
+    source.id ??
+    "";
+
+  const caseCode =
+    source.disputeCode ||
+    source.caseCode ||
+    (
+      "QSM-DSP-" +
+      String(apiId)
+        .padStart(8, "0")
+    );
+
+  const images =
+    Array.isArray(product.images)
+      ? product.images
+      : [];
+
+  const evidence =
+    Array.isArray(source.evidence)
+      ? source.evidence
+      : [];
+
+  const attachments =
+    Array.isArray(source.attachments)
+      ? source.attachments
+      : [];
+
+  const amount = Number(
+    source.protectedAmount ??
+    source.escrowAmount ??
+    order.totalAmount ??
+    order.total ??
+    order.price ??
+    order.amount ??
+    0
+  );
+
+  const internalNotes =
+    Array.isArray(source.internalNotes)
+      ? source.internalNotes
+      : source.notes
+        ? [
+            {
+              id:
+                "note-" +
+                String(apiId),
+
+              text:
+                String(source.notes),
+
+              createdAt:
+                source.updatedAt ||
+                source.createdAt
+            }
+          ]
+        : [];
+
+  return {
+    ...source,
+
+    apiId:
+      String(apiId),
+
+    id:
+      caseCode,
+
+    disputeCode:
+      caseCode,
+
+    orderId:
+      order.orderCode ||
+      source.orderCode ||
+      (
+        order.id
+          ? String(order.id)
+          : source.orderId
+            ? String(source.orderId)
+            : ""
+      ),
+
+    product: {
+      ...product,
+
+      id:
+        String(
+          product._id ??
+          product.id ??
+          source.productId ??
+          ""
+        ),
+
+      name:
+        product.title ||
+        product.name ||
+        source.productTitle ||
+        "Producto QSM",
+
+      serial:
+        product.serial ||
+        product.serialNumber ||
+        product.imei ||
+        "",
+
+      image:
+        product.image ||
+        product.imageUrl ||
+        product.thumbnail ||
+        images[0] ||
+        null
+    },
+
+    buyer:
+      normalizePerson(
+        buyer,
+        "Comprador QSM"
+      ),
+
+    seller:
+      normalizePerson(
+        seller,
+        "Vendedor QSM"
+      ),
+
+    assignedAgent:
+      assignedAgent
+        ? normalizePerson(
+            assignedAgent,
+            "Personal QSM"
+          )
+        : null,
+
+    category:
+      source.category ||
+      source.reason ||
+      "OTHER",
+
+    reason:
+      source.description ||
+      source.details ||
+      source.reason ||
+      "Sin descripción registrada.",
+
+    amount,
+
+    currency:
+      source.currency === "DOP"
+        ? "RD$"
+        : source.currency ||
+          "RD$",
+
+    priority:
+      source.priority ||
+      "MEDIUM",
+
+    status:
+      source.status ||
+      "OPEN",
+
+    createdAt:
+      source.createdAt ||
+      new Date().toISOString(),
+
+    lastUpdate:
+      source.lastActivityAt ||
+      source.updatedAt ||
+      source.createdAt ||
+      "",
+
+    deadline:
+      source.deadline ||
+      "Sin SLA definido",
+
+    unreadMessages:
+      Number(
+        source.adminUnreadCount ||
+        source.unreadMessages ||
+        0
+      ),
+
+    evidenceCount:
+      evidence.length +
+      attachments.length,
+
+    escrowStatus:
+      order.escrowStatus ||
+      source.escrowStatus ||
+      "HELD",
+
+    internalNotes,
+
+    messages:
+      Array.isArray(source.messages)
+        ? source.messages
+        : [],
+
+    timeline:
+      Array.isArray(source.timeline)
+        ? source.timeline
+        : []
+  };
+}
+
 function normalizeDashboardResponse(
   response
 ) {
-  const source =
-    response?.data || response;
+  const rawDisputes =
+    Array.isArray(response?.disputes)
+      ? response.disputes
+      : Array.isArray(
+          response?.data?.disputes
+        )
+        ? response.data.disputes
+        : Array.isArray(response?.data)
+          ? response.data
+          : [];
+
+  const disputes =
+    rawDisputes.map(
+      normalizeDispute
+    );
+
+  const openStatuses = [
+    "OPEN"
+  ];
+
+  const reviewStatuses = [
+    "IN_REVIEW",
+    "UNDER_REVIEW"
+  ];
+
+  const waitingStatuses = [
+    "WAITING_EVIDENCE",
+    "WAITING_BUYER",
+    "WAITING_SELLER",
+    "WAITING_QSM"
+  ];
+
+  const finalStatuses = [
+    "RESOLVED",
+    "RESOLVED_BUYER",
+    "RESOLVED_SELLER",
+    "REFUNDED",
+    "REJECTED",
+    "CLOSED"
+  ];
+
+  const open =
+    disputes.filter(
+      (item) =>
+        openStatuses.includes(
+          item.status
+        )
+    ).length;
+
+  const underReview =
+    disputes.filter(
+      (item) =>
+        reviewStatuses.includes(
+          item.status
+        )
+    ).length;
+
+  const waitingResponse =
+    disputes.filter(
+      (item) =>
+        waitingStatuses.includes(
+          item.status
+        )
+    ).length;
+
+  const escalated =
+    disputes.filter(
+      (item) =>
+        item.status === "ESCALATED"
+    ).length;
+
+  const resolved =
+    disputes.filter(
+      (item) =>
+        finalStatuses.includes(
+          item.status
+        )
+    ).length;
+
+  const protectedAmount =
+    disputes
+      .filter(
+        (item) =>
+          item.escrowStatus ===
+          "HELD"
+      )
+      .reduce(
+        (total, item) =>
+          total +
+          Number(item.amount || 0),
+        0
+      );
 
   return {
     generatedAt:
-      source.generatedAt ||
+      response?.generatedAt ||
       new Date().toISOString(),
 
     kpis: {
-      open:
-        Number(
-          source.kpis?.open
-        ) || 0,
-
-      underReview:
-        Number(
-          source.kpis
-            ?.underReview
-        ) || 0,
-
-      waitingResponse:
-        Number(
-          source.kpis
-            ?.waitingResponse
-        ) || 0,
-
-      escalated:
-        Number(
-          source.kpis
-            ?.escalated
-        ) || 0,
-
+      open,
+      underReview,
+      waitingResponse,
+      escalated,
+      resolved,
       resolvedToday:
-        Number(
-          source.kpis
-            ?.resolvedToday
-        ) || 0,
-
-      refundedToday:
-        Number(
-          source.kpis
-            ?.refundedToday
-        ) || 0,
-
-      critical:
-        Number(
-          source.kpis
-            ?.critical
-        ) || 0,
+        resolved,
+      protectedAmount,
 
       resolutionRate:
-        Number(
-          source.kpis
-            ?.resolutionRate
-        ) || 0
+        disputes.length
+          ? Math.round(
+              (
+                resolved /
+                disputes.length
+              ) * 100
+            )
+          : 0
     },
 
-    disputes:
-      Array.isArray(
-        source.disputes
-      )
-        ? source.disputes
-        : [],
+    disputes,
 
-    agents:
-      Array.isArray(
-        source.agents
-      )
-        ? source.agents
-        : [],
+    agents: [],
 
     alerts:
-      Array.isArray(
-        source.alerts
-      )
-        ? source.alerts
+      escalated > 0
+        ? [
+            {
+              id:
+                "ALERT-ESCALATED",
+
+              title:
+                escalated +
+                " caso(s) escalado(s)",
+
+              description:
+                "Requieren revisión administrativa.",
+
+              severity:
+                "HIGH"
+            }
+          ]
         : [],
 
     recentActivity:
-      Array.isArray(
-        source.recentActivity
-      )
-        ? source.recentActivity
-        : []
+      disputes
+        .slice(0, 6)
+        .map(
+          (
+            dispute,
+            index
+          ) => ({
+            id:
+              "ACT-" +
+              dispute.apiId +
+              "-" +
+              index,
+
+            title:
+              "Caso " +
+              dispute.status,
+
+            description:
+              dispute.id +
+              " · " +
+              dispute.product.name,
+
+            time:
+              dispute.lastUpdate,
+
+            icon:
+              "⚖️"
+          })
+        )
   };
 }
 

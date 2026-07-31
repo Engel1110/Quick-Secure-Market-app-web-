@@ -1,3 +1,4 @@
+import { API_BASE_URL as QSM_RUNTIME_API_URL } from "../config/runtime";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
@@ -9,7 +10,7 @@ import { getProducts } from "../api/products";
 import api from "../api/axios";
 
 const API_ORIGIN = String(
-  import.meta.env.VITE_API_URL || "http://localhost:5000/api"
+  QSM_RUNTIME_API_URL
 ).replace(/\/api\/?$/, "");
 
 const CATEGORIES = [

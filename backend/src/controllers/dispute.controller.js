@@ -1,17 +1,9 @@
-const mongoose = require("mongoose");
-const validator = require("validator");
-
-const Dispute = require("../models/Dispute");
-const Order = require("../models/Order");
-const Payment = require("../models/Payment");
-
-const {
-  createNotification
-} = require("../services/notification.service");
+const crypto = require("crypto");
+const prisma = require("../utils/prisma");
 
 /*
 |--------------------------------------------------------------------------
-| Constantes
+| Roles y estados
 |--------------------------------------------------------------------------
 */
 
@@ -61,26 +53,88 @@ const ALLOWED_RESOLUTION_ACTIONS = [
   "REJECT_DISPUTE"
 ];
 
+const USER_SELECT = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  email: true,
+  role: true,
+  trustScore: true,
+  isVerified: true,
+  status: true
+};
+
+const PRODUCT_SELECT = {
+  id: true,
+  title: true,
+  description: true,
+  price: true,
+  category: true,
+  condition: true,
+  images: true,
+  imageUrl: true,
+  status: true,
+  sellerId: true,
+  location: true
+};
+
+const ORDER_SELECT = {
+  id: true,
+  orderCode: true,
+  productId: true,
+  buyerId: true,
+  sellerId: true,
+  price: true,
+  protectionFee: true,
+  shippingFee: true,
+  totalAmount: true,
+  reserveFee: true,
+  status: true,
+  paymentMethod: true,
+  paymentStatus: true,
+  escrowStatus: true,
+  deliveryMethod: true,
+  deliveryStatus: true,
+  warehouseStatus: true,
+  createdAt: true,
+  updatedAt: true
+};
+
+const DISPUTE_INCLUDE = {
+  order: {
+    select: ORDER_SELECT
+  },
+  product: {
+    select: PRODUCT_SELECT
+  },
+  buyer: {
+    select: USER_SELECT
+  },
+  seller: {
+    select: USER_SELECT
+  },
+  assignedAdmin: {
+    select: USER_SELECT
+  },
+  assignedWarehouseUser: {
+    select: USER_SELECT
+  }
+};
+
 /*
 |--------------------------------------------------------------------------
-| Utilidades
+| Utilidades generales
 |--------------------------------------------------------------------------
 */
 
-const isValidObjectId = (value) => {
-  return mongoose.Types.ObjectId.isValid(value);
-};
+const parsePositiveInt = (value) => {
+  const parsed = Number(value);
 
-const sanitizeText = (
-  value,
-  maximumLength = 5000
-) => {
-  return validator
-    .escape(
-      String(value || "")
-        .trim()
-        .slice(0, maximumLength)
-    );
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return null;
+  }
+
+  return parsed;
 };
 
 const normalizeRole = (role) => {
@@ -89,118 +143,107 @@ const normalizeRole = (role) => {
     .toUpperCase();
 };
 
-const getUserRole = (user) => {
-  return normalizeRole(
-    user?.role ||
-      user?.systemRole ||
-      user?.adminRole
-  );
+const sanitizeText = (
+  value,
+  maximumLength = 5000
+) => {
+  return String(value || "")
+    .trim()
+    .slice(0, maximumLength);
+};
+
+const normalizeEvidence = (
+  evidence,
+  evidenceText
+) => {
+  let values = [];
+
+  if (Array.isArray(evidence)) {
+    values = evidence;
+  } else if (
+    typeof evidence === "string"
+  ) {
+    values = evidence.split(/\r?\n|,/);
+  }
+
+  if (
+    typeof evidenceText === "string"
+  ) {
+    values.push(
+      ...evidenceText.split(/\r?\n/)
+    );
+  }
+
+  return [
+    ...new Set(
+      values
+        .map((item) =>
+          sanitizeText(item, 2000)
+        )
+        .filter(Boolean)
+        .slice(0, 10)
+    )
+  ];
+};
+
+const safeJsonArray = (value) => {
+  return Array.isArray(value)
+    ? [...value]
+    : [];
+};
+
+const safeJsonObject = (value) => {
+  return (
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value)
+  )
+    ? { ...value }
+    : {};
 };
 
 const isAdmin = (user) => {
   return ADMIN_ROLES.includes(
-    getUserRole(user)
+    normalizeRole(user?.role)
   );
 };
 
 const canReviewDisputes = (user) => {
   return REVIEW_ROLES.includes(
-    getUserRole(user)
+    normalizeRole(user?.role)
   );
 };
 
-const objectIdToString = (value) => {
-  if (!value) {
-    return "";
-  }
+const getRequestMetadata = (req) => {
+  const forwardedFor =
+    req.headers["x-forwarded-for"];
 
-  if (value._id) {
-    return String(value._id);
-  }
+  const ipAddress = Array.isArray(
+    forwardedFor
+  )
+    ? forwardedFor[0]
+    : String(
+        forwardedFor ||
+        req.ip ||
+        req.socket?.remoteAddress ||
+        ""
+      )
+        .split(",")[0]
+        .trim();
 
-  return String(value);
+  return {
+    ipAddress,
+    userAgent: sanitizeText(
+      req.headers["user-agent"],
+      1000
+    )
+  };
 };
 
-const isDisputeParticipant = (
-  dispute,
-  userId
-) => {
-  const normalizedUserId =
-    objectIdToString(userId);
-
-  return (
-    objectIdToString(dispute.buyer) ===
-      normalizedUserId ||
-    objectIdToString(dispute.seller) ===
-      normalizedUserId
-  );
-};
-
-const canAccessDispute = (
-  dispute,
-  user
-) => {
-  return (
-    isDisputeParticipant(
-      dispute,
-      user?._id
-    ) ||
-    canReviewDisputes(user)
-  );
-};
-
-const getParticipantRole = (
-  dispute,
-  user
-) => {
-  const userId = objectIdToString(
-    user?._id
-  );
-
-  if (
-    objectIdToString(dispute.buyer) ===
-    userId
-  ) {
-    return "BUYER";
-  }
-
-  if (
-    objectIdToString(dispute.seller) ===
-    userId
-  ) {
-    return "SELLER";
-  }
-
-  const role = getUserRole(user);
-
-  if (role === "AUDITOR") {
-    return "AUDITOR";
-  }
-
-  if (role === "SENIOR_ADMIN") {
-    return "SENIOR_ADMIN";
-  }
-
-  if (
-    role === "ADMIN" ||
-    role === "SUPER_ADMIN"
-  ) {
-    return "ADMIN";
-  }
-
-  return "SYSTEM";
-};
-
-const getOrderProtectedAmount = (
-  order
-) => {
+const getProtectedAmount = (order) => {
   const candidates = [
     order?.totalAmount,
-    order?.total,
-    order?.amount,
-    order?.subtotal,
-    order?.price,
-    order?.product?.price
+    order?.price
   ];
 
   for (const candidate of candidates) {
@@ -217,92 +260,80 @@ const getOrderProtectedAmount = (
   return 0;
 };
 
-const normalizeEvidence = (
-  evidence,
-  evidenceText
-) => {
-  let values = [];
+const createDisputeCode = () => {
+  return `QSM-DSP-${Date.now()
+    .toString()
+    .slice(-8)}-${crypto
+    .randomInt(100, 1000)}`;
+};
 
-  if (Array.isArray(evidence)) {
-    values = evidence;
-  } else if (
-    typeof evidence === "string"
-  ) {
-    values = evidence
-      .split(/\r?\n|,/)
-      .map((item) => item.trim())
-      .filter(Boolean);
-  }
+/*
+|--------------------------------------------------------------------------
+| Puente temporal MongoDB Auth -> Prisma
+|--------------------------------------------------------------------------
+*/
 
-  if (
-    evidenceText &&
-    typeof evidenceText === "string"
-  ) {
-    values.push(
-      ...evidenceText
-        .split(/\r?\n/)
-        .map((item) => item.trim())
-        .filter(Boolean)
-    );
-  }
-
-  return [
-    ...new Set(
-      values
-        .slice(0, 10)
-        .map((item) =>
-          sanitizeText(item, 2000)
-        )
-        .filter(Boolean)
-    )
+const resolvePrismaUser = async (req) => {
+  const possibleIds = [
+    req.user?.id,
+    req.user?.userId,
+    req.user?._id
   ];
-};
 
-const getRequestMetadata = (req) => {
-  const forwardedFor =
-    req.headers["x-forwarded-for"];
+  for (const possibleId of possibleIds) {
+    const numericId =
+      parsePositiveInt(possibleId);
 
-  const ipAddress = Array.isArray(
-    forwardedFor
+    if (numericId) {
+      const user =
+        await prisma.user.findUnique({
+          where: {
+            id: numericId
+          }
+        });
+
+      if (user) {
+        return user;
+      }
+    }
+  }
+
+  const email = String(
+    req.user?.email || ""
   )
-    ? forwardedFor[0]
-    : String(
-        forwardedFor ||
-          req.ip ||
-          req.socket?.remoteAddress ||
-          ""
-      )
-        .split(",")[0]
-        .trim();
+    .trim()
+    .toLowerCase();
 
-  return {
-    ipAddress,
-    userAgent: sanitizeText(
-      req.headers["user-agent"],
-      1000
-    )
-  };
+  if (!email) {
+    return null;
+  }
+
+  return prisma.user.findUnique({
+    where: {
+      email
+    }
+  });
 };
+
+/*
+|--------------------------------------------------------------------------
+| Timeline, auditoría y mensajes JSON
+|--------------------------------------------------------------------------
+*/
 
 const addTimeline = (
-  dispute,
+  timeline,
   data
 ) => {
-  if (
-    typeof dispute.addTimelineEvent ===
-    "function"
-  ) {
-    dispute.addTimelineEvent(data);
-    return;
-  }
+  const result =
+    safeJsonArray(timeline);
 
-  if (!Array.isArray(dispute.timeline)) {
-    dispute.timeline = [];
-  }
-
-  dispute.timeline.push({
-    type: data.type || "OTHER",
-    title: data.title,
+  result.push({
+    id: crypto.randomUUID(),
+    type:
+      data.type || "OTHER",
+    title:
+      data.title || "Actividad",
     description:
       data.description || "",
     performedBy:
@@ -318,31 +349,29 @@ const addTimeline = (
       data.metadata || {},
     isInternal:
       Boolean(data.isInternal),
-    occurredAt: new Date()
+    occurredAt:
+      new Date().toISOString()
   });
+
+  return result;
 };
 
 const addAudit = (
-  dispute,
+  auditLog,
   data
 ) => {
-  if (
-    typeof dispute.addAuditEntry ===
-    "function"
-  ) {
-    dispute.addAuditEntry(data);
-    return;
-  }
+  const result =
+    safeJsonArray(auditLog);
 
-  if (!Array.isArray(dispute.auditLog)) {
-    dispute.auditLog = [];
-  }
-
-  dispute.auditLog.push({
-    action: data.action,
-    actor: data.actor || null,
+  result.push({
+    id: crypto.randomUUID(),
+    action:
+      data.action,
+    actor:
+      data.actor || null,
     actorRole:
-      data.actorRole || "SYSTEM",
+      data.actorRole ||
+      "SYSTEM",
     ipAddress:
       data.ipAddress || "",
     userAgent:
@@ -353,12 +382,92 @@ const addAudit = (
       data.after || null,
     metadata:
       data.metadata || {},
-    createdAt: new Date()
+    createdAt:
+      new Date().toISOString()
   });
+
+  return result;
 };
 
-const safeCreateNotification =
+const getParticipantRole = (
+  dispute,
+  user
+) => {
+  if (
+    dispute.buyerId ===
+    user.id
+  ) {
+    return "BUYER";
+  }
+
+  if (
+    dispute.sellerId ===
+    user.id
+  ) {
+    return "SELLER";
+  }
+
+  const role =
+    normalizeRole(user.role);
+
+  if (role === "AUDITOR") {
+    return "AUDITOR";
+  }
+
+  if (
+    role === "SENIOR_ADMIN"
+  ) {
+    return "SENIOR_ADMIN";
+  }
+
+  if (
+    role === "ADMIN" ||
+    role === "SUPER_ADMIN"
+  ) {
+    return "ADMIN";
+  }
+
+  return "SYSTEM";
+};
+
+/*
+|--------------------------------------------------------------------------
+| Permisos
+|--------------------------------------------------------------------------
+*/
+
+const isDisputeParticipant = (
+  dispute,
+  userId
+) => {
+  return (
+    dispute.buyerId === userId ||
+    dispute.sellerId === userId
+  );
+};
+
+const canAccessDispute = (
+  dispute,
+  user
+) => {
+  return (
+    isDisputeParticipant(
+      dispute,
+      user.id
+    ) ||
+    canReviewDisputes(user)
+  );
+};
+
+/*
+|--------------------------------------------------------------------------
+| Notificaciones y Socket.IO
+|--------------------------------------------------------------------------
+*/
+
+const createNotificationSafe =
   async (
+    client,
     userId,
     type,
     title,
@@ -369,12 +478,17 @@ const safeCreateNotification =
     }
 
     try {
-      await createNotification(
-        userId,
-        type,
-        title,
-        message
-      );
+      await client.notification.create({
+        data: {
+          userId,
+          title,
+          message:
+            type
+              ? `[${type}] ${message}`
+              : message,
+          read: false
+        }
+      });
     } catch (error) {
       console.error(
         "No se pudo crear la notificación:",
@@ -390,7 +504,8 @@ const emitUserEvent = (
   payload
 ) => {
   try {
-    const io = req.app.get("io");
+    const io =
+      req.app.get("io");
 
     if (!io || !userId) {
       return;
@@ -398,7 +513,10 @@ const emitUserEvent = (
 
     io
       .to(`user:${userId}`)
-      .emit(eventName, payload);
+      .emit(
+        eventName,
+        payload
+      );
   } catch (error) {
     console.error(
       "No se pudo emitir evento Socket.IO:",
@@ -407,79 +525,289 @@ const emitUserEvent = (
   }
 };
 
-const serializeDispute = (
-  dispute,
-  user
-) => {
-  const plainDispute =
-    typeof dispute.toObject ===
-    "function"
-      ? dispute.toObject()
-      : { ...dispute };
+/*
+|--------------------------------------------------------------------------
+| Serialización compatible con el frontend
+|--------------------------------------------------------------------------
+*/
 
-  if (!canReviewDisputes(user)) {
-    delete plainDispute.auditLog;
-    delete plainDispute.internalNotes;
-
-    if (
-      Array.isArray(
-        plainDispute.timeline
-      )
-    ) {
-      plainDispute.timeline =
-        plainDispute.timeline.filter(
-          (event) =>
-            !event.isInternal
-        );
-    }
-
-    if (
-      Array.isArray(
-        plainDispute.messages
-      )
-    ) {
-      plainDispute.messages =
-        plainDispute.messages.filter(
-          (message) =>
-            !message.isInternal
-        );
-    }
+const serializeUser = (user) => {
+  if (!user) {
+    return null;
   }
 
-  return plainDispute;
+  return {
+    ...user,
+    _id: String(user.id)
+  };
 };
 
-const populateDisputeQuery = (
-  query
+const serializeProduct = (
+  product
 ) => {
-  return query
-    .populate(
-      "order"
+  if (!product) {
+    return null;
+  }
+
+  return {
+    ...product,
+    _id: String(product.id)
+  };
+};
+
+const serializeOrder = (order) => {
+  if (!order) {
+    return null;
+  }
+
+  return {
+    ...order,
+    _id: String(order.id),
+    total:
+      Number(order.totalAmount || 0)
+  };
+};
+
+const hydrateMessages = async (
+  messages
+) => {
+  const safeMessages =
+    safeJsonArray(messages);
+
+  const senderIds = [
+    ...new Set(
+      safeMessages
+        .map((message) =>
+          parsePositiveInt(
+            message.senderId ??
+            message.sender
+          )
+        )
+        .filter(Boolean)
     )
-    .populate(
-      "product",
-      "title price category condition images seller"
-    )
-    .populate(
-      "buyer",
-      "firstName lastName email trustScore isVerified avatar"
-    )
-    .populate(
-      "seller",
-      "firstName lastName email trustScore isVerified avatar"
-    )
-    .populate(
-      "assignedAdmin",
-      "firstName lastName email role"
-    )
-    .populate(
-      "messages.sender",
-      "firstName lastName email avatar role"
-    )
-    .populate(
-      "timeline.performedBy",
-      "firstName lastName email role"
-    );
+  ];
+
+  const users = senderIds.length
+    ? await prisma.user.findMany({
+        where: {
+          id: {
+            in: senderIds
+          }
+        },
+        select: USER_SELECT
+      })
+    : [];
+
+  const userMap = new Map(
+    users.map((user) => [
+      user.id,
+      user
+    ])
+  );
+
+  return safeMessages.map(
+    (message) => {
+      const senderId =
+        parsePositiveInt(
+          message.senderId ??
+          message.sender
+        );
+
+      const sender =
+        senderId
+          ? userMap.get(senderId)
+          : null;
+
+      return {
+        ...message,
+        _id:
+          message._id ||
+          message.id ||
+          crypto.randomUUID(),
+        senderId:
+          senderId || null,
+        sender:
+          sender
+            ? serializeUser(sender)
+            : senderId,
+        text:
+          message.text ||
+          message.message ||
+          "",
+        message:
+          message.message ||
+          message.text ||
+          "",
+        createdAt:
+          message.createdAt ||
+          new Date().toISOString()
+      };
+    }
+  );
+};
+
+const serializeDispute =
+  async (
+    dispute,
+    requestUser
+  ) => {
+    if (!dispute) {
+      return null;
+    }
+
+    const reviewer =
+      canReviewDisputes(
+        requestUser
+      );
+
+    const timeline =
+      safeJsonArray(
+        dispute.timeline
+      ).filter(
+        (event) =>
+          reviewer ||
+          !event?.isInternal
+      );
+
+    const messages =
+      await hydrateMessages(
+        safeJsonArray(
+          dispute.messages
+        ).filter(
+          (message) =>
+            reviewer ||
+            !message?.isInternal
+        )
+      );
+
+    const serialized = {
+      ...dispute,
+      _id:
+        String(dispute.id),
+      disputeId:
+        dispute.id,
+      order:
+        serializeOrder(
+          dispute.order
+        ),
+      product:
+        serializeProduct(
+          dispute.product
+        ),
+      buyer:
+        serializeUser(
+          dispute.buyer
+        ),
+      seller:
+        serializeUser(
+          dispute.seller
+        ),
+      assignedAdmin:
+        serializeUser(
+          dispute.assignedAdmin
+        ),
+      assignedWarehouseUser:
+        serializeUser(
+          dispute.assignedWarehouseUser
+        ),
+      details:
+        dispute.description,
+      evidenceText:
+        Array.isArray(
+          dispute.evidence
+        )
+          ? dispute.evidence.join(
+              "\n"
+            )
+          : "",
+      escrowAmount:
+        Number(
+          dispute.protectedAmount ||
+          0
+        ),
+      timeline,
+      messages,
+      resolution:
+        dispute.resolutionData &&
+        Object.keys(
+          safeJsonObject(
+            dispute.resolutionData
+          )
+        ).length
+          ? dispute.resolutionData
+          : dispute.resolution
+    };
+
+    if (!reviewer) {
+      delete serialized.auditLog;
+      delete serialized.internalNotes;
+      delete serialized.adminNotes;
+    }
+
+    return serialized;
+  };
+
+/*
+|--------------------------------------------------------------------------
+| Consulta completa
+|--------------------------------------------------------------------------
+*/
+
+const getDisputeRecord = async (
+  disputeId,
+  client = prisma
+) => {
+  return client.dispute.findUnique({
+    where: {
+      id: disputeId
+    },
+    include:
+      DISPUTE_INCLUDE
+  });
+};
+
+/*
+|--------------------------------------------------------------------------
+| Manejo de errores
+|--------------------------------------------------------------------------
+*/
+
+const handleError = (
+  res,
+  error,
+  message
+) => {
+  console.error(message, error);
+
+  if (
+    error?.code === "P2002"
+  ) {
+    return res.status(409).json({
+      success: false,
+      message:
+        "Ya existe una disputa para esta orden."
+    });
+  }
+
+  if (
+    error?.code === "P2025"
+  ) {
+    return res.status(404).json({
+      success: false,
+      message:
+        "La disputa solicitada no fue encontrada."
+    });
+  }
+
+  return res.status(500).json({
+    success: false,
+    message,
+    error:
+      process.env.NODE_ENV ===
+      "production"
+        ? undefined
+        : error.message
+  });
 };
 
 /*
@@ -500,7 +828,13 @@ const createDispute = async (
       details,
       evidence,
       evidenceText
-    } = req.body;
+    } = req.body || {};
+
+    const numericOrderId =
+      parsePositiveInt(orderId);
+
+    const normalizedReason =
+      sanitizeText(reason, 300);
 
     const normalizedDescription =
       sanitizeText(
@@ -508,11 +842,8 @@ const createDispute = async (
         5000
       );
 
-    const normalizedReason =
-      sanitizeText(reason, 300);
-
     if (
-      !orderId ||
+      !numericOrderId ||
       !normalizedReason ||
       !normalizedDescription
     ) {
@@ -523,17 +854,29 @@ const createDispute = async (
       });
     }
 
-    if (!isValidObjectId(orderId)) {
-      return res.status(400).json({
+    const prismaUser =
+      await resolvePrismaUser(req);
+
+    if (!prismaUser) {
+      return res.status(401).json({
         success: false,
         message:
-          "El identificador de la orden no es válido."
+          "Tu usuario autenticado todavía no existe en Supabase."
       });
     }
 
-    const order = await Order.findById(
-      orderId
-    ).populate("product");
+    const order =
+      await prisma.order.findUnique({
+        where: {
+          id: numericOrderId
+        },
+        include: {
+          product: {
+            select:
+              PRODUCT_SELECT
+          }
+        }
+      });
 
     if (!order) {
       return res.status(404).json({
@@ -544,8 +887,8 @@ const createDispute = async (
     }
 
     if (
-      objectIdToString(order.buyer) !==
-      objectIdToString(req.user._id)
+      order.buyerId !==
+      prismaUser.id
     ) {
       return res.status(403).json({
         success: false,
@@ -555,8 +898,10 @@ const createDispute = async (
     }
 
     if (
-      order.status === "COMPLETED" ||
-      order.escrowStatus === "RELEASED"
+      order.status ===
+        "COMPLETED" ||
+      order.escrowStatus ===
+        "RELEASED"
     ) {
       return res.status(400).json({
         success: false,
@@ -566,8 +911,10 @@ const createDispute = async (
     }
 
     if (
-      order.status === "CANCELLED" ||
-      order.escrowStatus === "REFUNDED"
+      order.status ===
+        "CANCELLED" ||
+      order.escrowStatus ===
+        "REFUNDED"
     ) {
       return res.status(400).json({
         success: false,
@@ -577,10 +924,14 @@ const createDispute = async (
     }
 
     const existingDispute =
-      await Dispute.findOne({
-        order: order._id,
-        status: {
-          $nin: FINAL_STATUSES
+      await prisma.dispute.findUnique({
+        where: {
+          orderId:
+            numericOrderId
+        },
+        select: {
+          id: true,
+          status: true
         }
       });
 
@@ -588,9 +939,9 @@ const createDispute = async (
       return res.status(409).json({
         success: false,
         message:
-          "Esta orden ya tiene una disputa activa.",
+          "Esta orden ya tiene una disputa registrada.",
         disputeId:
-          existingDispute._id
+          existingDispute.id
       });
     }
 
@@ -600,128 +951,205 @@ const createDispute = async (
         evidenceText
       );
 
-    const protectedAmount =
-      getOrderProtectedAmount(order);
+    const now =
+      new Date();
 
-    const dispute =
-      await Dispute.create({
-        order: order._id,
-        buyer: order.buyer,
-        seller: order.seller,
-        product:
-          order.product?._id ||
-          order.product,
-        reason: normalizedReason,
+    let timeline = [];
+
+    timeline = addTimeline(
+      timeline,
+      {
+        type:
+          "DISPUTE_CREATED",
+        title:
+          "Disputa creada",
         description:
-          normalizedDescription,
-        evidence: safeEvidence,
-        status: "OPEN",
-        priority: "MEDIUM",
-        protectedAmount,
-        currency:
-          order.currency || "DOP",
-        lastActivityAt:
-          new Date()
-      });
+          "El comprador abrió una disputa y QSM retuvo el pago para revisión.",
+        performedBy:
+          prismaUser.id,
+        performedByRole:
+          "BUYER",
+        newStatus:
+          "OPEN"
+      }
+    );
+
+    timeline = addTimeline(
+      timeline,
+      {
+        type:
+          "PAYMENT_HELD",
+        title:
+          "Pago retenido",
+        description:
+          "Los fondos de la orden quedaron protegidos mientras se revisa el caso.",
+        performedBy:
+          null,
+        performedByRole:
+          "SYSTEM",
+        newStatus:
+          "OPEN"
+      }
+    );
 
     const requestMetadata =
       getRequestMetadata(req);
 
-    addAudit(dispute, {
-      action: "DISPUTE_CREATED",
-      actor: req.user._id,
-      actorRole: "BUYER",
-      ...requestMetadata,
-      before: null,
-      after: {
-        status: "OPEN",
-        order: order._id
-      }
-    });
+    const auditLog =
+      addAudit(
+        [],
+        {
+          action:
+            "DISPUTE_CREATED",
+          actor:
+            prismaUser.id,
+          actorRole:
+            "BUYER",
+          ...requestMetadata,
+          before:
+            null,
+          after: {
+            status:
+              "OPEN",
+            orderId:
+              numericOrderId
+          }
+        }
+      );
 
-    order.status = "DISPUTED";
-    order.escrowStatus = "HELD";
+    const createdId =
+      await prisma.$transaction(
+        async (tx) => {
+          const created =
+            await tx.dispute.create({
+              data: {
+                disputeCode:
+                  createDisputeCode(),
+                orderId:
+                  numericOrderId,
+                productId:
+                  order.productId,
+                buyerId:
+                  order.buyerId,
+                sellerId:
+                  order.sellerId,
+                reason:
+                  normalizedReason,
+                description:
+                  normalizedDescription,
+                evidence:
+                  safeEvidence,
+                status:
+                  "OPEN",
+                priority:
+                  "MEDIUM",
+                protectedAmount:
+                  getProtectedAmount(
+                    order
+                  ),
+                currency:
+                  "DOP",
+                lastActivityAt:
+                  now,
+                timeline,
+                auditLog
+              }
+            });
 
-    await Promise.all([
-      dispute.save(),
-      order.save()
-    ]);
+          await tx.order.update({
+            where: {
+              id:
+                numericOrderId
+            },
+            data: {
+              status:
+                "DISPUTED",
+              escrowStatus:
+                "HELD",
+              disputeReason:
+                normalizedReason,
+              disputeOpenedById:
+                prismaUser.id,
+              disputeOpenedAt:
+                now
+            }
+          });
 
-    await Promise.all([
-      safeCreateNotification(
-        order.seller,
-        "DISPUTE_OPENED",
-        "Disputa abierta",
-        "El comprador abrió una disputa. El pago permanecerá retenido mientras QSM revisa el caso."
-      ),
+          await createNotificationSafe(
+            tx,
+            order.sellerId,
+            "DISPUTE_OPENED",
+            "Disputa abierta",
+            "El comprador abrió una disputa. El pago permanecerá retenido mientras QSM revisa el caso."
+          );
 
-      safeCreateNotification(
-        order.buyer,
-        "DISPUTE_OPENED",
-        "Disputa creada correctamente",
-        "Tu disputa fue registrada y Quick Secure Market revisará el caso."
-      )
-    ]);
+          await createNotificationSafe(
+            tx,
+            order.buyerId,
+            "DISPUTE_OPENED",
+            "Disputa creada correctamente",
+            "Tu disputa fue registrada y Quick Secure Market revisará el caso."
+          );
 
-    emitUserEvent(
-      req,
-      order.seller,
-      "dispute:created",
-      {
-        disputeId:
-          dispute._id,
-        orderId: order._id,
-        status:
-          dispute.status
-      }
-    );
-
-    emitUserEvent(
-      req,
-      order.buyer,
-      "dispute:created",
-      {
-        disputeId:
-          dispute._id,
-        orderId: order._id,
-        status:
-          dispute.status
-      }
-    );
+          return created.id;
+        },
+        {
+          maxWait:
+            20000,
+          timeout:
+            60000
+        }
+      );
 
     const populatedDispute =
-      await populateDisputeQuery(
-        Dispute.findById(
-          dispute._id
-        )
+      await getDisputeRecord(
+        createdId
       );
+
+    emitUserEvent(
+      req,
+      order.sellerId,
+      "dispute:created",
+      {
+        disputeId:
+          createdId,
+        orderId:
+          numericOrderId,
+        status:
+          "OPEN"
+      }
+    );
+
+    emitUserEvent(
+      req,
+      order.buyerId,
+      "dispute:created",
+      {
+        disputeId:
+          createdId,
+        orderId:
+          numericOrderId,
+        status:
+          "OPEN"
+      }
+    );
 
     return res.status(201).json({
       success: true,
       message:
         "Disputa creada correctamente. El pago quedó retenido para revisión.",
       dispute:
-        serializeDispute(
+        await serializeDispute(
           populatedDispute,
-          req.user
+          prismaUser
         )
     });
   } catch (error) {
-    console.error(
-      "Error creando disputa:",
-      error
+    return handleError(
+      res,
+      error,
+      "Ocurrió un error creando la disputa."
     );
-
-    return res.status(500).json({
-      success: false,
-      message:
-        "Ocurrió un error creando la disputa.",
-      error:
-        process.env.NODE_ENV ===
-        "production"
-          ? undefined
-          : error.message
-    });
   }
 };
 
@@ -736,66 +1164,98 @@ const getMyDisputes = async (
   res
 ) => {
   try {
+    const prismaUser =
+      await resolvePrismaUser(req);
+
+    if (!prismaUser) {
+      return res.status(401).json({
+        success: false,
+        message:
+          "Tu usuario autenticado todavía no existe en Supabase.",
+        disputes: [],
+        count: 0
+      });
+    }
+
     const {
       status,
       search,
       sort = "newest",
       page = 1,
       limit = 50
-    } = req.query;
+    } = req.query || {};
 
-    const query = {
-      $or: [
+    const safePage =
+      Math.max(
+        Number(page) || 1,
+        1
+      );
+
+    const safeLimit =
+      Math.min(
+        Math.max(
+          Number(limit) || 50,
+          1
+        ),
+        100
+      );
+
+    const where = {
+      isArchived:
+        false,
+      OR: [
         {
-          buyer:
-            req.user._id
+          buyerId:
+            prismaUser.id
         },
         {
-          seller:
-            req.user._id
+          sellerId:
+            prismaUser.id
         }
-      ],
-      isArchived: {
-        $ne: true
-      }
+      ]
     };
 
     if (
       status &&
-      status !== "ALL"
+      normalizeRole(status) !==
+      "ALL"
     ) {
-      query.status =
+      where.status =
         normalizeRole(status);
     }
 
     const normalizedSearch =
-      String(search || "")
-        .trim()
-        .slice(0, 100);
+      sanitizeText(
+        search,
+        100
+      );
 
     if (normalizedSearch) {
-      query.$and = [
+      where.AND = [
         {
-          $or: [
+          OR: [
             {
               disputeCode: {
-                $regex:
+                contains:
                   normalizedSearch,
-                $options: "i"
+                mode:
+                  "insensitive"
               }
             },
             {
               reason: {
-                $regex:
+                contains:
                   normalizedSearch,
-                $options: "i"
+                mode:
+                  "insensitive"
               }
             },
             {
               description: {
-                $regex:
+                contains:
                   normalizedSearch,
-                $options: "i"
+                mode:
+                  "insensitive"
               }
             }
           ]
@@ -803,55 +1263,63 @@ const getMyDisputes = async (
       ];
     }
 
-    const safePage = Math.max(
-      Number(page) || 1,
-      1
-    );
+    let orderBy = {
+      createdAt:
+        "desc"
+    };
 
-    const safeLimit = Math.min(
-      Math.max(
-        Number(limit) || 50,
-        1
-      ),
-      100
-    );
+    if (sort === "oldest") {
+      orderBy = {
+        createdAt:
+          "asc"
+      };
+    }
 
-    const sortOptions =
-      sort === "oldest"
-        ? { createdAt: 1 }
-        : sort === "activity"
-          ? {
-              lastActivityAt: -1
-            }
-          : {
-              createdAt: -1
-            };
+    if (sort === "activity") {
+      orderBy = {
+        lastActivityAt:
+          "desc"
+      };
+    }
 
     const [
       disputes,
       total
     ] = await Promise.all([
-      populateDisputeQuery(
-        Dispute.find(query)
-      )
-        .sort(sortOptions)
-        .skip(
+      prisma.dispute.findMany({
+        where,
+        include:
+          DISPUTE_INCLUDE,
+        orderBy,
+        skip:
           (safePage - 1) *
-            safeLimit
-        )
-        .limit(safeLimit),
+          safeLimit,
+        take:
+          safeLimit
+      }),
 
-      Dispute.countDocuments(
-        query
-      )
+      prisma.dispute.count({
+        where
+      })
     ]);
+
+    const serialized =
+      await Promise.all(
+        disputes.map(
+          (dispute) =>
+            serializeDispute(
+              dispute,
+              prismaUser
+            )
+        )
+      );
 
     return res.status(200).json({
       success: true,
       message:
         "Disputas obtenidas correctamente.",
       count:
-        disputes.length,
+        serialized.length,
       total,
       page:
         safePage,
@@ -860,33 +1328,20 @@ const getMyDisputes = async (
           total / safeLimit
         ),
       disputes:
-        disputes.map(
-          (dispute) =>
-            serializeDispute(
-              dispute,
-              req.user
-            )
-        )
+        serialized
     });
   } catch (error) {
-    console.error(
-      "Error obteniendo disputas:",
-      error
+    return handleError(
+      res,
+      error,
+      "Ocurrió un error obteniendo las disputas."
     );
-
-    return res.status(500).json({
-      success: false,
-      message:
-        "Ocurrió un error obteniendo las disputas.",
-      disputes: [],
-      count: 0
-    });
   }
 };
 
 /*
 |--------------------------------------------------------------------------
-| Resumen para Dashboard
+| Resumen
 |--------------------------------------------------------------------------
 */
 
@@ -895,61 +1350,83 @@ const getDisputesSummary = async (
   res
 ) => {
   try {
-    const match = canReviewDisputes(
-      req.user
-    )
-      ? {
-          isArchived: {
-            $ne: true
+    const prismaUser =
+      await resolvePrismaUser(req);
+
+    if (!prismaUser) {
+      return res.status(401).json({
+        success: false,
+        message:
+          "Tu usuario autenticado todavía no existe en Supabase."
+      });
+    }
+
+    const where =
+      canReviewDisputes(
+        prismaUser
+      )
+        ? {
+            isArchived:
+              false
           }
-        }
-      : {
-          $or: [
-            {
-              buyer:
-                req.user._id
-            },
-            {
-              seller:
-                req.user._id
-            }
-          ],
-          isArchived: {
-            $ne: true
-          }
-        };
+        : {
+            isArchived:
+              false,
+            OR: [
+              {
+                buyerId:
+                  prismaUser.id
+              },
+              {
+                sellerId:
+                  prismaUser.id
+              }
+            ]
+          };
 
     const disputes =
-      await Dispute.find(match)
-        .select(
-          "status protectedAmount updatedAt createdAt"
-        )
-        .lean();
+      await prisma.dispute.findMany({
+        where,
+        select: {
+          status:
+            true,
+          protectedAmount:
+            true,
+          lastActivityAt:
+            true,
+          updatedAt:
+            true,
+          createdAt:
+            true
+        }
+      });
 
     const summary = {
       total:
         disputes.length,
-
-      open: 0,
-
-      review: 0,
-
-      waitingEvidence: 0,
-
-      resolved: 0,
-
-      active: 0,
-
-      protectedAmount: 0,
-
-      lastUpdatedAt: null
+      open:
+        0,
+      review:
+        0,
+      waitingEvidence:
+        0,
+      resolved:
+        0,
+      active:
+        0,
+      protectedAmount:
+        0,
+      lastUpdatedAt:
+        null
     };
 
-    for (const dispute of disputes) {
-      const status =
-        dispute.status;
-
-      if (status === "OPEN") {
+    for (
+      const dispute of disputes
+    ) {
+      if (
+        dispute.status ===
+        "OPEN"
+      ) {
         summary.open += 1;
       }
 
@@ -959,13 +1436,15 @@ const getDisputesSummary = async (
           "IN_REVIEW",
           "ESCALATED",
           "READY_TO_RESOLVE"
-        ].includes(status)
+        ].includes(
+          dispute.status
+        )
       ) {
         summary.review += 1;
       }
 
       if (
-        status ===
+        dispute.status ===
         "WAITING_EVIDENCE"
       ) {
         summary.waitingEvidence += 1;
@@ -973,20 +1452,21 @@ const getDisputesSummary = async (
 
       if (
         FINAL_STATUSES.includes(
-          status
+          dispute.status
         )
       ) {
         summary.resolved += 1;
       } else {
         summary.active += 1;
-
         summary.protectedAmount +=
           Number(
-            dispute.protectedAmount
-          ) || 0;
+            dispute.protectedAmount ||
+            0
+          );
       }
 
       const activityDate =
+        dispute.lastActivityAt ||
         dispute.updatedAt ||
         dispute.createdAt;
 
@@ -994,10 +1474,8 @@ const getDisputesSummary = async (
         activityDate &&
         (
           !summary.lastUpdatedAt ||
-          new Date(activityDate) >
-            new Date(
-              summary.lastUpdatedAt
-            )
+          activityDate >
+          summary.lastUpdatedAt
         )
       ) {
         summary.lastUpdatedAt =
@@ -1008,44 +1486,14 @@ const getDisputesSummary = async (
     return res.status(200).json({
       success: true,
       summary,
-
-      // Compatibilidad directa con componentes
-      total:
-        summary.total,
-      open:
-        summary.open,
-      review:
-        summary.review,
-      resolved:
-        summary.resolved,
-      active:
-        summary.active,
-      protectedAmount:
-        summary.protectedAmount,
-      lastUpdatedAt:
-        summary.lastUpdatedAt
+      ...summary
     });
   } catch (error) {
-    console.error(
-      "Error obteniendo resumen de disputas:",
-      error
+    return handleError(
+      res,
+      error,
+      "No se pudo obtener el resumen de disputas."
     );
-
-    return res.status(500).json({
-      success: false,
-      message:
-        "No se pudo obtener el resumen de disputas.",
-      summary: {
-        total: 0,
-        open: 0,
-        review: 0,
-        waitingEvidence: 0,
-        resolved: 0,
-        active: 0,
-        protectedAmount: 0,
-        lastUpdatedAt: null
-      }
-    });
   }
 };
 
@@ -1060,15 +1508,12 @@ const getDisputeById = async (
   res
 ) => {
   try {
-    const {
-      disputeId
-    } = req.params;
+    const disputeId =
+      parsePositiveInt(
+        req.params.disputeId
+      );
 
-    if (
-      !isValidObjectId(
-        disputeId
-      )
-    ) {
+    if (!disputeId) {
       return res.status(400).json({
         success: false,
         message:
@@ -1076,11 +1521,20 @@ const getDisputeById = async (
       });
     }
 
+    const prismaUser =
+      await resolvePrismaUser(req);
+
+    if (!prismaUser) {
+      return res.status(401).json({
+        success: false,
+        message:
+          "Tu usuario autenticado todavía no existe en Supabase."
+      });
+    }
+
     const dispute =
-      await populateDisputeQuery(
-        Dispute.findById(
-          disputeId
-        )
+      await getDisputeRecord(
+        disputeId
       );
 
     if (!dispute) {
@@ -1094,7 +1548,7 @@ const getDisputeById = async (
     if (
       !canAccessDispute(
         dispute,
-        req.user
+        prismaUser
       )
     ) {
       return res.status(403).json({
@@ -1107,22 +1561,17 @@ const getDisputeById = async (
     return res.status(200).json({
       success: true,
       dispute:
-        serializeDispute(
+        await serializeDispute(
           dispute,
-          req.user
+          prismaUser
         )
     });
   } catch (error) {
-    console.error(
-      "Error obteniendo disputa:",
-      error
+    return handleError(
+      res,
+      error,
+      "Ocurrió un error obteniendo la disputa."
     );
-
-    return res.status(500).json({
-      success: false,
-      message:
-        "Ocurrió un error obteniendo la disputa."
-    });
   }
 };
 
@@ -1137,21 +1586,12 @@ const addDisputeMessage = async (
   res
 ) => {
   try {
-    const {
-      disputeId
-    } = req.params;
+    const disputeId =
+      parsePositiveInt(
+        req.params.disputeId
+      );
 
-    const {
-      message,
-      text,
-      isInternal = false
-    } = req.body;
-
-    if (
-      !isValidObjectId(
-        disputeId
-      )
-    ) {
+    if (!disputeId) {
       return res.status(400).json({
         success: false,
         message:
@@ -1161,7 +1601,8 @@ const addDisputeMessage = async (
 
     const safeMessage =
       sanitizeText(
-        message || text,
+        req.body?.message ||
+        req.body?.text,
         5000
       );
 
@@ -1173,8 +1614,19 @@ const addDisputeMessage = async (
       });
     }
 
+    const prismaUser =
+      await resolvePrismaUser(req);
+
+    if (!prismaUser) {
+      return res.status(401).json({
+        success: false,
+        message:
+          "Tu usuario autenticado todavía no existe en Supabase."
+      });
+    }
+
     const dispute =
-      await Dispute.findById(
+      await getDisputeRecord(
         disputeId
       );
 
@@ -1189,7 +1641,7 @@ const addDisputeMessage = async (
     if (
       !canAccessDispute(
         dispute,
-        req.user
+        prismaUser
       )
     ) {
       return res.status(403).json({
@@ -1214,102 +1666,132 @@ const addDisputeMessage = async (
     const senderRole =
       getParticipantRole(
         dispute,
-        req.user
+        prismaUser
       );
 
     const internalMessage =
-      Boolean(isInternal) &&
+      Boolean(
+        req.body?.isInternal
+      ) &&
       canReviewDisputes(
-        req.user
+        prismaUser
       );
 
-    dispute.messages.push({
-      sender:
-        req.user._id,
+    const message = {
+      id:
+        crypto.randomUUID(),
+      _id:
+        crypto.randomUUID(),
+      senderId:
+        prismaUser.id,
       senderRole,
       message:
         safeMessage,
-      type: "TEXT",
-      attachments: [],
+      text:
+        safeMessage,
+      type:
+        "TEXT",
+      attachments:
+        [],
       isInternal:
         internalMessage,
       isSystemMessage:
         false,
+      isEdited:
+        false,
+      editedAt:
+        null,
+      deletedAt:
+        null,
       readBy: [
         {
-          user:
-            req.user._id,
+          userId:
+            prismaUser.id,
           readAt:
-            new Date()
+            new Date().toISOString()
         }
-      ]
-    });
+      ],
+      createdAt:
+        new Date().toISOString(),
+      updatedAt:
+        new Date().toISOString()
+    };
 
-    dispute.lastMessageAt =
-      new Date();
+    const messages =
+      safeJsonArray(
+        dispute.messages
+      );
 
-    dispute.lastActivityAt =
-      new Date();
+    messages.push(message);
+
+    let timeline =
+      safeJsonArray(
+        dispute.timeline
+      );
 
     if (!internalMessage) {
-      addTimeline(dispute, {
-        type: "MESSAGE_SENT",
-        title:
-          "Nuevo mensaje",
-        description:
-          `${senderRole} agregó un mensaje al caso.`,
-        performedBy:
-          req.user._id,
-        performedByRole:
-          senderRole,
-        newStatus:
-          dispute.status
-      });
+      timeline =
+        addTimeline(
+          timeline,
+          {
+            type:
+              "MESSAGE_SENT",
+            title:
+              "Nuevo mensaje",
+            description:
+              `${senderRole} agregó un mensaje al caso.`,
+            performedBy:
+              prismaUser.id,
+            performedByRole:
+              senderRole,
+            newStatus:
+              dispute.status
+          }
+        );
     }
 
     const requestMetadata =
       getRequestMetadata(req);
 
-    addAudit(dispute, {
-      action:
-        "DISPUTE_MESSAGE_SENT",
-      actor:
-        req.user._id,
-      actorRole:
-        senderRole,
-      ...requestMetadata,
-      metadata: {
-        internal:
-          internalMessage
-      }
-    });
+    const auditLog =
+      addAudit(
+        dispute.auditLog,
+        {
+          action:
+            "DISPUTE_MESSAGE_SENT",
+          actor:
+            prismaUser.id,
+          actorRole:
+            senderRole,
+          ...requestMetadata,
+          metadata: {
+            internal:
+              internalMessage
+          }
+        }
+      );
+
+    let buyerUnreadCount =
+      dispute.buyerUnreadCount;
+
+    let sellerUnreadCount =
+      dispute.sellerUnreadCount;
+
+    let adminUnreadCount =
+      dispute.adminUnreadCount;
 
     if (
       senderRole === "BUYER"
     ) {
-      dispute.sellerUnreadCount =
-        Number(
-          dispute.sellerUnreadCount
-        ) + 1;
-
-      dispute.adminUnreadCount =
-        Number(
-          dispute.adminUnreadCount
-        ) + 1;
+      sellerUnreadCount += 1;
+      adminUnreadCount += 1;
     }
 
     if (
       senderRole === "SELLER"
     ) {
-      dispute.buyerUnreadCount =
-        Number(
-          dispute.buyerUnreadCount
-        ) + 1;
-
-      dispute.adminUnreadCount =
-        Number(
-          dispute.adminUnreadCount
-        ) + 1;
+      buyerUnreadCount += 1;
+      adminUnreadCount += 1;
     }
 
     if (
@@ -1319,78 +1801,92 @@ const addDisputeMessage = async (
         "AUDITOR"
       ].includes(senderRole)
     ) {
-      dispute.buyerUnreadCount =
-        Number(
-          dispute.buyerUnreadCount
-        ) + 1;
-
-      dispute.sellerUnreadCount =
-        Number(
-          dispute.sellerUnreadCount
-        ) + 1;
+      buyerUnreadCount += 1;
+      sellerUnreadCount += 1;
     }
 
-    await dispute.save();
+    await prisma.$transaction(
+      async (tx) => {
+        await tx.dispute.update({
+          where: {
+            id:
+              dispute.id
+          },
+          data: {
+            messages,
+            timeline,
+            auditLog,
+            lastMessageAt:
+              new Date(),
+            lastActivityAt:
+              new Date(),
+            buyerUnreadCount,
+            sellerUnreadCount,
+            adminUnreadCount
+          }
+        });
 
-    const lastMessage =
-      dispute.messages[
-        dispute.messages.length - 1
-      ];
+        if (!internalMessage) {
+          if (
+            senderRole !==
+            "BUYER"
+          ) {
+            await createNotificationSafe(
+              tx,
+              dispute.buyerId,
+              "DISPUTE_MESSAGE",
+              "Nueva respuesta en tu disputa",
+              "Se agregó un nuevo mensaje al caso."
+            );
+          }
 
-    if (!internalMessage) {
-      const notificationPromises = [];
-
-      if (
-        senderRole !== "BUYER"
-      ) {
-        notificationPromises.push(
-          safeCreateNotification(
-            dispute.buyer,
-            "DISPUTE_MESSAGE",
-            "Nueva respuesta en tu disputa",
-            "Se agregó un nuevo mensaje al caso."
-          )
-        );
+          if (
+            senderRole !==
+            "SELLER"
+          ) {
+            await createNotificationSafe(
+              tx,
+              dispute.sellerId,
+              "DISPUTE_MESSAGE",
+              "Nueva respuesta en una disputa",
+              "Se agregó un nuevo mensaje al caso."
+            );
+          }
+        }
+      },
+      {
+        maxWait:
+          20000,
+        timeout:
+          60000
       }
+    );
 
-      if (
-        senderRole !== "SELLER"
-      ) {
-        notificationPromises.push(
-          safeCreateNotification(
-            dispute.seller,
-            "DISPUTE_MESSAGE",
-            "Nueva respuesta en una disputa",
-            "Se agregó un nuevo mensaje al caso."
-          )
-        );
-      }
-
-      await Promise.all(
-        notificationPromises
+    const updated =
+      await getDisputeRecord(
+        dispute.id
       );
 
+    if (!internalMessage) {
       emitUserEvent(
         req,
-        dispute.buyer,
+        dispute.buyerId,
         "dispute:message",
         {
           disputeId:
-            dispute._id,
-          message:
-            lastMessage
+            dispute.id,
+          message
         }
       );
 
       emitUserEvent(
         req,
-        dispute.seller,
+        dispute.sellerId,
         "dispute:message",
         {
           disputeId:
-            dispute._id,
-          message:
-            lastMessage
+            dispute.id,
+          message
         }
       );
     }
@@ -1399,30 +1895,28 @@ const addDisputeMessage = async (
       success: true,
       message:
         "Mensaje agregado correctamente.",
-      disputeId:
-        dispute._id,
       disputeMessage:
-        lastMessage,
+        message,
       data:
-        lastMessage
+        message,
+      dispute:
+        await serializeDispute(
+          updated,
+          prismaUser
+        )
     });
   } catch (error) {
-    console.error(
-      "Error agregando mensaje:",
-      error
+    return handleError(
+      res,
+      error,
+      "No se pudo agregar el mensaje."
     );
-
-    return res.status(500).json({
-      success: false,
-      message:
-        "No se pudo agregar el mensaje."
-    });
   }
 };
 
 /*
 |--------------------------------------------------------------------------
-| Cambiar estado de la disputa
+| Cambiar estado
 |--------------------------------------------------------------------------
 */
 
@@ -1431,21 +1925,12 @@ const updateDisputeStatus = async (
   res
 ) => {
   try {
-    const {
-      disputeId
-    } = req.params;
+    const disputeId =
+      parsePositiveInt(
+        req.params.disputeId
+      );
 
-    const {
-      status,
-      note,
-      reason
-    } = req.body;
-
-    if (
-      !isValidObjectId(
-        disputeId
-      )
-    ) {
+    if (!disputeId) {
       return res.status(400).json({
         success: false,
         message:
@@ -1454,7 +1939,9 @@ const updateDisputeStatus = async (
     }
 
     const normalizedStatus =
-      normalizeRole(status);
+      normalizeRole(
+        req.body?.status
+      );
 
     if (!normalizedStatus) {
       return res.status(400).json({
@@ -1464,8 +1951,19 @@ const updateDisputeStatus = async (
       });
     }
 
+    const prismaUser =
+      await resolvePrismaUser(req);
+
+    if (!prismaUser) {
+      return res.status(401).json({
+        success: false,
+        message:
+          "Tu usuario autenticado todavía no existe en Supabase."
+      });
+    }
+
     const dispute =
-      await Dispute.findById(
+      await getDisputeRecord(
         disputeId
       );
 
@@ -1480,7 +1978,7 @@ const updateDisputeStatus = async (
     if (
       !canAccessDispute(
         dispute,
-        req.user
+        prismaUser
       )
     ) {
       return res.status(403).json({
@@ -1502,11 +2000,23 @@ const updateDisputeStatus = async (
       });
     }
 
-    const userIsAdmin =
-      isAdmin(req.user);
+    if (
+      [
+        "RESOLVED_BUYER",
+        "RESOLVED_SELLER"
+      ].includes(
+        normalizedStatus
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "La resolución financiera debe realizarse desde el flujo administrativo de resolución."
+      });
+    }
 
     const allowedStatuses =
-      userIsAdmin
+      isAdmin(prismaUser)
         ? ADMIN_WORKFLOW_STATUSES
         : USER_WORKFLOW_STATUSES;
 
@@ -1518,17 +2028,14 @@ const updateDisputeStatus = async (
       return res.status(403).json({
         success: false,
         message:
-          userIsAdmin
+          isAdmin(prismaUser)
             ? "El estado solicitado no forma parte del flujo administrativo."
             : "No tienes permiso para asignar ese estado."
       });
     }
 
-    const previousStatus =
-      dispute.status;
-
     if (
-      previousStatus ===
+      dispute.status ===
       normalizedStatus
     ) {
       return res.status(200).json({
@@ -1536,112 +2043,132 @@ const updateDisputeStatus = async (
         message:
           "La disputa ya tiene ese estado.",
         dispute:
-          serializeDispute(
+          await serializeDispute(
             dispute,
-            req.user
+            prismaUser
           )
       });
     }
 
+    const previousStatus =
+      dispute.status;
+
     const performerRole =
       getParticipantRole(
         dispute,
-        req.user
+        prismaUser
       );
-
-    dispute.status =
-      normalizedStatus;
-
-    if (
-      normalizedStatus ===
-      "ESCALATED"
-    ) {
-      dispute.escalatedAt =
-        new Date();
-    }
-
-    dispute.lastActivityAt =
-      new Date();
 
     const safeNote =
       sanitizeText(
-        note || reason,
+        req.body?.note ||
+        req.body?.reason,
         2000
       );
 
-    addTimeline(dispute, {
-      type:
-        normalizedStatus ===
-        "ESCALATED"
-          ? "CASE_ESCALATED"
-          : "STATUS_CHANGED",
-
-      title:
-        "Estado actualizado",
-
-      description:
-        safeNote ||
-        `El estado cambió de ${previousStatus} a ${normalizedStatus}.`,
-
-      performedBy:
-        req.user._id,
-
-      performedByRole:
-        performerRole,
-
-      previousStatus,
-
-      newStatus:
-        normalizedStatus
-    });
+    const timeline =
+      addTimeline(
+        dispute.timeline,
+        {
+          type:
+            normalizedStatus ===
+            "ESCALATED"
+              ? "CASE_ESCALATED"
+              : "STATUS_CHANGED",
+          title:
+            "Estado actualizado",
+          description:
+            safeNote ||
+            `El estado cambió de ${previousStatus} a ${normalizedStatus}.`,
+          performedBy:
+            prismaUser.id,
+          performedByRole:
+            performerRole,
+          previousStatus,
+          newStatus:
+            normalizedStatus
+        }
+      );
 
     const requestMetadata =
       getRequestMetadata(req);
 
-    addAudit(dispute, {
-      action:
-        "DISPUTE_STATUS_UPDATED",
+    const auditLog =
+      addAudit(
+        dispute.auditLog,
+        {
+          action:
+            "DISPUTE_STATUS_UPDATED",
+          actor:
+            prismaUser.id,
+          actorRole:
+            performerRole,
+          ...requestMetadata,
+          before: {
+            status:
+              previousStatus
+          },
+          after: {
+            status:
+              normalizedStatus
+          }
+        }
+      );
 
-      actor:
-        req.user._id,
+    await prisma.$transaction(
+      async (tx) => {
+        await tx.dispute.update({
+          where: {
+            id:
+              dispute.id
+          },
+          data: {
+            status:
+              normalizedStatus,
+            escalatedAt:
+              normalizedStatus ===
+              "ESCALATED"
+                ? new Date()
+                : dispute.escalatedAt,
+            lastActivityAt:
+              new Date(),
+            timeline,
+            auditLog
+          }
+        });
 
-      actorRole:
-        performerRole,
+        await createNotificationSafe(
+          tx,
+          dispute.buyerId,
+          "DISPUTE_STATUS_UPDATED",
+          "Estado de disputa actualizado",
+          `El caso ahora se encuentra en estado ${normalizedStatus}.`
+        );
 
-      ...requestMetadata,
-
-      before: {
-        status:
-          previousStatus
+        await createNotificationSafe(
+          tx,
+          dispute.sellerId,
+          "DISPUTE_STATUS_UPDATED",
+          "Estado de disputa actualizado",
+          `El caso ahora se encuentra en estado ${normalizedStatus}.`
+        );
       },
-
-      after: {
-        status:
-          normalizedStatus
+      {
+        maxWait:
+          20000,
+        timeout:
+          60000
       }
-    });
+    );
 
-    await dispute.save();
-
-    await Promise.all([
-      safeCreateNotification(
-        dispute.buyer,
-        "DISPUTE_STATUS_UPDATED",
-        "Estado de disputa actualizado",
-        `El caso ahora se encuentra en estado ${normalizedStatus}.`
-      ),
-
-      safeCreateNotification(
-        dispute.seller,
-        "DISPUTE_STATUS_UPDATED",
-        "Estado de disputa actualizado",
-        `El caso ahora se encuentra en estado ${normalizedStatus}.`
-      )
-    ]);
+    const updated =
+      await getDisputeRecord(
+        dispute.id
+      );
 
     const eventPayload = {
       disputeId:
-        dispute._id,
+        dispute.id,
       previousStatus,
       status:
         normalizedStatus,
@@ -1651,14 +2178,14 @@ const updateDisputeStatus = async (
 
     emitUserEvent(
       req,
-      dispute.buyer,
+      dispute.buyerId,
       "dispute:status",
       eventPayload
     );
 
     emitUserEvent(
       req,
-      dispute.seller,
+      dispute.sellerId,
       "dispute:status",
       eventPayload
     );
@@ -1671,28 +2198,23 @@ const updateDisputeStatus = async (
       status:
         normalizedStatus,
       dispute:
-        serializeDispute(
-          dispute,
-          req.user
+        await serializeDispute(
+          updated,
+          prismaUser
         )
     });
   } catch (error) {
-    console.error(
-      "Error actualizando estado:",
-      error
+    return handleError(
+      res,
+      error,
+      "No se pudo actualizar el estado de la disputa."
     );
-
-    return res.status(500).json({
-      success: false,
-      message:
-        "No se pudo actualizar el estado de la disputa."
-    });
   }
 };
 
 /*
 |--------------------------------------------------------------------------
-| Obtener todas las disputas — Administración
+| Administración: listar todas
 |--------------------------------------------------------------------------
 */
 
@@ -1701,6 +2223,22 @@ const getAllDisputes = async (
   res
 ) => {
   try {
+    const prismaUser =
+      await resolvePrismaUser(req);
+
+    if (
+      !prismaUser ||
+      !canReviewDisputes(
+        prismaUser
+      )
+    ) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "No tienes permiso para revisar todas las disputas."
+      });
+    }
+
     const {
       status,
       priority,
@@ -1708,115 +2246,151 @@ const getAllDisputes = async (
       page = 1,
       limit = 50,
       sort = "newest"
-    } = req.query;
+    } = req.query || {};
 
-    const query = {
-      isArchived: {
-        $ne: true
-      }
+    const safePage =
+      Math.max(
+        Number(page) || 1,
+        1
+      );
+
+    const safeLimit =
+      Math.min(
+        Math.max(
+          Number(limit) || 50,
+          1
+        ),
+        100
+      );
+
+    const where = {
+      isArchived:
+        false
     };
 
     if (
       status &&
-      status !== "ALL"
+      normalizeRole(status) !==
+      "ALL"
     ) {
-      query.status =
+      where.status =
         normalizeRole(status);
     }
 
     if (
       priority &&
-      priority !== "ALL"
+      normalizeRole(priority) !==
+      "ALL"
     ) {
-      query.priority =
+      where.priority =
         normalizeRole(priority);
     }
 
     const normalizedSearch =
-      String(search || "")
-        .trim()
-        .slice(0, 100);
+      sanitizeText(
+        search,
+        100
+      );
 
     if (normalizedSearch) {
-      query.$or = [
+      where.OR = [
         {
           disputeCode: {
-            $regex:
+            contains:
               normalizedSearch,
-            $options: "i"
+            mode:
+              "insensitive"
           }
         },
         {
           reason: {
-            $regex:
+            contains:
               normalizedSearch,
-            $options: "i"
+            mode:
+              "insensitive"
           }
         },
         {
           description: {
-            $regex:
+            contains:
               normalizedSearch,
-            $options: "i"
+            mode:
+              "insensitive"
           }
         }
       ];
     }
 
-    const safePage = Math.max(
-      Number(page) || 1,
-      1
-    );
+    let orderBy = {
+      createdAt:
+        "desc"
+    };
 
-    const safeLimit = Math.min(
-      Math.max(
-        Number(limit) || 50,
-        1
-      ),
-      100
-    );
+    if (sort === "oldest") {
+      orderBy = {
+        createdAt:
+          "asc"
+      };
+    }
 
-    const sortOptions =
-      sort === "oldest"
-        ? { createdAt: 1 }
-        : sort === "priority"
-          ? {
-              priority: -1,
-              createdAt: -1
-            }
-          : sort === "activity"
-            ? {
-                lastActivityAt: -1
-              }
-            : {
-                createdAt: -1
-              };
+    if (sort === "activity") {
+      orderBy = {
+        lastActivityAt:
+          "desc"
+      };
+    }
+
+    if (sort === "priority") {
+      orderBy = [
+        {
+          priority:
+            "desc"
+        },
+        {
+          createdAt:
+            "desc"
+        }
+      ];
+    }
 
     const [
       disputes,
       total
     ] = await Promise.all([
-      populateDisputeQuery(
-        Dispute.find(query)
-      )
-        .sort(sortOptions)
-        .skip(
+      prisma.dispute.findMany({
+        where,
+        include:
+          DISPUTE_INCLUDE,
+        orderBy,
+        skip:
           (safePage - 1) *
-            safeLimit
-        )
-        .limit(safeLimit),
+          safeLimit,
+        take:
+          safeLimit
+      }),
 
-      Dispute.countDocuments(
-        query
-      )
+      prisma.dispute.count({
+        where
+      })
     ]);
+
+    const serialized =
+      await Promise.all(
+        disputes.map(
+          (dispute) =>
+            serializeDispute(
+              dispute,
+              prismaUser
+            )
+        )
+      );
 
     return res.status(200).json({
       success: true,
       message:
         "Todas las disputas fueron obtenidas correctamente.",
       count:
-        disputes.length,
+        serialized.length,
       total,
       page:
         safePage,
@@ -1825,33 +2399,20 @@ const getAllDisputes = async (
           total / safeLimit
         ),
       disputes:
-        disputes.map(
-          (dispute) =>
-            serializeDispute(
-              dispute,
-              req.user
-            )
-        )
+        serialized
     });
   } catch (error) {
-    console.error(
-      "Error obteniendo todas las disputas:",
-      error
+    return handleError(
+      res,
+      error,
+      "No se pudieron obtener las disputas."
     );
-
-    return res.status(500).json({
-      success: false,
-      message:
-        "No se pudieron obtener las disputas.",
-      disputes: [],
-      count: 0
-    });
   }
 };
 
 /*
 |--------------------------------------------------------------------------
-| Resolver disputa — Administración
+| Administración: resolver
 |--------------------------------------------------------------------------
 */
 
@@ -1860,21 +2421,12 @@ const resolveDispute = async (
   res
 ) => {
   try {
-    const {
-      disputeId
-    } = req.params;
+    const disputeId =
+      parsePositiveInt(
+        req.params.disputeId
+      );
 
-    const {
-      action,
-      adminNotes,
-      decision
-    } = req.body;
-
-    if (
-      !isValidObjectId(
-        disputeId
-      )
-    ) {
+    if (!disputeId) {
       return res.status(400).json({
         success: false,
         message:
@@ -1883,7 +2435,9 @@ const resolveDispute = async (
     }
 
     const normalizedAction =
-      normalizeRole(action);
+      normalizeRole(
+        req.body?.action
+      );
 
     if (
       !ALLOWED_RESOLUTION_ACTIONS.includes(
@@ -1897,8 +2451,22 @@ const resolveDispute = async (
       });
     }
 
+    const prismaUser =
+      await resolvePrismaUser(req);
+
+    if (
+      !prismaUser ||
+      !isAdmin(prismaUser)
+    ) {
+      return res.status(403).json({
+        success: false,
+        message:
+          "Solo un administrador puede resolver la disputa."
+      });
+    }
+
     const dispute =
-      await Dispute.findById(
+      await getDisputeRecord(
         disputeId
       );
 
@@ -1923,9 +2491,12 @@ const resolveDispute = async (
     }
 
     const order =
-      await Order.findById(
-        dispute.order
-      );
+      await prisma.order.findUnique({
+        where: {
+          id:
+            dispute.orderId
+        }
+      });
 
     if (!order) {
       return res.status(404).json({
@@ -1936,8 +2507,13 @@ const resolveDispute = async (
     }
 
     if (
-      order.escrowStatus !==
-      "HELD"
+      ![
+        "HELD",
+        "UNDER_REVIEW",
+        "PENDING"
+      ].includes(
+        order.escrowStatus
+      )
     ) {
       return res.status(400).json({
         success: false,
@@ -1946,52 +2522,33 @@ const resolveDispute = async (
       });
     }
 
-    const payment =
-      await Payment.findOne({
-        order:
-          order._id
-      });
-
     const previousStatus =
       dispute.status;
 
-    let finalStatus = "";
-    let notificationTitle = "";
-    let buyerMessage = "";
-    let sellerMessage = "";
+    let finalStatus;
+    let orderStatus;
+    let escrowStatus;
+    let paymentStatus;
+    let notificationTitle;
+    let buyerMessage;
+    let sellerMessage;
 
     if (
       normalizedAction ===
       "REFUND_BUYER"
     ) {
-      finalStatus = "REFUNDED";
-
-      dispute.status =
-        finalStatus;
-
-      order.status =
-        "CANCELLED";
-
-      order.escrowStatus =
+      finalStatus =
         "REFUNDED";
-
-      if (
-        payment &&
-        payment.status === "HELD"
-      ) {
-        payment.status =
-          "REFUNDED";
-
-        payment.notes =
-          "Pago reembolsado al comprador por resolución de disputa.";
-      }
-
+      orderStatus =
+        "CANCELLED";
+      escrowStatus =
+        "REFUNDED";
+      paymentStatus =
+        "REFUNDED";
       notificationTitle =
         "Disputa resuelta a favor del comprador";
-
       buyerMessage =
         "Quick Secure Market aprobó el reembolso de la orden.";
-
       sellerMessage =
         "Quick Secure Market resolvió la disputa y aprobó el reembolso al comprador.";
     }
@@ -2002,33 +2559,16 @@ const resolveDispute = async (
     ) {
       finalStatus =
         "RESOLVED";
-
-      dispute.status =
-        finalStatus;
-
-      order.status =
+      orderStatus =
         "COMPLETED";
-
-      order.escrowStatus =
+      escrowStatus =
         "RELEASED";
-
-      if (
-        payment &&
-        payment.status === "HELD"
-      ) {
-        payment.status =
-          "RELEASED";
-
-        payment.notes =
-          "Pago liberado al vendedor por resolución de disputa.";
-      }
-
+      paymentStatus =
+        "RELEASED";
       notificationTitle =
         "Disputa resuelta a favor del vendedor";
-
       buyerMessage =
         "Quick Secure Market resolvió el caso y liberó el pago al vendedor.";
-
       sellerMessage =
         "Quick Secure Market liberó el pago de la orden a tu favor.";
     }
@@ -2039,238 +2579,270 @@ const resolveDispute = async (
     ) {
       finalStatus =
         "REJECTED";
-
-      dispute.status =
-        finalStatus;
-
-      order.status =
+      orderStatus =
         "COMPLETED";
-
-      order.escrowStatus =
+      escrowStatus =
         "RELEASED";
-
-      if (
-        payment &&
-        payment.status === "HELD"
-      ) {
-        payment.status =
-          "RELEASED";
-
-        payment.notes =
-          "Pago liberado porque la disputa fue rechazada.";
-      }
-
+      paymentStatus =
+        "RELEASED";
       notificationTitle =
         "Disputa rechazada";
-
       buyerMessage =
         "Quick Secure Market rechazó la disputa después de revisar el caso.";
-
       sellerMessage =
         "La disputa fue rechazada y el pago fue liberado a tu favor.";
     }
 
     const safeAdminNotes =
       sanitizeText(
-        adminNotes || decision,
+        req.body?.adminNotes ||
+        req.body?.decision,
         5000
       );
 
-    dispute.adminNotes =
-      safeAdminNotes;
-
-    dispute.resolvedAt =
+    const now =
       new Date();
 
-    dispute.lastActivityAt =
-      new Date();
-
-    dispute.resolution = {
+    const resolutionData = {
       action:
         normalizedAction,
       decision:
         safeAdminNotes,
       amount:
         Number(
-          dispute.protectedAmount
-        ) ||
-        getOrderProtectedAmount(
-          order
+          dispute.protectedAmount ||
+          getProtectedAmount(
+            order
+          )
         ),
       currency:
         dispute.currency ||
-        order.currency ||
         "DOP",
       resolvedBy:
-        req.user._id,
+        prismaUser.id,
       resolvedAt:
-        new Date()
+        now.toISOString()
     };
 
-    addTimeline(dispute, {
-      type:
-        "DISPUTE_RESOLVED",
-      title:
-        notificationTitle,
-      description:
-        safeAdminNotes ||
-        "Quick Secure Market emitió una resolución final.",
-      performedBy:
-        req.user._id,
-      performedByRole:
-        getParticipantRole(
-          dispute,
-          req.user
-        ),
-      previousStatus,
-      newStatus:
-        finalStatus
-    });
+    let timeline =
+      addTimeline(
+        dispute.timeline,
+        {
+          type:
+            "DISPUTE_RESOLVED",
+          title:
+            notificationTitle,
+          description:
+            safeAdminNotes ||
+            "Quick Secure Market emitió una resolución final.",
+          performedBy:
+            prismaUser.id,
+          performedByRole:
+            "ADMIN",
+          previousStatus,
+          newStatus:
+            finalStatus
+        }
+      );
 
-    if (
-      finalStatus ===
-      "REFUNDED"
-    ) {
-      addTimeline(dispute, {
-        type:
-          "PAYMENT_REFUNDED",
-        title:
-          "Pago reembolsado",
-        description:
-          "Los fondos fueron marcados para reembolso al comprador.",
-        performedBy:
-          req.user._id,
-        performedByRole:
-          "ADMIN",
-        previousStatus,
-        newStatus:
-          finalStatus
-      });
-    } else {
-      addTimeline(dispute, {
-        type:
-          "PAYMENT_RELEASED",
-        title:
-          "Pago liberado",
-        description:
-          "Los fondos fueron liberados al vendedor.",
-        performedBy:
-          req.user._id,
-        performedByRole:
-          "ADMIN",
-        previousStatus,
-        newStatus:
-          finalStatus
-      });
-    }
+    timeline =
+      addTimeline(
+        timeline,
+        {
+          type:
+            finalStatus ===
+            "REFUNDED"
+              ? "PAYMENT_REFUNDED"
+              : "PAYMENT_RELEASED",
+          title:
+            finalStatus ===
+            "REFUNDED"
+              ? "Pago reembolsado"
+              : "Pago liberado",
+          description:
+            finalStatus ===
+            "REFUNDED"
+              ? "Los fondos fueron marcados para reembolso al comprador."
+              : "Los fondos fueron liberados al vendedor.",
+          performedBy:
+            prismaUser.id,
+          performedByRole:
+            "ADMIN",
+          previousStatus,
+          newStatus:
+            finalStatus
+        }
+      );
 
     const requestMetadata =
       getRequestMetadata(req);
 
-    addAudit(dispute, {
-      action:
-        "DISPUTE_RESOLVED",
-      actor:
-        req.user._id,
-      actorRole:
-        getParticipantRole(
-          dispute,
-          req.user
-        ),
-      ...requestMetadata,
-      before: {
-        status:
-          previousStatus,
-        orderStatus:
-          "DISPUTED",
-        escrowStatus:
-          "HELD"
-      },
-      after: {
-        status:
-          finalStatus,
-        orderStatus:
-          order.status,
-        escrowStatus:
-          order.escrowStatus,
-        paymentStatus:
-          payment?.status ||
-          null
-      },
-      metadata: {
-        resolutionAction:
-          normalizedAction
-      }
-    });
-
-    const saveOperations = [
-      dispute.save(),
-      order.save()
-    ];
-
-    if (payment) {
-      saveOperations.push(
-        payment.save()
+    const auditLog =
+      addAudit(
+        dispute.auditLog,
+        {
+          action:
+            "DISPUTE_RESOLVED",
+          actor:
+            prismaUser.id,
+          actorRole:
+            "ADMIN",
+          ...requestMetadata,
+          before: {
+            status:
+              previousStatus,
+            orderStatus:
+              order.status,
+            escrowStatus:
+              order.escrowStatus
+          },
+          after: {
+            status:
+              finalStatus,
+            orderStatus,
+            escrowStatus,
+            paymentStatus
+          },
+          metadata: {
+            resolutionAction:
+              normalizedAction
+          }
+        }
       );
-    }
 
-    await Promise.all(
-      saveOperations
+    await prisma.$transaction(
+      async (tx) => {
+        await tx.dispute.update({
+          where: {
+            id:
+              dispute.id
+          },
+          data: {
+            status:
+              finalStatus,
+            adminNotes:
+              safeAdminNotes,
+            resolutionData,
+            resolvedAt:
+              now,
+            lastActivityAt:
+              now,
+            timeline,
+            auditLog
+          }
+        });
+
+        await tx.order.update({
+          where: {
+            id:
+              order.id
+          },
+          data: {
+            status:
+              orderStatus,
+            escrowStatus,
+            paymentStatus,
+            refundedAt:
+              finalStatus ===
+              "REFUNDED"
+                ? now
+                : order.refundedAt,
+            releasedAt:
+              finalStatus !==
+              "REFUNDED"
+                ? now
+                : order.releasedAt
+          }
+        });
+
+        await tx.payment.updateMany({
+          where: {
+            orderId:
+              order.id,
+            status: {
+              in: [
+                "HELD",
+                "PENDING",
+                "UNDER_REVIEW"
+              ]
+            }
+          },
+          data: {
+            status:
+              paymentStatus,
+            notes:
+              finalStatus ===
+              "REFUNDED"
+                ? "Pago reembolsado al comprador por resolución de disputa."
+                : "Pago liberado al vendedor por resolución de disputa."
+          }
+        });
+
+        await createNotificationSafe(
+          tx,
+          dispute.buyerId,
+          "DISPUTE_RESOLVED",
+          notificationTitle,
+          buyerMessage
+        );
+
+        await createNotificationSafe(
+          tx,
+          dispute.sellerId,
+          normalizedAction ===
+          "REFUND_BUYER"
+            ? "DISPUTE_RESOLVED"
+            : "PAYMENT_RELEASED",
+          notificationTitle,
+          sellerMessage
+        );
+      },
+      {
+        maxWait:
+          20000,
+        timeout:
+          60000
+      }
     );
 
-    await Promise.all([
-      safeCreateNotification(
-        dispute.buyer,
-        "DISPUTE_RESOLVED",
-        notificationTitle,
-        buyerMessage
-      ),
-
-      safeCreateNotification(
-        dispute.seller,
-        normalizedAction ===
-          "REFUND_BUYER"
-          ? "DISPUTE_RESOLVED"
-          : "PAYMENT_RELEASED",
-        notificationTitle,
-        sellerMessage
-      )
-    ]);
+    const updated =
+      await getDisputeRecord(
+        dispute.id
+      );
 
     const socketPayload = {
       disputeId:
-        dispute._id,
+        dispute.id,
       action:
         normalizedAction,
       previousStatus,
       status:
         finalStatus,
-      orderStatus:
-        order.status,
-      escrowStatus:
-        order.escrowStatus
+      orderStatus,
+      escrowStatus
     };
 
     emitUserEvent(
       req,
-      dispute.buyer,
+      dispute.buyerId,
       "dispute:resolved",
       socketPayload
     );
 
     emitUserEvent(
       req,
-      dispute.seller,
+      dispute.sellerId,
       "dispute:resolved",
       socketPayload
     );
 
-    const populatedDispute =
-      await populateDisputeQuery(
-        Dispute.findById(
-          dispute._id
-        )
-      );
+    const payment =
+      await prisma.payment.findFirst({
+        where: {
+          orderId:
+            order.id
+        }
+      });
 
     return res.status(200).json({
       success: true,
@@ -2279,30 +2851,34 @@ const resolveDispute = async (
       action:
         normalizedAction,
       dispute:
-        serializeDispute(
-          populatedDispute,
-          req.user
+        await serializeDispute(
+          updated,
+          prismaUser
         ),
-      order,
+      order:
+        serializeOrder(
+          await prisma.order.findUnique({
+            where: {
+              id:
+                order.id
+            }
+          })
+        ),
       payment:
-        payment || null
+        payment
+          ? {
+              ...payment,
+              _id:
+                String(payment.id)
+            }
+          : null
     });
   } catch (error) {
-    console.error(
-      "Error resolviendo disputa:",
-      error
+    return handleError(
+      res,
+      error,
+      "Ocurrió un error resolviendo la disputa."
     );
-
-    return res.status(500).json({
-      success: false,
-      message:
-        "Ocurrió un error resolviendo la disputa.",
-      error:
-        process.env.NODE_ENV ===
-        "production"
-          ? undefined
-          : error.message
-    });
   }
 };
 

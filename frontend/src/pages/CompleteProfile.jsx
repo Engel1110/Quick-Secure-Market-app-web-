@@ -1,10 +1,15 @@
+import { API_BASE_URL as QSM_RUNTIME_API_URL } from "../config/runtime";
 import { useEffect, useMemo, useState } from "react";
 import api from "../api/axios";
 import Sidebar from "../components/Sidebar";
 import Topbar from "../components/Topbar";
 import AiAssistant from "../components/AiAssistant";
+import { useAuth } from "../context/AuthContext";
 
 function CompleteProfile() {
+  const {
+    refreshUser
+  } = useAuth();
   const savedUser =
     safeJson(localStorage.getItem("qsm_user")) ||
     safeJson(localStorage.getItem("user")) ||
@@ -79,36 +84,126 @@ function CompleteProfile() {
 
   const status = profile?.status || "NOT_SUBMITTED";
 
+  const generalCorrectionReason =
+    profile?.fieldReasons?.GENERAL ||
+    profile?.rejectionReason ||
+    "";
+
   const loadVerification = async () => {
     try {
       setLoading(true);
       setError("");
-      setMessage("");
 
-      const response = await api.get("/verification/me");
-      const data = response.data.verification || response.data.data || null;
+      const response =
+        await api.get(
+          "/verifications/me"
+        );
 
-      if (data) {
-        setProfile(data);
-        setForm((prev) => ({
-          ...prev,
-          firstName: data.firstName || prev.firstName,
-          lastName: data.lastName || prev.lastName,
-          phone: data.phone || prev.phone,
-          documentType: data.documentType || "CEDULA",
-          documentNumber: data.documentNumber || "",
-          address: data.address || "",
-          city: data.city || "",
-          province: data.province || "",
-          gender: data.gender || "",
-          birthDate: data.birthDate ? String(data.birthDate).slice(0, 10) : ""
-        }));
+      const payload =
+        response?.data || {};
+
+      const data =
+        payload.verification ||
+        payload.data?.verification ||
+        payload.data ||
+        payload;
+
+      if (
+        !data ||
+        typeof data !== "object"
+      ) {
+        throw new Error(
+          "La respuesta KYC no contiene una verificacion valida."
+        );
       }
+
+      const normalizedBirthDate =
+        data.birthDate ||
+        data.dateOfBirth ||
+        "";
+
+      setProfile(data);
+
+      setForm((previous) => ({
+        ...previous,
+
+        firstName:
+          data.firstName ||
+          data.user?.firstName ||
+          previous.firstName ||
+          "",
+
+        lastName:
+          data.lastName ||
+          data.user?.lastName ||
+          previous.lastName ||
+          "",
+
+        phone:
+          data.phone ||
+          data.user?.phone ||
+          previous.phone ||
+          "",
+
+        documentType:
+          data.documentType ||
+          data.user?.documentType ||
+          previous.documentType ||
+          "CEDULA",
+
+        documentNumber:
+          data.documentNumber ||
+          data.documentId ||
+          data.user?.documentId ||
+          previous.documentNumber ||
+          "",
+
+        address:
+          data.address ||
+          data.user?.address ||
+          previous.address ||
+          "",
+
+        city:
+          data.city ||
+          data.user?.city ||
+          previous.city ||
+          "",
+
+        province:
+          data.province ||
+          data.user?.province ||
+          previous.province ||
+          "",
+
+        gender:
+          data.gender ||
+          data.user?.gender ||
+          previous.gender ||
+          "",
+
+        birthDate:
+          normalizedBirthDate
+            ? String(
+                normalizedBirthDate
+              ).slice(0, 10)
+            : previous.birthDate ||
+              ""
+      }));
+return data;
     } catch (err) {
+      console.error(
+        "KYC load error:",
+        err
+      );
+
       setError(
         err?.response?.data?.message ||
-          "No se pudo cargar tu verificación. Verifica GET /verification/me."
+        err?.message ||
+        "No se pudo cargar tu verificacion."
       );
+
+      return null;
     } finally {
       setLoading(false);
     }
@@ -177,8 +272,25 @@ function CompleteProfile() {
       return "REJECTED";
     }
 
-    if (status === "PENDING" && hasValue) {
-      return "PENDING";
+    if (
+      [
+        "PENDING",
+        "PENDING_REVIEW",
+        "UNDER_REVIEW"
+      ].includes(status) &&
+      hasValue
+    ) {
+      return status;
+    }
+
+    if (
+      [
+        "RESUBMISSION_REQUIRED",
+        "REJECTED"
+      ].includes(status) &&
+      hasValue
+    ) {
+      return "RESUBMISSION_REQUIRED";
     }
 
     return hasValue ? "COMPLETED" : "MISSING";
@@ -197,8 +309,30 @@ function CompleteProfile() {
   const submitVerification = async (event) => {
     event.preventDefault();
 
-    if (completion < 80) {
-      setError("Completa la mayor cantidad de campos y sube documento frontal, reverso y selfie.");
+    if (completion !== 100) {
+      setError(
+        "Completa todos los campos y sube las cuatro im\u00e1genes requeridas."
+      );
+      return;
+    }
+
+    const currentStatus =
+      String(
+        profile?.status || ""
+      ).toUpperCase();
+
+    if (
+      [
+        "PENDING_REVIEW",
+        "UNDER_REVIEW",
+        "APPROVED"
+      ].includes(currentStatus)
+    ) {
+      setError(
+        currentStatus === "APPROVED"
+          ? "Tu identidad ya est\u00e1 verificada."
+          : "Tu verificaci\u00f3n ya est\u00e1 siendo revisada."
+      );
       return;
     }
 
@@ -207,32 +341,87 @@ function CompleteProfile() {
       setError("");
       setMessage("");
 
-      const formData = new FormData();
+      const formData =
+        new FormData();
 
-      Object.entries(form).forEach(([key, value]) => {
-        formData.append(key, value);
-      });
+      Object.entries(form).forEach(
+        ([key, value]) => {
+          formData.append(
+            key,
+            value
+          );
+        }
+      );
 
-      if (frontFile) formData.append("documentFront", frontFile);
-      if (backFile) formData.append("documentBack", backFile);
-      if (selfieFile) formData.append("selfie", selfieFile);
-      if (profilePhotoFile) {
-        formData.append("profilePhoto", profilePhotoFile);
+      if (frontFile) {
+        formData.append(
+          "documentFront",
+          frontFile
+        );
       }
 
-      const response = await api.post("/verification/submit", formData, {
-        headers: { "Content-Type": "multipart/form-data" }
-      });
+      if (backFile) {
+        formData.append(
+          "documentBack",
+          backFile
+        );
+      }
 
-      const verification = response.data.verification || response.data.data || response.data;
+      if (selfieFile) {
+        formData.append(
+          "selfie",
+          selfieFile
+        );
+      }
 
-      setProfile(verification);
-      setMessage("Verificación enviada correctamente. QSM revisará tu identidad.");
+      if (profilePhotoFile) {
+        formData.append(
+          "profilePhoto",
+          profilePhotoFile
+        );
+      }
+
+      const endpoint =
+        [
+          "REJECTED",
+          "RESUBMISSION_REQUIRED"
+        ].includes(currentStatus)
+          ? "/verifications/me/resubmit"
+          : "/verifications/me/submit";
+
+      const response =
+        await api.post(
+          endpoint,
+          formData,
+          {
+            headers: {
+              "Content-Type":
+                "multipart/form-data"
+            }
+          }
+        );
+
+      setFrontFile(null);
+      setBackFile(null);
+      setSelfieFile(null);
+      setProfilePhotoFile(null);
+
+      setFrontPreview("");
+      setBackPreview("");
+      setSelfiePreview("");
+      setProfilePhotoPreview("");
+
       await loadVerification();
+      await refreshUser();
+
+      setMessage(
+        response.data?.message ||
+        "Verificaci\u00f3n enviada correctamente."
+      );
     } catch (err) {
       setError(
         err?.response?.data?.message ||
-          "No se pudo enviar la verificación. Verifica POST /verification/submit."
+        "No se pudo enviar la verificaci\u00f3n."
       );
     } finally {
       setSubmitting(false);
@@ -245,7 +434,7 @@ function CompleteProfile() {
       setError("");
       setMessage("");
 
-      const response = await api.post("/verification/daily-check", {});
+      const response = await api.post("/verifications/daily-check", {});
       const verification = response.data.verification || response.data.data || response.data;
 
       setProfile(verification);
@@ -253,7 +442,7 @@ function CompleteProfile() {
     } catch (err) {
       setError(
         err?.response?.data?.message ||
-          "No se pudo completar la validación diaria. Verifica POST /verification/daily-check."
+          "No se pudo completar la validación diaria. Verifica POST /verifications/daily-check."
       );
     } finally {
       setChecking(false);
@@ -341,6 +530,17 @@ function CompleteProfile() {
 
           {message && <div style={successBox}>{message}</div>}
           {error && <div style={errorBox}>{error}</div>}
+          {generalCorrectionReason && (
+            <div style={correctionAlert}>
+              <strong>
+                {"Correcci\u00f3n solicitada por el equipo QSM"}
+              </strong>
+
+              <p>
+                {generalCorrectionReason}
+              </p>
+            </div>
+          )}
 
           {loading ? (
             <div style={centerCard}>
@@ -650,8 +850,44 @@ function CompleteProfile() {
                     Actualizar
                   </button>
 
-                  <button type="submit" disabled={submitting} style={primaryButton}>
-                    {submitting ? "Enviando..." : "Enviar verificación →"}
+                                    <button
+                    type="submit"
+                    disabled={
+                      submitting ||
+                      [
+                        "PENDING_REVIEW",
+                        "UNDER_REVIEW",
+                        "APPROVED"
+                      ].includes(status)
+                    }
+                    style={{
+                      ...primaryButton,
+                      opacity:
+                        submitting ||
+                        [
+                          "PENDING_REVIEW",
+                          "UNDER_REVIEW",
+                          "APPROVED"
+                        ].includes(status)
+                          ? .55
+                          : 1
+                    }}
+                  >
+                    {submitting
+                      ? "Enviando..."
+                      : status === "APPROVED"
+                      ? "Identidad verificada"
+                      : [
+                          "PENDING_REVIEW",
+                          "UNDER_REVIEW"
+                        ].includes(status)
+                      ? "Verificaci\u00f3n en revisi\u00f3n"
+                      : [
+                          "REJECTED",
+                          "RESUBMISSION_REQUIRED"
+                        ].includes(status)
+                      ? "Reenviar correcciones"
+                      : "Enviar verificaci\u00f3n \u2192"}
                   </button>
                 </div>
               </form>
@@ -690,11 +926,19 @@ function CompleteProfile() {
                 <section style={statusPanel}>
                   <h2>Validación diaria</h2>
                   <p style={muted}>
-                    Simula la validación diaria estilo Uber: una selfie o check rápido para confirmar actividad segura.
+                    La validación biométrica automática se habilitará cuando exista un proveedor facial real y auditado.
                   </p>
 
-                  <button onClick={runDailyCheck} disabled={checking} style={primaryButtonFull}>
-                    {checking ? "Validando..." : "Realizar check diario"}
+                  <button
+                    type="button"
+                    disabled
+                    style={{
+                      ...primaryButtonFull,
+                      opacity: .55,
+                      cursor: "not-allowed"
+                    }}
+                  >
+                    Face ID automático: próximamente
                   </button>
                 </section>
 
@@ -770,10 +1014,13 @@ function StatusPill({ status }) {
     APPROVED: "✓ Verificado",
     VERIFIED: "✓ Verificado",
     PENDING: "En revisión",
+    PENDING_REVIEW: "En revisión",
+    UNDER_REVIEW: "En revisión",
     IN_REVIEW: "En revisión",
     REJECTED: "Rechazado",
     NEEDS_REVIEW: "Corregir",
     REQUIRES_RESUBMISSION: "Reenviar",
+    RESUBMISSION_REQUIRED: "Reenviar",
     COMPLETED: "Completado",
     MISSING: "Sin completar"
   };
@@ -880,15 +1127,22 @@ function safeJson(value) {
 }
 
 function formatStatus(status) {
+  const normalized =
+    String(status || "").toUpperCase();
+
   const map = {
     NOT_SUBMITTED: "Pendiente",
-    PENDING: "En revisión",
+    NOT_STARTED: "Pendiente",
+    PENDING: "En revisi\u00f3n",
+    PENDING_REVIEW: "Pendiente de revisi\u00f3n",
+    UNDER_REVIEW: "En revisi\u00f3n",
+    RESUBMISSION_REQUIRED: "Correcci\u00f3n requerida",
     APPROVED: "Verificado",
     REJECTED: "Rechazado",
-    NEEDS_REVIEW: "Requiere revisión"
+    NEEDS_REVIEW: "Requiere revisi\u00f3n"
   };
 
-  return map[status] || "Pendiente";
+  return map[normalized] || "Pendiente";
 }
 
 function formatDate(value) {
@@ -901,12 +1155,42 @@ function formatDate(value) {
   });
 }
 
-function toAbsoluteFile(path) {
-  if (!path) return "";
-  if (String(path).startsWith("http")) return path;
-  if (String(path).startsWith("/uploads")) return `http://localhost:5000${path}`;
-  if (String(path).startsWith("uploads")) return `http://localhost:5000/${path}`;
-  return `http://localhost:5000/uploads/verification/${path}`;
+function toAbsoluteFile(filePath) {
+  if (!filePath) {
+    return "";
+  }
+
+  const value =
+    String(filePath).trim();
+
+  if (
+    value.startsWith("http://") ||
+    value.startsWith("https://") ||
+    value.startsWith("blob:")
+  ) {
+    return value;
+  }
+
+  const apiOrigin =
+    String(
+      QSM_RUNTIME_API_URL
+    )
+      .replace(/\/api\/?$/, "")
+      .replace(/\/$/, "");
+
+  if (value.startsWith("/")) {
+    return apiOrigin + value;
+  }
+
+  if (value.startsWith("uploads/")) {
+    return apiOrigin + "/" + value;
+  }
+
+  return (
+    apiOrigin +
+    "/uploads/verification/" +
+    value
+  );
 }
 
 const page = {
@@ -1095,10 +1379,13 @@ const statusPill = (status) => {
     APPROVED: ["rgba(34,197,94,.15)", "#86efac", "rgba(34,197,94,.30)"],
     VERIFIED: ["rgba(34,197,94,.15)", "#86efac", "rgba(34,197,94,.30)"],
     PENDING: ["rgba(245,158,11,.14)", "#fde68a", "rgba(245,158,11,.30)"],
+    PENDING_REVIEW: ["rgba(245,158,11,.14)", "#fde68a", "rgba(245,158,11,.30)"],
+    UNDER_REVIEW: ["rgba(56,189,248,.14)", "#7dd3fc", "rgba(56,189,248,.30)"],
     IN_REVIEW: ["rgba(56,189,248,.14)", "#7dd3fc", "rgba(56,189,248,.30)"],
     REJECTED: ["rgba(239,68,68,.15)", "#fca5a5", "rgba(239,68,68,.30)"],
     NEEDS_REVIEW: ["rgba(239,68,68,.15)", "#fca5a5", "rgba(239,68,68,.30)"],
     REQUIRES_RESUBMISSION: ["rgba(168,85,247,.15)", "#d8b4fe", "rgba(168,85,247,.30)"],
+    RESUBMISSION_REQUIRED: ["rgba(168,85,247,.15)", "#d8b4fe", "rgba(168,85,247,.30)"],
     COMPLETED: ["rgba(53,208,195,.14)", "#7ce7dc", "rgba(53,208,195,.28)"],
     MISSING: ["rgba(148,163,184,.12)", "#94a3b8", "rgba(148,163,184,.20)"]
   };
@@ -1205,7 +1492,11 @@ const uploadPlaceholder = {
 const uploadPreview = {
   width: "100%",
   height: "230px",
-  objectFit: "cover"
+  maxWidth: "100%",
+  display: "block",
+  objectFit: "contain",
+  objectPosition: "center",
+  background: "rgba(2,6,23,.72)"
 };
 
 const securityNotice = {
@@ -1340,6 +1631,16 @@ const benefit = {
   marginTop: "10px"
 };
 
+const correctionAlert = {
+  background: "rgba(168,85,247,.14)",
+  border: "1px solid rgba(168,85,247,.34)",
+  color: "#e9d5ff",
+  padding: "14px 18px",
+  borderRadius: "16px",
+  marginBottom: "16px",
+  lineHeight: "1.55"
+};
+
 const successBox = {
   background: "rgba(34,197,94,.14)",
   border: "1px solid rgba(34,197,94,.32)",
@@ -1370,3 +1671,5 @@ const centerCard = {
 };
 
 export default CompleteProfile;
+
+

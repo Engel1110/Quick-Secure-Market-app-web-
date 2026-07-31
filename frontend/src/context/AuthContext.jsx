@@ -344,6 +344,34 @@ export const AuthProvider = ({
         } catch (
           error
         ) {
+          const status =
+            Number(
+              error?.response?.status ||
+              0
+            );
+
+          const storedUser =
+            getStoredUser();
+
+          // TEMPORARY_AUTH_ERROR
+          if (
+            status === 429 ||
+            status >= 500 ||
+            status === 0
+          ) {
+            setToken(
+              savedToken
+            );
+
+            setUser(
+              (currentUser) =>
+                currentUser ||
+                storedUser
+            );
+
+            return storedUser;
+          }
+
           clearNormalSession();
 
           setToken(null);

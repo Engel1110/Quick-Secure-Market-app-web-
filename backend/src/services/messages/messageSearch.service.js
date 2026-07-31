@@ -1,152 +1,1457 @@
-const mongoose = require("mongoose");
-const Conversation = require("../../models/Conversation");
-const Message = require("../../models/Message");
+const fs = require("fs");
+const path = require("path");
+
+const prisma = require(
+  "../../utils/prisma"
+);
 
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
 
-function escapeRegex(value = "") {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
+const mapsPath = path.join(
+  __dirname,
+  "../../../RECOVERY_IMPORT_MAPS.json"
+);
 
-function pagination(query) {
-  const page = Math.max(Number(query.page || 1), 1);
-  const limit = Math.min(Math.max(Number(query.limit || DEFAULT_LIMIT), 1), MAX_LIMIT);
-  return { page, limit, skip: (page - 1) * limit };
-}
+function readMaps() {
+  try {
+    if (!fs.existsSync(mapsPath)) {
+      return {};
+    }
 
-function dateRange(from, to) {
-  if (!from && !to) return null;
-  const range = {};
-  if (from) {
-    const d = new Date(from);
-    if (!Number.isNaN(d.getTime())) range.$gte = d;
+    return JSON.parse(
+      fs
+        .readFileSync(
+          mapsPath,
+          "utf8"
+        )
+        .replace(/^\uFEFF/, "")
+    );
+  } catch (error) {
+    console.warn(
+      "No se pudieron leer los mapas del Messenger:",
+      error.message
+    );
+
+    return {};
   }
-  if (to) {
-    const d = new Date(to);
-    if (!Number.isNaN(d.getTime())) {
-      d.setHours(23, 59, 59, 999);
-      range.$lte = d;
+}
+
+const maps = readMaps();
+
+function createError(
+  message,
+  statusCode = 400
+) {
+  const error =
+    new Error(message);
+
+  error.statusCode =
+    statusCode;
+
+  return error;
+}
+
+function normalizeReference(value) {
+  if (
+    value === null ||
+    value === undefined
+  ) {
+    return "";
+  }
+
+  if (
+    typeof value === "object"
+  ) {
+    const nested =
+      value.id ??
+      value._id ??
+      value.userId;
+
+    if (
+      nested !== undefined &&
+      nested !== value
+    ) {
+      return normalizeReference(
+        nested
+      );
     }
   }
-  return Object.keys(range).length ? range : null;
+
+  const normalized =
+    String(value).trim();
+
+  return normalized ===
+    "[object Object]"
+      ? ""
+      : normalized;
 }
 
-async function accessibleConversationIds(userId, query) {
-  const filter = { participants: userId };
-  if (query.category) filter.category = query.category;
-  if (query.priority) filter.priority = query.priority;
-  if (query.archived === "true") filter.archivedBy = userId;
-  if (query.archived === "false") filter.archivedBy = { $ne: userId };
-  if (query.favorite === "true") filter.favoriteBy = userId;
-  if (query.pinned === "true") filter["pinnedBy.user"] = userId;
-  if (query.labelId && mongoose.Types.ObjectId.isValid(query.labelId)) {
-    filter.labels = { $elemMatch: { label: query.labelId, assignedBy: userId } };
+function parsePositiveInt(value) {
+  const normalized =
+    normalizeReference(value);
+
+  if (
+    !/^\d+$/.test(
+      normalized
+    )
+  ) {
+    return null;
   }
-  if (query.conversationId) {
-    if (!mongoose.Types.ObjectId.isValid(query.conversationId)) return [];
-    filter._id = query.conversationId;
-  }
-  const rows = await Conversation.find(filter).select("_id").lean();
-  return rows.map((row) => row._id);
+
+  const number =
+    Number(normalized);
+
+  return (
+    Number.isSafeInteger(number) &&
+    number > 0
+  )
+    ? number
+    : null;
 }
 
-function applyAttachmentFilter(filter, fileType) {
-  if (!fileType) return;
-  if (fileType === "FILE") filter["attachments.0"] = { $exists: true };
-  if (fileType === "IMAGE") filter["attachments.mimeType"] = /^image\//i;
-  if (fileType === "VIDEO") filter["attachments.mimeType"] = /^video\//i;
-  if (fileType === "AUDIO") filter["attachments.mimeType"] = /^audio\//i;
-  if (fileType === "PDF") filter["attachments.mimeType"] = "application/pdf";
-}
+function resolveMappedId(
+  map,
+  value
+) {
+  const numericId =
+    parsePositiveInt(value);
 
-async function searchMessages({ userId, query = {} }) {
-  const { page, limit, skip } = pagination(query);
-  const ids = await accessibleConversationIds(userId, query);
-  if (!ids.length) return { items: [], pagination: { page, limit, total: 0, pages: 0 } };
-
-  const filter = { conversation: { $in: ids } };
-  const q = String(query.q || "").trim();
-  if (q) {
-    const regex = new RegExp(escapeRegex(q), "i");
-    filter.$or = [{ content: regex }, { text: regex }, { "attachments.name": regex }];
+  if (numericId) {
+    return numericId;
   }
 
-  const range = dateRange(query.from, query.to);
-  if (range) filter.createdAt = range;
-  if (query.senderId && mongoose.Types.ObjectId.isValid(query.senderId)) filter.sender = query.senderId;
-  if (query.orderId && mongoose.Types.ObjectId.isValid(query.orderId)) filter.order = query.orderId;
-  if (query.productId && mongoose.Types.ObjectId.isValid(query.productId)) filter.product = query.productId;
-  if (query.hasAttachments === "true") filter["attachments.0"] = { $exists: true };
-  applyAttachmentFilter(filter, query.fileType);
-  if (query.hasAiAlert === "true") filter["security.riskLevel"] = { $in: ["HIGH", "CRITICAL"] };
-  if (query.reported === "true") filter.reported = true;
+  const legacyId =
+    normalizeReference(value);
 
-  const sort = query.sort === "OLDEST" ? { createdAt: 1 } : { createdAt: -1 };
-  const [items, total] = await Promise.all([
-    Message.find(filter)
-      .populate("sender", "name email avatar")
-      .populate("conversation")
-      .populate("order")
-      .sort(sort)
-      .skip(skip)
-      .limit(limit)
-      .lean(),
-    Message.countDocuments(filter)
-  ]);
+  const mappedId =
+    Number(
+      map?.[legacyId]
+    );
+
+  return (
+    Number.isSafeInteger(
+      mappedId
+    ) &&
+    mappedId > 0
+  )
+    ? mappedId
+    : null;
+}
+
+function pagination(query = {}) {
+  const requestedPage =
+    Number(query.page || 1);
+
+  const requestedLimit =
+    Number(
+      query.limit ||
+      DEFAULT_LIMIT
+    );
+
+  const page =
+    Number.isFinite(
+      requestedPage
+    )
+      ? Math.max(
+          Math.floor(
+            requestedPage
+          ),
+          1
+        )
+      : 1;
+
+  const limit =
+    Number.isFinite(
+      requestedLimit
+    )
+      ? Math.min(
+          Math.max(
+            Math.floor(
+              requestedLimit
+            ),
+            1
+          ),
+          MAX_LIMIT
+        )
+      : DEFAULT_LIMIT;
 
   return {
-    items: items.map((message) => ({
-      ...message,
-      searchMeta: {
-        matchedText: q || null,
-        preview: String(message.content || message.text || "").slice(0, 220)
-      }
-    })),
-    pagination: { page, limit, total, pages: Math.ceil(total / limit) }
+    page,
+    limit,
+    skip:
+      (page - 1) *
+      limit
   };
 }
 
-async function searchConversations({ userId, query = {} }) {
-  const { page, limit, skip } = pagination(query);
-  const filter = { participants: userId };
-  if (query.category) filter.category = query.category;
-  if (query.priority) filter.priority = query.priority;
-  if (query.archived === "true") filter.archivedBy = userId;
-  if (query.archived === "false") filter.archivedBy = { $ne: userId };
-  if (query.favorite === "true") filter.favoriteBy = userId;
-  if (query.pinned === "true") filter["pinnedBy.user"] = userId;
-  if (query.labelId && mongoose.Types.ObjectId.isValid(query.labelId)) {
-    filter.labels = { $elemMatch: { label: query.labelId, assignedBy: userId } };
+function dateRange(
+  from,
+  to
+) {
+  if (!from && !to) {
+    return null;
   }
 
-  const q = String(query.q || "").trim();
-  if (q) {
-    const regex = new RegExp(escapeRegex(q), "i");
-    filter.$or = [
-      { title: regex },
-      { subject: regex },
-      { "lastMessage.content": regex },
-      { "product.name": regex },
-      { "order.orderNumber": regex }
-    ];
+  const range = {};
+
+  if (from) {
+    const date =
+      new Date(from);
+
+    if (
+      !Number.isNaN(
+        date.getTime()
+      )
+    ) {
+      date.setHours(
+        0,
+        0,
+        0,
+        0
+      );
+
+      range.gte =
+        date;
+    }
   }
 
-  const range = dateRange(query.from, query.to);
-  if (range) filter.updatedAt = range;
+  if (to) {
+    const date =
+      new Date(to);
 
-  const [items, total] = await Promise.all([
-    Conversation.find(filter)
-      .populate("participants", "name email avatar")
-      .populate("labels.label")
-      .sort({ updatedAt: -1 })
-      .skip(skip)
-      .limit(limit)
-      .lean(),
-    Conversation.countDocuments(filter)
-  ]);
+    if (
+      !Number.isNaN(
+        date.getTime()
+      )
+    ) {
+      date.setHours(
+        23,
+        59,
+        59,
+        999
+      );
 
-  return { items, pagination: { page, limit, total, pages: Math.ceil(total / limit) } };
+      range.lte =
+        date;
+    }
+  }
+
+  return Object.keys(
+    range
+  ).length
+    ? range
+    : null;
 }
 
-module.exports = { searchMessages, searchConversations };
+function normalizeBoolean(
+  value
+) {
+  return String(
+    value || ""
+  ).toLowerCase() ===
+    "true";
+}
+
+function normalizeAttachments(
+  attachments
+) {
+  return Array.isArray(
+    attachments
+  )
+    ? attachments
+    : [];
+}
+
+function attachmentMimeType(
+  attachment
+) {
+  return String(
+    attachment?.mimeType ||
+    attachment?.mimetype ||
+    attachment?.type ||
+    ""
+  ).toLowerCase();
+}
+
+function attachmentName(
+  attachment
+) {
+  return String(
+    attachment?.name ||
+    attachment?.fileName ||
+    attachment?.filename ||
+    ""
+  );
+}
+
+function matchesAttachmentFilter(
+  attachments,
+  query
+) {
+  const files =
+    normalizeAttachments(
+      attachments
+    );
+
+  const hasAttachments =
+    normalizeBoolean(
+      query.hasAttachments
+    );
+
+  const fileType =
+    String(
+      query.fileType || ""
+    )
+      .trim()
+      .toUpperCase();
+
+  if (
+    hasAttachments &&
+    files.length === 0
+  ) {
+    return false;
+  }
+
+  if (!fileType) {
+    return true;
+  }
+
+  if (fileType === "FILE") {
+    return files.length > 0;
+  }
+
+  return files.some(
+    (attachment) => {
+      const mimeType =
+        attachmentMimeType(
+          attachment
+        );
+
+      const name =
+        attachmentName(
+          attachment
+        ).toLowerCase();
+
+      if (
+        fileType === "IMAGE"
+      ) {
+        return mimeType.startsWith(
+          "image/"
+        );
+      }
+
+      if (
+        fileType === "VIDEO"
+      ) {
+        return mimeType.startsWith(
+          "video/"
+        );
+      }
+
+      if (
+        fileType === "AUDIO"
+      ) {
+        return mimeType.startsWith(
+          "audio/"
+        );
+      }
+
+      if (
+        fileType === "PDF"
+      ) {
+        return (
+          mimeType ===
+            "application/pdf" ||
+          name.endsWith(".pdf")
+        );
+      }
+
+      return true;
+    }
+  );
+}
+
+function matchesText(
+  message,
+  searchText
+) {
+  if (!searchText) {
+    return true;
+  }
+
+  const normalizedSearch =
+    searchText.toLowerCase();
+
+  const content =
+    String(
+      message.content || ""
+    ).toLowerCase();
+
+  const text =
+    String(
+      message.text || ""
+    ).toLowerCase();
+
+  const attachmentMatch =
+    normalizeAttachments(
+      message.attachments
+    ).some(
+      (attachment) =>
+        attachmentName(
+          attachment
+        )
+          .toLowerCase()
+          .includes(
+            normalizedSearch
+          )
+    );
+
+  return (
+    content.includes(
+      normalizedSearch
+    ) ||
+    text.includes(
+      normalizedSearch
+    ) ||
+    attachmentMatch
+  );
+}
+
+function person(user) {
+  if (!user) {
+    return null;
+  }
+
+  const name = [
+    user.firstName,
+    user.lastName
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
+
+  return {
+    _id:
+      String(user.id),
+
+    id:
+      user.id,
+
+    name:
+      name ||
+      user.email ||
+      "Usuario QSM",
+
+    firstName:
+      user.firstName ||
+      "",
+
+    lastName:
+      user.lastName ||
+      "",
+
+    email:
+      user.email ||
+      "",
+
+    role:
+      user.role ||
+      "USER"
+  };
+}
+
+const userSelect = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  email: true,
+  role: true
+};
+
+function serializeMessage(
+  message,
+  searchText
+) {
+  const preview =
+    String(
+      message.content ||
+      message.text ||
+      ""
+    ).slice(
+      0,
+      220
+    );
+
+  return {
+    ...message,
+
+    _id:
+      String(message.id),
+
+    conversationId:
+      message.conversationId,
+
+    sender:
+      person(
+        message.sender
+      ),
+
+    receiver:
+      person(
+        message.receiver
+      ),
+
+    conversation:
+      message.conversation
+        ? {
+            ...message.conversation,
+
+            _id:
+              String(
+                message
+                  .conversation
+                  .id
+              ),
+
+            lastMessage: {
+              content:
+                message
+                  .conversation
+                  .lastMessageText ||
+                ""
+            }
+          }
+        : null,
+
+    order:
+      message.order
+        ? {
+            ...message.order,
+            _id:
+              String(
+                message.order.id
+              )
+          }
+        : null,
+
+    product:
+      message.product
+        ? {
+            ...message.product,
+
+            _id:
+              String(
+                message.product.id
+              ),
+
+            name:
+              message.product.title
+          }
+        : null,
+
+    attachments:
+      normalizeAttachments(
+        message.attachments
+      ),
+
+    searchMeta: {
+      matchedText:
+        searchText ||
+        null,
+
+      preview
+    }
+  };
+}
+
+function serializeConversation(
+  row
+) {
+  const conversation =
+    row.conversation;
+
+  const product =
+    conversation.product
+      ? {
+          ...conversation.product,
+
+          _id:
+            String(
+              conversation
+                .product
+                .id
+            ),
+
+          name:
+            conversation
+              .product
+              .title
+        }
+      : null;
+
+  const participants =
+    conversation.participants.map(
+      (participant) => ({
+        ...person(
+          participant.user
+        ),
+
+        unreadCount:
+          participant.unreadCount,
+
+        muted:
+          participant.muted,
+
+        archived:
+          participant.archived,
+
+        blocked:
+          participant.blocked,
+
+        favorite:
+          participant.favorite,
+
+        pinned:
+          participant.pinned
+      })
+    );
+
+  const labels =
+    conversation
+      .labelAssignments
+      .map(
+        (assignment) => ({
+          ...assignment.label,
+
+          _id:
+            String(
+              assignment
+                .label
+                .id
+            ),
+
+          assignedById:
+            assignment
+              .assignedById,
+
+          assignedAt:
+            assignment
+              .assignedAt
+        })
+      );
+
+  return {
+    ...conversation,
+
+    _id:
+      String(
+        conversation.id
+      ),
+
+    title:
+      product?.name ||
+      `Conversación #${conversation.id}`,
+
+    subject:
+      product?.name ||
+      `Conversación #${conversation.id}`,
+
+    product,
+
+    order:
+      conversation.order
+        ? {
+            ...conversation.order,
+
+            _id:
+              String(
+                conversation
+                  .order
+                  .id
+              )
+          }
+        : null,
+
+    participants,
+    labels,
+
+    lastMessage: {
+      content:
+        conversation
+          .lastMessageText ||
+        "",
+
+      senderId:
+        conversation
+          .lastMessageSenderId,
+
+      createdAt:
+        conversation
+          .lastMessageAt
+    },
+
+    archived:
+      row.archived,
+
+    favorite:
+      row.favorite,
+
+    pinned:
+      row.pinned,
+
+    muted:
+      row.muted,
+
+    blocked:
+      row.blocked,
+
+    unreadCount:
+      row.unreadCount
+  };
+}
+
+async function resolveCurrentUserId(
+  userReference
+) {
+  const userId =
+    resolveMappedId(
+      maps.userMap,
+      userReference
+    );
+
+  if (!userId) {
+    throw createError(
+      "Usuario autenticado no válido.",
+      401
+    );
+  }
+
+  const user =
+    await prisma.user.findUnique({
+      where: {
+        id:
+          userId
+      },
+
+      select: {
+        id:
+          true
+      }
+    });
+
+  if (!user) {
+    throw createError(
+      "Usuario autenticado no encontrado.",
+      401
+    );
+  }
+
+  return user.id;
+}
+
+async function resolveLabelId(
+  value
+) {
+  const numericId =
+    parsePositiveInt(value);
+
+  if (numericId) {
+    return numericId;
+  }
+
+  const legacyMongoId =
+    normalizeReference(value);
+
+  if (!legacyMongoId) {
+    return null;
+  }
+
+  const mappedId =
+    Number(
+      maps.conversationLabelMap?.[
+        legacyMongoId
+      ] ||
+      maps.labelMap?.[
+        legacyMongoId
+      ]
+    );
+
+  if (
+    Number.isSafeInteger(
+      mappedId
+    ) &&
+    mappedId > 0
+  ) {
+    return mappedId;
+  }
+
+  const label =
+    await prisma
+      .conversationLabel
+      .findFirst({
+        where: {
+          legacyMongoId
+        },
+
+        select: {
+          id:
+            true
+        }
+      });
+
+  return label?.id ||
+    null;
+}
+
+async function accessibleConversations(
+  userReference,
+  query = {}
+) {
+  const userId =
+    await resolveCurrentUserId(
+      userReference
+    );
+
+  const participantWhere = {
+    userId
+  };
+
+  if (
+    query.archived === "true"
+  ) {
+    participantWhere.archived =
+      true;
+  }
+
+  if (
+    query.archived === "false"
+  ) {
+    participantWhere.archived =
+      false;
+  }
+
+  if (
+    query.favorite === "true"
+  ) {
+    participantWhere.favorite =
+      true;
+  }
+
+  if (
+    query.pinned === "true"
+  ) {
+    participantWhere.pinned =
+      true;
+  }
+
+  const conversationWhere = {};
+
+  if (query.category) {
+    conversationWhere.category =
+      String(
+        query.category
+      ).toUpperCase();
+  }
+
+  if (query.priority) {
+    conversationWhere.priority =
+      String(
+        query.priority
+      ).toUpperCase();
+  }
+
+  if (
+    query.conversationId
+  ) {
+    const conversationId =
+      resolveMappedId(
+        maps.conversationMap,
+        query.conversationId
+      );
+
+    if (!conversationId) {
+      return {
+        userId,
+        rows: []
+      };
+    }
+
+    conversationWhere.id =
+      conversationId;
+  }
+
+  if (query.labelId) {
+    const labelId =
+      await resolveLabelId(
+        query.labelId
+      );
+
+    if (!labelId) {
+      return {
+        userId,
+        rows: []
+      };
+    }
+
+    conversationWhere
+      .labelAssignments = {
+        some: {
+          labelId,
+          assignedById:
+            userId
+        }
+      };
+  }
+
+  const range =
+    dateRange(
+      query.from,
+      query.to
+    );
+
+  if (
+    range &&
+    query.searchMode ===
+      "CONVERSATIONS"
+  ) {
+    conversationWhere.updatedAt =
+      range;
+  }
+
+  if (
+    Object.keys(
+      conversationWhere
+    ).length
+  ) {
+    participantWhere.conversation = {
+      is:
+        conversationWhere
+    };
+  }
+
+  const rows =
+    await prisma
+      .conversationParticipant
+      .findMany({
+        where:
+          participantWhere,
+
+        select: {
+          conversationId:
+            true
+        }
+      });
+
+  return {
+    userId,
+
+    rows
+  };
+}
+
+async function searchMessages({
+  userId:
+    userReference,
+  query = {}
+}) {
+  const {
+    page,
+    limit,
+    skip
+  } =
+    pagination(query);
+
+  const access =
+    await accessibleConversations(
+      userReference,
+      query
+    );
+
+  const conversationIds =
+    access.rows.map(
+      (row) =>
+        row.conversationId
+    );
+
+  if (
+    conversationIds.length === 0
+  ) {
+    return {
+      items: [],
+
+      pagination: {
+        page,
+        limit,
+        total:
+          0,
+        pages:
+          0
+      }
+    };
+  }
+
+  const where = {
+    conversationId: {
+      in:
+        conversationIds
+    }
+  };
+
+  const range =
+    dateRange(
+      query.from,
+      query.to
+    );
+
+  if (range) {
+    where.createdAt =
+      range;
+  }
+
+  if (query.senderId) {
+    const senderId =
+      resolveMappedId(
+        maps.userMap,
+        query.senderId
+      );
+
+    if (!senderId) {
+      return {
+        items: [],
+
+        pagination: {
+          page,
+          limit,
+          total:
+            0,
+          pages:
+            0
+        }
+      };
+    }
+
+    where.senderId =
+      senderId;
+  }
+
+  if (query.orderId) {
+    const orderId =
+      resolveMappedId(
+        maps.orderMap,
+        query.orderId
+      );
+
+    if (!orderId) {
+      return {
+        items: [],
+
+        pagination: {
+          page,
+          limit,
+          total:
+            0,
+          pages:
+            0
+        }
+      };
+    }
+
+    where.orderId =
+      orderId;
+  }
+
+  if (query.productId) {
+    const productId =
+      resolveMappedId(
+        maps.productMap,
+        query.productId
+      );
+
+    if (!productId) {
+      return {
+        items: [],
+
+        pagination: {
+          page,
+          limit,
+          total:
+            0,
+          pages:
+            0
+        }
+      };
+    }
+
+    where.productId =
+      productId;
+  }
+
+  if (
+    normalizeBoolean(
+      query.hasAiAlert
+    )
+  ) {
+    where.riskLevel = {
+      in: [
+        "HIGH",
+        "CRITICAL"
+      ]
+    };
+  }
+
+  if (
+    normalizeBoolean(
+      query.reported
+    )
+  ) {
+    where.isFlagged =
+      true;
+  }
+
+  const orderBy =
+    query.sort ===
+    "OLDEST"
+      ? {
+          createdAt:
+            "asc"
+        }
+      : {
+          createdAt:
+            "desc"
+        };
+
+  const candidates =
+    await prisma.message.findMany({
+      where,
+      orderBy,
+
+      include: {
+        sender: {
+          select:
+            userSelect
+        },
+
+        receiver: {
+          select:
+            userSelect
+        },
+
+        conversation: {
+          select: {
+            id:
+              true,
+
+            category:
+              true,
+
+            priority:
+              true,
+
+            status:
+              true,
+
+            lastMessageText:
+              true,
+
+            lastMessageSenderId:
+              true,
+
+            lastMessageAt:
+              true,
+
+            updatedAt:
+              true
+          }
+        },
+
+        order: {
+          select: {
+            id:
+              true
+          }
+        },
+
+        product: {
+          select: {
+            id:
+              true,
+
+            title:
+              true,
+
+            qsmCode:
+              true,
+
+            imageUrl:
+              true,
+
+            images:
+              true
+          }
+        }
+      }
+    });
+
+  const searchText =
+    String(
+      query.q || ""
+    ).trim();
+
+  const filtered =
+    candidates.filter(
+      (message) =>
+        matchesText(
+          message,
+          searchText
+        ) &&
+        matchesAttachmentFilter(
+          message.attachments,
+          query
+        )
+    );
+
+  const total =
+    filtered.length;
+
+  const items =
+    filtered
+      .slice(
+        skip,
+        skip + limit
+      )
+      .map(
+        (message) =>
+          serializeMessage(
+            message,
+            searchText
+          )
+      );
+
+  return {
+    items,
+
+    pagination: {
+      page,
+      limit,
+      total,
+
+      pages:
+        total
+          ? Math.ceil(
+              total /
+              limit
+            )
+          : 0
+    }
+  };
+}
+
+async function searchConversations({
+  userId:
+    userReference,
+  query = {}
+}) {
+  const {
+    page,
+    limit,
+    skip
+  } =
+    pagination(query);
+
+  const access =
+    await accessibleConversations(
+      userReference,
+      {
+        ...query,
+        searchMode:
+          "CONVERSATIONS"
+      }
+    );
+
+  const conversationIds =
+    access.rows.map(
+      (row) =>
+        row.conversationId
+    );
+
+  if (
+    conversationIds.length === 0
+  ) {
+    return {
+      items: [],
+
+      pagination: {
+        page,
+        limit,
+        total:
+          0,
+        pages:
+          0
+      }
+    };
+  }
+
+  const participantRows =
+    await prisma
+      .conversationParticipant
+      .findMany({
+        where: {
+          userId:
+            access.userId,
+
+          conversationId: {
+            in:
+              conversationIds
+          }
+        },
+
+        include: {
+          conversation: {
+            include: {
+              product: {
+                select: {
+                  id:
+                    true,
+
+                  title:
+                    true,
+
+                  qsmCode:
+                    true,
+
+                  imageUrl:
+                    true,
+
+                  images:
+                    true
+                }
+              },
+
+              order: {
+                select: {
+                  id:
+                    true
+                }
+              },
+
+              participants: {
+                include: {
+                  user: {
+                    select:
+                      userSelect
+                  }
+                }
+              },
+
+              labelAssignments: {
+                include: {
+                  label:
+                    true
+                }
+              }
+            }
+          }
+        }
+      });
+
+  const searchText =
+    String(
+      query.q || ""
+    )
+      .trim()
+      .toLowerCase();
+
+  const filtered =
+    participantRows
+      .filter(
+        (row) => {
+          if (!searchText) {
+            return true;
+          }
+
+          const conversation =
+            row.conversation;
+
+          const values = [
+            conversation
+              .lastMessageText,
+
+            conversation
+              .product
+              ?.title,
+
+            conversation
+              .product
+              ?.qsmCode,
+
+            `Conversación ${conversation.id}`,
+
+            conversation.orderId
+              ? String(
+                  conversation
+                    .orderId
+                )
+              : ""
+          ];
+
+          return values.some(
+            (value) =>
+              String(value || "")
+                .toLowerCase()
+                .includes(
+                  searchText
+                )
+          );
+        }
+      )
+      .sort(
+        (left, right) =>
+          new Date(
+            right
+              .conversation
+              .updatedAt
+          ).getTime() -
+          new Date(
+            left
+              .conversation
+              .updatedAt
+          ).getTime()
+      );
+
+  const total =
+    filtered.length;
+
+  const items =
+    filtered
+      .slice(
+        skip,
+        skip + limit
+      )
+      .map(
+        serializeConversation
+      );
+
+  return {
+    items,
+
+    pagination: {
+      page,
+      limit,
+      total,
+
+      pages:
+        total
+          ? Math.ceil(
+              total /
+              limit
+            )
+          : 0
+    }
+  };
+}
+
+module.exports = {
+  searchMessages,
+  searchConversations
+};
