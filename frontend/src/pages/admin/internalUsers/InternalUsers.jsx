@@ -14,7 +14,7 @@ import {
   getAdminApiErrorMessage
 } from "../../../services/adminUsers.service";
 
-import "../dashboard/adminDashboard.css";
+import "../Dashboard/adminDashboard.css";
 import "./internalUsers.css";
 
 

@@ -12,7 +12,7 @@ import {
   updateSystemSettings
 } from "../../../services/adminSystemSettings.service.js";
 
-import "../dashboard/adminDashboard.css";
+import "../Dashboard/adminDashboard.css";
 import "./systemSettings.css";
 
 const SECTIONS = [
