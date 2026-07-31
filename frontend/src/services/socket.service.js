@@ -1,3 +1,4 @@
+import { API_BASE_URL as QSM_RUNTIME_API_URL } from "../config/runtime";
 import { io } from "socket.io-client";
 
 /**
@@ -40,8 +41,7 @@ const getSocketUrl = () => {
   }
 
   const apiUrl =
-    import.meta.env.VITE_API_URL ||
-    "http://localhost:5000/api";
+    QSM_RUNTIME_API_URL;
 
   return String(apiUrl)
     .replace(/\/api\/?$/, "")
@@ -482,7 +482,7 @@ export const emitTyping = (
   }
 
   return emitEvent(
-    "conversation:typing",
+    "message:typing",
     {
       conversationId
     }
@@ -498,10 +498,10 @@ export const emitStopTyping = (
 
   /**
    * Nombre oficial consolidado:
-   * conversation:stopTyping
+   * message:stopTyping
    */
   return emitEvent(
-    "conversation:stopTyping",
+    "message:stopTyping",
     {
       conversationId
     }

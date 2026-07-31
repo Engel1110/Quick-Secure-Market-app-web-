@@ -1,4 +1,4 @@
-const express = require("express");
+﻿const express = require("express");
 const router = express.Router();
 
 const authMiddleware = require("../middleware/auth.middleware");
@@ -18,14 +18,14 @@ router.get("/my-payments", authMiddleware, getMyPayments);
 router.put(
   "/:paymentId/release",
   authMiddleware,
-  requireRole("ADMIN", "SENIOR_ADMIN"),
+  requireRole("SUPER_ADMIN", "SENIOR_ADMIN", "ADMIN"),
   releasePaymentToSeller
 );
 
 router.put(
   "/:paymentId/refund",
   authMiddleware,
-  requireRole("ADMIN", "SENIOR_ADMIN"),
+  requireRole("SUPER_ADMIN", "SENIOR_ADMIN", "ADMIN"),
   refundPaymentToBuyer
 );
 

@@ -1,10 +1,7 @@
-// backend/src/socket.js
-
 const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
-const mongoose = require("mongoose");
 
-const User = require("./models/User");
+const prisma = require("./utils/prisma");
 
 const {
   initializeMessageSocket
@@ -12,31 +9,15 @@ const {
 
 const onlineUsers = new Map();
 
-const splitOrigins = (value) =>
-  String(value || "")
-    .split(",")
-    .map((item) => item.trim().replace(/\/$/, ""))
-    .filter(Boolean);
-
-const getAllowedOrigins = () =>
-  Array.from(
-    new Set([
-      "http://localhost:5173",
-      "http://localhost:5174",
-      "http://localhost:3000",
-      "https://quick-secure-market-app-web.vercel.app",
-      ...splitOrigins(process.env.FRONTEND_URL),
-      ...splitOrigins(process.env.ALLOWED_ORIGINS)
-    ])
-  );
+const { getAllowedOrigins } = require("./config/runtime.config");
 
 const getSocketToken = (socket) => {
   const authToken =
     socket.handshake.auth?.token;
 
   const authorization =
-    socket.handshake.headers?.authorization ||
-    "";
+    socket.handshake.headers
+      ?.authorization || "";
 
   if (authToken) {
     return String(authToken).replace(
@@ -51,16 +32,92 @@ const getSocketToken = (socket) => {
   );
 };
 
+async function resolveSocketUser(payload) {
+  const rawId =
+    normalizeReference(
+      payload.userId ??
+      payload.id ??
+      payload._id ??
+      payload.sub
+    );
+
+  const email =
+    String(payload.email || "")
+      .trim()
+      .toLowerCase();
+
+  const select = {
+    id: true,
+    legacyMongoId: true,
+    firstName: true,
+    lastName: true,
+    email: true,
+    role: true,
+    status: true,
+    deletedAt: true
+  };
+
+  const numericId =
+    parsePositiveInt(rawId);
+
+  if (numericId) {
+    const user =
+      await prisma.user.findUnique({
+        where: {
+          id: numericId
+        },
+        select
+      });
+
+    if (user) {
+      return user;
+    }
+  }
+
+  if (email) {
+    const user =
+      await prisma.user.findUnique({
+        where: {
+          email
+        },
+        select
+      });
+
+    if (user) {
+      return user;
+    }
+  }
+
+  if (rawId) {
+    const user =
+      await prisma.user.findUnique({
+        where: {
+          legacyMongoId: rawId
+        },
+        select
+      });
+
+    if (user) {
+      return user;
+    }
+  }
+
+  return null;
+}
+
 const authenticateSocket = async (
   socket,
   next
 ) => {
   try {
-    const token = getSocketToken(socket);
+    const token =
+      getSocketToken(socket);
 
     if (!token) {
       return next(
-        new Error("AUTH_TOKEN_REQUIRED")
+        new Error(
+          "AUTH_TOKEN_REQUIRED"
+        )
       );
     }
 
@@ -76,32 +133,11 @@ const authenticateSocket = async (
       );
     }
 
-    const payload = jwt.verify(
-      token,
-      secret
-    );
+    const payload =
+      jwt.verify(token, secret);
 
-    const userId =
-      payload.userId ||
-      payload.id ||
-      payload._id ||
-      payload.sub;
-
-    if (
-      !mongoose.Types.ObjectId.isValid(
-        String(userId || "")
-      )
-    ) {
-      return next(
-        new Error("INVALID_USER_ID")
-      );
-    }
-
-    const user = await User.findById(
-      userId
-    ).select(
-      "_id firstName lastName name email role status isActive"
-    );
+    const user =
+      await resolveSocketUser(payload);
 
     if (!user) {
       return next(
@@ -109,35 +145,58 @@ const authenticateSocket = async (
       );
     }
 
-    const status = String(
-      user.status || ""
-    ).toUpperCase();
+    const status =
+      String(user.status || "")
+        .trim()
+        .toUpperCase();
+
+    const blockedStatuses =
+      new Set([
+        "SUSPENDED",
+        "BANNED",
+        "DELETED",
+        "DISABLED"
+      ]);
 
     if (
-      user.isActive === false ||
-      status === "SUSPENDED" ||
-      status === "BANNED"
+      user.deletedAt ||
+      blockedStatuses.has(status)
     ) {
       return next(
-        new Error("USER_NOT_ALLOWED")
+        new Error(
+          "USER_NOT_ALLOWED"
+        )
       );
     }
 
-    socket.userId = String(user._id);
+    const fullName = [
+      user.firstName,
+      user.lastName
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+
+    socket.userId =
+      String(user.id);
 
     socket.user = {
-      _id: user._id,
+      _id: String(user.id),
+      id: user.id,
       firstName:
         user.firstName || "",
       lastName:
         user.lastName || "",
       name:
-        user.name || "",
+        fullName ||
+        user.email ||
+        "Usuario QSM",
       email:
         user.email || "",
-      role: String(
-        user.role || "USER"
-      ).toUpperCase()
+      role:
+        String(
+          user.role || "USER"
+        ).toUpperCase()
     };
 
     return next();
@@ -163,10 +222,7 @@ const initializeSocket = (
     httpServer,
     {
       cors: {
-        origin(
-          origin,
-          callback
-        ) {
+        origin(origin, callback) {
           const normalizedOrigin =
             String(origin || "")
               .trim()
@@ -220,40 +276,20 @@ const initializeSocket = (
       const userId =
         socket.userId;
 
-      /*
-      |--------------------------------------------------------------------------
-      | Sala personal
-      |--------------------------------------------------------------------------
-      */
-
       socket.join(
         `user:${userId}`
       );
-
-      /*
-      |--------------------------------------------------------------------------
-      | Registrar módulo de mensajes
-      |--------------------------------------------------------------------------
-      */
 
       initializeMessageSocket(
         io,
         socket
       );
 
-      /*
-      |--------------------------------------------------------------------------
-      | Presencia
-      |--------------------------------------------------------------------------
-      */
-
       const connections =
         onlineUsers.get(userId) ||
         new Set();
 
-      connections.add(
-        socket.id
-      );
+      connections.add(socket.id);
 
       onlineUsers.set(
         userId,
@@ -286,12 +322,6 @@ const initializeSocket = (
         `Socket conectado: ${socket.id} | usuario: ${userId}`
       );
 
-      /*
-      |--------------------------------------------------------------------------
-      | Ping
-      |--------------------------------------------------------------------------
-      */
-
       socket.on(
         "socket:ping",
         (callback) => {
@@ -308,27 +338,19 @@ const initializeSocket = (
         }
       );
 
-      /*
-      |--------------------------------------------------------------------------
-      | Desconexión
-      |--------------------------------------------------------------------------
-      */
-
       socket.on(
         "disconnect",
         (reason) => {
-          const current =
-            onlineUsers.get(
-              userId
-            );
+          const connections =
+            onlineUsers.get(userId);
 
-          if (current) {
-            current.delete(
+          if (connections) {
+            connections.delete(
               socket.id
             );
 
             if (
-              current.size === 0
+              connections.size === 0
             ) {
               onlineUsers.delete(
                 userId
@@ -340,7 +362,8 @@ const initializeSocket = (
                   userId,
                   online: false,
                   at:
-                    new Date().toISOString()
+                    new Date()
+                      .toISOString()
                 }
               );
             }

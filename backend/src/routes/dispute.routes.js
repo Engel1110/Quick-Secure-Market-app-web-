@@ -1,6 +1,16 @@
 const express = require("express");
 const router = express.Router();
 
+const {
+  auditMutations
+} = require(
+  "../middleware/audit-action.middleware"
+);
+
+router.use(
+  auditMutations("DISPUTES")
+);
+
 const authMiddleware = require("../middleware/auth.middleware");
 const requireRole = require("../middleware/role.middleware");
 

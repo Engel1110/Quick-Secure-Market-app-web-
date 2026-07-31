@@ -1,80 +1,51 @@
-import express from "express";
-import multer from "multer";
-import path from "path";
-import fs from "fs";
+"use strict";
 
-import {
+const express = require("express");
+const multer = require("multer");
+
+const {
   getMyVerification,
-  saveVerificationDraft,
   submitVerification,
-  resubmitVerification,
+  dailyCheckUnavailable
+} = require(
+  "../controllers/verification-prisma.controller"
+);
 
-  uploadProfilePhoto,
-  uploadDocumentFront,
-  uploadDocumentBack,
-  uploadSelfie,
-
-  dailyCheck,
-
+const {
   getAllVerifications,
   getVerificationStats,
   getVerificationById,
   startVerificationReview,
-
   approveVerificationField,
   rejectVerificationField,
-
   approveVerification,
   rejectVerification,
   requestVerificationResubmission,
   reviewVerification,
   reopenVerification
-} from "../controllers/verification.controller.js";
+} = require(
+  "../controllers/verification-admin-prisma.controller"
+);
 
-import { protect } from "../middleware/auth.middleware.js";
+const protect = require(
+  "../middleware/auth.middleware"
+);
+
+const {
+  uploadPublicFile,
+  uploadPrivateFile,
+  deletePublicObjectPaths,
+  deletePrivateObjectPaths,
+  privateResponseSigningMiddleware
+} = require(
+  "../services/storage.service"
+);
 
 const router = express.Router();
 
-/* =========================================================
-   CONFIGURACIÓN DE MULTER
-========================================================= */
-
-const uploadDir = path.join(
-  process.cwd(),
-  "uploads",
-  "verification"
+router.use(
+  privateResponseSigningMiddleware
 );
-
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, {
-    recursive: true
-  });
-}
-
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    cb(null, uploadDir);
-  },
-
-  filename: (_req, file, cb) => {
-    const extension = path.extname(file.originalname);
-
-    const originalName = path
-      .basename(file.originalname, extension)
-      .replace(/[^a-zA-Z0-9-_]/g, "-")
-      .replace(/-+/g, "-")
-      .toLowerCase();
-
-    const uniqueName = `${Date.now()}-${Math.round(
-      Math.random() * 1e9
-    )}`;
-
-    cb(
-      null,
-      `${uniqueName}-${originalName}${extension.toLowerCase()}`
-    );
-  }
-});
 
 const allowedMimeTypes = [
   "image/jpeg",
@@ -84,114 +55,257 @@ const allowedMimeTypes = [
 ];
 
 const upload = multer({
-  storage,
+  storage:
+    multer.memoryStorage(),
 
   limits: {
-    fileSize: 8 * 1024 * 1024,
+    fileSize:
+      8 *
+      1024 *
+      1024,
     files: 4
   },
 
-  fileFilter: (_req, file, cb) => {
-    if (!allowedMimeTypes.includes(file.mimetype)) {
-      return cb(
+  fileFilter(
+    _req,
+    file,
+    callback
+  ) {
+    if (
+      !allowedMimeTypes.includes(
+        file.mimetype
+      )
+    ) {
+      return callback(
         new Error(
           "Solo se permiten imágenes JPG, JPEG, PNG o WEBP."
         )
       );
     }
 
-    cb(null, true);
+    return callback(
+      null,
+      true
+    );
   }
 });
 
-/* =========================================================
-   MIDDLEWARE PARA ERRORES DE MULTER
-========================================================= */
+const uploadFields =
+  upload.fields([
+    {
+      name:
+        "profilePhoto",
+      maxCount: 1
+    },
+    {
+      name:
+        "documentFront",
+      maxCount: 1
+    },
+    {
+      name:
+        "documentBack",
+      maxCount: 1
+    },
+    {
+      name:
+        "selfie",
+      maxCount: 1
+    }
+  ]);
 
-const handleUploadErrors = (uploadMiddleware) => {
-  return (req, res, next) => {
-    uploadMiddleware(req, res, (error) => {
+function handleUploadErrors(
+  req,
+  res,
+  next
+) {
+  uploadFields(
+    req,
+    res,
+    (error) => {
       if (!error) {
         return next();
       }
 
-      if (error instanceof multer.MulterError) {
-        if (error.code === "LIMIT_FILE_SIZE") {
-          return res.status(400).json({
+      if (
+        error instanceof
+        multer.MulterError
+      ) {
+        const messages = {
+          LIMIT_FILE_SIZE:
+            "La imagen supera el tamaño máximo permitido de 8 MB.",
+          LIMIT_UNEXPECTED_FILE:
+            "Se recibió un archivo o campo no permitido.",
+          LIMIT_FILE_COUNT:
+            "Se superó la cantidad máxima de archivos permitidos."
+        };
+
+        return res
+          .status(400)
+          .json({
             success: false,
             message:
-              "La imagen supera el tamaño máximo permitido de 8 MB."
+              messages[error.code] ||
+              error.message
           });
-        }
-
-        if (error.code === "LIMIT_UNEXPECTED_FILE") {
-          return res.status(400).json({
-            success: false,
-            message:
-              "Se recibió un archivo o campo no permitido."
-          });
-        }
-
-        return res.status(400).json({
-          success: false,
-          message: error.message
-        });
       }
 
-      return res.status(400).json({
+      return res
+        .status(400)
+        .json({
+          success: false,
+          message:
+            error?.message ||
+            "No se pudo procesar la imagen."
+        });
+    }
+  );
+}
+
+async function uploadVerificationFiles(
+  req,
+  res,
+  next
+) {
+  const publicObjectPaths = [];
+  const privateObjectPaths = [];
+
+  req.publicUploadedObjectPaths =
+    publicObjectPaths;
+
+  req.privateUploadedObjectPaths =
+    privateObjectPaths;
+
+  try {
+    const userId =
+      Number(
+        req.prismaUser?.id ??
+        req.user?.id ??
+        0
+      );
+
+    const fields =
+      req.files || {};
+
+    for (
+      const [
+        fieldName,
+        fieldFiles
+      ] of Object.entries(fields)
+    ) {
+      if (
+        !Array.isArray(fieldFiles) ||
+        !fieldFiles[0]
+      ) {
+        continue;
+      }
+
+      const file =
+        fieldFiles[0];
+
+      if (
+        fieldName ===
+        "profilePhoto"
+      ) {
+        const uploaded =
+          await uploadPublicFile(
+            file,
+            {
+              folder:
+                `profiles/verification/${userId || "user"}`
+            }
+          );
+
+        publicObjectPaths.push(
+          uploaded.objectPath
+        );
+
+        fields[fieldName][0] = {
+          ...file,
+          url:
+            uploaded.url,
+          path:
+            uploaded.url,
+          storagePath:
+            uploaded.objectPath,
+          bucket:
+            uploaded.bucket,
+          filename:
+            uploaded.filename
+        };
+
+        continue;
+      }
+
+      const uploaded =
+        await uploadPrivateFile(
+          file,
+          {
+            folder:
+              `verification/${userId || "user"}/${fieldName}`
+          }
+        );
+
+      privateObjectPaths.push(
+        uploaded.objectPath
+      );
+
+      fields[fieldName][0] = {
+        ...file,
+        url:
+          uploaded.storageRef,
+        path:
+          uploaded.storageRef,
+        storageRef:
+          uploaded.storageRef,
+        signedUrl:
+          uploaded.signedUrl,
+        storagePath:
+          uploaded.objectPath,
+        bucket:
+          uploaded.bucket,
+        filename:
+          uploaded.filename
+      };
+    }
+
+    req.files = fields;
+
+    return next();
+  } catch (error) {
+    console.error(
+      "Error subiendo documentos de verificación:",
+      error
+    );
+
+    await Promise.allSettled([
+      deletePublicObjectPaths(
+        publicObjectPaths
+      ),
+      deletePrivateObjectPaths(
+        privateObjectPaths
+      )
+    ]);
+
+    return res
+      .status(500)
+      .json({
         success: false,
         message:
-          error.message ||
-          "No se pudo procesar la imagen."
+          "No se pudieron guardar los documentos de verificación.",
+        error:
+          process.env.NODE_ENV ===
+          "production"
+            ? undefined
+            : error.message
       });
-    });
-  };
-};
+  }
+}
 
-/* =========================================================
-   CAMPOS DE SUBIDA
-========================================================= */
-
-const verificationFilesUpload = handleUploadErrors(
-  upload.fields([
-    {
-      name: "profilePhoto",
-      maxCount: 1
-    },
-    {
-      name: "documentFront",
-      maxCount: 1
-    },
-    {
-      name: "documentBack",
-      maxCount: 1
-    },
-    {
-      name: "selfie",
-      maxCount: 1
-    }
-  ])
-);
-
-const profilePhotoUpload = handleUploadErrors(
-  upload.single("profilePhoto")
-);
-
-const documentFrontUpload = handleUploadErrors(
-  upload.single("documentFront")
-);
-
-const documentBackUpload = handleUploadErrors(
-  upload.single("documentBack")
-);
-
-const selfieUpload = handleUploadErrors(
-  upload.single("selfie")
-);
-
-/* =========================================================
-   RUTAS DEL USUARIO
-========================================================= */
+const verificationFilesUpload = [
+  handleUploadErrors,
+  uploadVerificationFiles
+];
 
 router.get(
   "/me",
@@ -199,91 +313,38 @@ router.get(
   getMyVerification
 );
 
-router.put(
-  "/me/draft",
-  protect,
-  saveVerificationDraft
-);
-
 router.post(
   "/me/submit",
   protect,
-  verificationFilesUpload,
+  ...verificationFilesUpload,
   submitVerification
 );
 
 router.post(
   "/me/resubmit",
   protect,
-  verificationFilesUpload,
-  resubmitVerification
+  ...verificationFilesUpload,
+  submitVerification
 );
-
-/* =========================================================
-   SUBIDAS INDIVIDUALES
-========================================================= */
-
-router.post(
-  "/me/profile-photo",
-  protect,
-  profilePhotoUpload,
-  uploadProfilePhoto
-);
-
-router.post(
-  "/me/document-front",
-  protect,
-  documentFrontUpload,
-  uploadDocumentFront
-);
-
-router.post(
-  "/me/document-back",
-  protect,
-  documentBackUpload,
-  uploadDocumentBack
-);
-
-router.post(
-  "/me/selfie",
-  protect,
-  selfieUpload,
-  uploadSelfie
-);
-
-/* =========================================================
-   VALIDACIÓN FACIAL PERIÓDICA
-========================================================= */
 
 router.post(
   "/me/daily-check",
   protect,
-  selfieUpload,
-  dailyCheck
+  dailyCheckUnavailable
 );
-
-/* =========================================================
-   COMPATIBILIDAD CON RUTAS ANTERIORES
-========================================================= */
 
 router.post(
   "/submit",
   protect,
-  verificationFilesUpload,
+  ...verificationFilesUpload,
   submitVerification
 );
 
 router.post(
   "/daily-check",
   protect,
-  selfieUpload,
-  dailyCheck
+  dailyCheckUnavailable
 );
-
-/* =========================================================
-   BACKOFFICE
-   Las rutas específicas deben ir antes de /:id
-========================================================= */
 
 router.get(
   "/admin/stats",
@@ -309,10 +370,6 @@ router.put(
   startVerificationReview
 );
 
-/* =========================================================
-   REVISIÓN INDIVIDUAL DE CAMPOS
-========================================================= */
-
 router.put(
   "/admin/:id/fields/:field/approve",
   protect,
@@ -324,10 +381,6 @@ router.put(
   protect,
   rejectVerificationField
 );
-
-/* =========================================================
-   DECISIÓN GENERAL
-========================================================= */
 
 router.put(
   "/admin/:id/approve",
@@ -353,14 +406,10 @@ router.put(
   reopenVerification
 );
 
-/* =========================================================
-   COMPATIBILIDAD CON EL ENDPOINT ANTERIOR
-========================================================= */
-
 router.patch(
   "/:id/review",
   protect,
   reviewVerification
 );
 
-export default router;
+module.exports = router;

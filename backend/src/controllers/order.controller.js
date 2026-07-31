@@ -1,14 +1,5 @@
 const crypto = require("crypto");
-const mongoose = require("mongoose");
-
-const Order = require("../models/Order");
-const Product = require("../models/Product");
-
-const {
-  createNotification
-} = require(
-  "../services/notification.service"
-);
+const prisma = require("../utils/prisma");
 
 /*
 |--------------------------------------------------------------------------
@@ -70,59 +61,97 @@ const INTERNAL_ROLES = [
   "WAREHOUSE",
   "DELIVERY",
   "ADMIN",
-  "SENIOR_ADMIN"
+  "SENIOR_ADMIN",
+  "SUPER_ADMIN"
 ];
+
+const USER_SELECT = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  email: true,
+  trustScore: true,
+  isVerified: true,
+  role: true,
+  status: true
+};
+
+const PRODUCT_SELECT = {
+  id: true,
+  title: true,
+  description: true,
+  price: true,
+  category: true,
+  condition: true,
+  images: true,
+  imageUrl: true,
+  status: true,
+  riskLevel: true,
+  confidenceScore: true,
+  sellerId: true,
+  location: true,
+  seller: {
+    select: USER_SELECT
+  }
+};
+
+const ORDER_INCLUDE = {
+  product: {
+    select: PRODUCT_SELECT
+  },
+  buyer: {
+    select: USER_SELECT
+  },
+  seller: {
+    select: USER_SELECT
+  },
+  warehouseAgent: {
+    select: USER_SELECT
+  },
+  deliveryAgent: {
+    select: USER_SELECT
+  },
+  paymentConfirmedBy: {
+    select: USER_SELECT
+  },
+  deliveryPinVerifiedBy: {
+    select: USER_SELECT
+  },
+  cancelledBy: {
+    select: USER_SELECT
+  },
+  disputeOpenedBy: {
+    select: USER_SELECT
+  },
+  dispute: true,
+  payments: true
+};
 
 /*
 |--------------------------------------------------------------------------
-| Utilidades generales
+| Utilidades
 |--------------------------------------------------------------------------
 */
 
-const isValidObjectId = (id) => {
-  return mongoose.Types.ObjectId.isValid(
-    id
-  );
-};
+const parsePositiveInt = (value) => {
+  const parsed = Number(value);
 
-const getUserId = (req) => {
-  return (
-    req.user?._id ||
-    req.user?.id ||
-    null
-  );
-};
-
-const getUserRole = (req) => {
-  return String(
-    req.user?.role || "USER"
-  ).toUpperCase();
-};
-
-const normalizeId = (value) => {
-  if (!value) {
-    return "";
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return null;
   }
 
-  if (
-    typeof value === "string"
-  ) {
-    return value;
-  }
+  return parsed;
+};
 
-  return String(
-    value?._id ||
-    value?.id ||
-    value
-  );
+const normalizeUpper = (value, fallback = "") => {
+  return String(value || fallback)
+    .trim()
+    .toUpperCase();
 };
 
 const generateDeliveryPin = () => {
   return String(
-    crypto.randomInt(
-      100000,
-      1000000
-    )
+    crypto.randomInt(100000, 1000000)
   );
 };
 
@@ -131,11 +160,10 @@ const generateOrderCode = () => {
     .toString()
     .slice(-8);
 
-  const random =
-    crypto.randomInt(
-      100,
-      1000
-    );
+  const random = crypto.randomInt(
+    100,
+    1000
+  );
 
   return `QSM-${timestamp}-${random}`;
 };
@@ -148,7 +176,7 @@ const generateDemoTransactionId = () => {
 };
 
 const addTimelineEvent = (
-  order,
+  timeline,
   {
     status,
     description,
@@ -156,58 +184,239 @@ const addTimelineEvent = (
     metadata = {}
   }
 ) => {
-  if (
-    !Array.isArray(order.timeline)
-  ) {
-    order.timeline = [];
-  }
+  const safeTimeline = Array.isArray(timeline)
+    ? [...timeline]
+    : [];
 
-  order.timeline.push({
+  safeTimeline.push({
     status,
     description,
     createdBy,
     metadata,
-    createdAt: new Date()
+    createdAt: new Date().toISOString()
+  });
+
+  return safeTimeline;
+};
+
+/*
+|--------------------------------------------------------------------------
+| Puente temporal MongoDB Auth -> Prisma/Supabase
+|--------------------------------------------------------------------------
+*/
+
+const resolvePrismaUser = async (req) => {
+  const possibleIds = [
+    req.user?.id,
+    req.user?.userId,
+    req.user?._id
+  ];
+
+  for (const possibleId of possibleIds) {
+    const numericId = parsePositiveInt(
+      possibleId
+    );
+
+    if (numericId) {
+      const userById =
+        await prisma.user.findUnique({
+          where: {
+            id: numericId
+          }
+        });
+
+      if (userById) {
+        return userById;
+      }
+    }
+  }
+
+  const email = String(
+    req.user?.email || ""
+  )
+    .trim()
+    .toLowerCase();
+
+  if (!email) {
+    return null;
+  }
+
+  return prisma.user.findUnique({
+    where: {
+      email
+    }
+  });
+};
+
+const getRequestRole = (
+  req,
+  prismaUser
+) => {
+  return normalizeUpper(
+    req.user?.role ||
+    prismaUser?.role ||
+    "USER",
+    "USER"
+  );
+};
+
+/*
+|--------------------------------------------------------------------------
+| Serialización compatible con el frontend anterior
+|--------------------------------------------------------------------------
+*/
+
+const serializeUser = (user) => {
+  if (!user) {
+    return null;
+  }
+
+  return {
+    ...user,
+    _id: String(user.id)
+  };
+};
+
+const serializeProduct = (product) => {
+  if (!product) {
+    return null;
+  }
+
+  return {
+    ...product,
+    _id: String(product.id),
+    seller: serializeUser(
+      product.seller
+    )
+  };
+};
+
+const serializePayment = (payment) => {
+  if (!payment) {
+    return null;
+  }
+
+  return {
+    ...payment,
+    _id: String(payment.id),
+    order: String(payment.orderId),
+    buyer: String(payment.buyerId),
+    seller: String(payment.sellerId)
+  };
+};
+
+const serializeDispute = (dispute) => {
+  if (!dispute) {
+    return null;
+  }
+
+  return {
+    ...dispute,
+    _id: String(dispute.id),
+    order: String(dispute.orderId)
+  };
+};
+
+const serializeOrder = (order) => {
+  if (!order) {
+    return null;
+  }
+
+  return {
+    ...order,
+    _id: String(order.id),
+
+    product: order.product
+      ? serializeProduct(order.product)
+      : String(order.productId),
+
+    buyer: order.buyer
+      ? serializeUser(order.buyer)
+      : String(order.buyerId),
+
+    seller: order.seller
+      ? serializeUser(order.seller)
+      : String(order.sellerId),
+
+    warehouseAgent:
+      serializeUser(
+        order.warehouseAgent
+      ),
+
+    deliveryAgent:
+      serializeUser(
+        order.deliveryAgent
+      ),
+
+    paymentConfirmedBy:
+      serializeUser(
+        order.paymentConfirmedBy
+      ),
+
+    deliveryPinVerifiedBy:
+      serializeUser(
+        order.deliveryPinVerifiedBy
+      ),
+
+    cancelledBy:
+      serializeUser(
+        order.cancelledBy
+      ),
+
+    disputeOpenedBy:
+      serializeUser(
+        order.disputeOpenedBy
+      ),
+
+    dispute:
+      serializeDispute(
+        order.dispute
+      ),
+
+    payments:
+      Array.isArray(order.payments)
+        ? order.payments.map(
+            serializePayment
+          )
+        : [],
+
+    timeline:
+      Array.isArray(order.timeline)
+        ? order.timeline
+        : []
+  };
+};
+
+/*
+|--------------------------------------------------------------------------
+| Consulta completa de una orden
+|--------------------------------------------------------------------------
+*/
+
+const getOrderRecord = async (
+  orderId,
+  client = prisma
+) => {
+  return client.order.findUnique({
+    where: {
+      id: orderId
+    },
+    include: ORDER_INCLUDE
   });
 };
 
 /*
 |--------------------------------------------------------------------------
-| Permisos de la orden
+| Permisos
 |--------------------------------------------------------------------------
 */
 
 const getOrderPermissions = (
   order,
-  req
+  prismaUser,
+  role
 ) => {
-  const userId =
-    normalizeId(
-      getUserId(req)
-    );
-
-  const role =
-    getUserRole(req);
-
-  const buyerId =
-    normalizeId(
-      order?.buyer
-    );
-
-  const sellerId =
-    normalizeId(
-      order?.seller
-    );
-
-  const warehouseAgentId =
-    normalizeId(
-      order?.warehouseAgent
-    );
-
-  const deliveryAgentId =
-    normalizeId(
-      order?.deliveryAgent
-    );
+  const userId = prismaUser?.id || null;
 
   return {
     userId,
@@ -215,35 +424,35 @@ const getOrderPermissions = (
 
     isBuyer:
       Boolean(userId) &&
-      buyerId === userId,
+      order.buyerId === userId,
 
     isSeller:
       Boolean(userId) &&
-      sellerId === userId,
+      order.sellerId === userId,
 
     isWarehouseAgent:
       Boolean(userId) &&
-      warehouseAgentId === userId,
+      order.warehouseAgentId === userId,
 
     isDeliveryAgent:
       Boolean(userId) &&
-      deliveryAgentId === userId,
+      order.deliveryAgentId === userId,
 
     isInternal:
-      INTERNAL_ROLES.includes(
-        role
-      )
+      INTERNAL_ROLES.includes(role)
   };
 };
 
 const canAccessOrder = (
   order,
-  req
+  prismaUser,
+  role
 ) => {
   const permissions =
     getOrderPermissions(
       order,
-      req
+      prismaUser,
+      role
     );
 
   return (
@@ -257,89 +466,15 @@ const canAccessOrder = (
 
 /*
 |--------------------------------------------------------------------------
-| Consulta poblada de una orden
-|--------------------------------------------------------------------------
-*/
-
-const populateOrder = async (
-  orderId
-) => {
-  return Order.findById(orderId)
-    .populate(
-      "product",
-      [
-        "title",
-        "description",
-        "price",
-        "category",
-        "condition",
-        "images",
-        "status",
-        "riskLevel",
-        "confidenceScore",
-        "seller",
-        "location"
-      ].join(" ")
-    )
-    .populate(
-      "buyer",
-      [
-        "firstName",
-        "lastName",
-        "email",
-        "trustScore",
-        "isVerified",
-        "role"
-      ].join(" ")
-    )
-    .populate(
-      "seller",
-      [
-        "firstName",
-        "lastName",
-        "email",
-        "trustScore",
-        "isVerified",
-        "role"
-      ].join(" ")
-    )
-    .populate(
-      "warehouseAgent",
-      "firstName lastName email role"
-    )
-    .populate(
-      "deliveryAgent",
-      "firstName lastName email role"
-    )
-    .populate(
-      "paymentConfirmedBy",
-      "firstName lastName email role"
-    )
-    .populate(
-      "deliveryPinVerifiedBy",
-      "firstName lastName email role"
-    )
-    .populate(
-      "cancelledBy",
-      "firstName lastName email role"
-    )
-    .populate(
-      "disputeOpenedBy",
-      "firstName lastName email role"
-    )
-    .populate(
-      "timeline.createdBy",
-      "firstName lastName email role"
-    );
-};
-
-/*
-|--------------------------------------------------------------------------
 | Voucher
 |--------------------------------------------------------------------------
 */
 
-const buildVoucher = (order) => {
+const buildVoucher = (rawOrder) => {
+  const order = serializeOrder(
+    rawOrder
+  );
+
   const product =
     order?.product || {};
 
@@ -361,7 +496,7 @@ const buildVoucher = (order) => {
       id:
         product?._id ||
         product?.id ||
-        order?.product ||
+        order?.productId ||
         "",
 
       title:
@@ -380,26 +515,25 @@ const buildVoucher = (order) => {
         product?.condition ||
         "",
 
-      price:
-        Number(
-          product?.price ||
-          order?.price ||
-          0
-        ),
+      price: Number(
+        product?.price ||
+        order?.price ||
+        0
+      ),
 
       images:
-        Array.isArray(
-          product?.images
-        )
+        Array.isArray(product?.images)
           ? product.images
           : []
     },
 
     buyer:
-      order?.buyer || null,
+      order?.buyer ||
+      null,
 
     seller:
-      order?.seller || null,
+      order?.seller ||
+      null,
 
     paymentMethod:
       order?.paymentMethod ||
@@ -425,46 +559,33 @@ const buildVoucher = (order) => {
       order?.warehouseStatus ||
       "NOT_REQUIRED",
 
-    subtotal:
-      Number(
-        order?.price || 0
-      ),
+    subtotal: Number(
+      order?.price || 0
+    ),
 
-    protectionFee:
-      Number(
-        order?.protectionFee ||
-        0
-      ),
+    protectionFee: Number(
+      order?.protectionFee || 0
+    ),
 
-    shippingFee:
-      Number(
-        order?.shippingFee ||
-        0
-      ),
+    shippingFee: Number(
+      order?.shippingFee || 0
+    ),
 
-    totalAmount:
-      Number(
-        order?.totalAmount ||
-        0
-      ),
+    totalAmount: Number(
+      order?.totalAmount || 0
+    ),
 
-    depositPercentage:
-      Number(
-        order?.depositPercentage ||
-        0
-      ),
+    depositPercentage: Number(
+      order?.depositPercentage || 0
+    ),
 
-    depositAmount:
-      Number(
-        order?.depositAmount ||
-        0
-      ),
+    depositAmount: Number(
+      order?.depositAmount || 0
+    ),
 
-    remainingAmount:
-      Number(
-        order?.remainingAmount ||
-        0
-      ),
+    remainingAmount: Number(
+      order?.remainingAmount || 0
+    ),
 
     depositStatus:
       order?.depositStatus ||
@@ -486,35 +607,80 @@ const buildVoucher = (order) => {
 
 /*
 |--------------------------------------------------------------------------
-| Notificaciones seguras
+| Notificaciones en Prisma/Supabase
 |--------------------------------------------------------------------------
 */
 
-const sendNotificationSafe =
-  async (
-    userId,
-    type,
-    title,
-    message
-  ) => {
-    try {
-      if (!userId) {
-        return;
-      }
-
-      await createNotification(
-        userId,
-        type,
-        title,
-        message
-      );
-    } catch (error) {
-      console.error(
-        `Error enviando notificación ${type}:`,
-        error.message
-      );
+const createNotificationSafe = async (
+  client,
+  userId,
+  type,
+  title,
+  message
+) => {
+  try {
+    if (!userId) {
+      return;
     }
-  };
+
+    await client.notification.create({
+      data: {
+        userId,
+        title,
+        message:
+          type
+            ? `[${type}] ${message}`
+            : message,
+        read: false
+      }
+    });
+  } catch (error) {
+    console.error(
+      `Error enviando notificación ${type}:`,
+      error.message
+    );
+  }
+};
+
+/*
+|--------------------------------------------------------------------------
+| Manejo de errores
+|--------------------------------------------------------------------------
+*/
+
+const handleError = (
+  res,
+  error,
+  message
+) => {
+  console.error(message, error);
+
+  if (error?.code === "P2002") {
+    return res.status(409).json({
+      success: false,
+      message:
+        "Ya existe un registro con uno de los valores únicos enviados."
+    });
+  }
+
+  if (error?.code === "P2025") {
+    return res.status(404).json({
+      success: false,
+      message:
+        "El registro solicitado no fue encontrado."
+    });
+  }
+
+  return res.status(500).json({
+    success: false,
+    message,
+    error:
+      process.env.NODE_ENV ===
+      "production"
+        ? undefined
+        : error.message
+  });
+};
 
 /*
 |--------------------------------------------------------------------------
@@ -526,10 +692,6 @@ const createOrder = async (
   req,
   res
 ) => {
-  let createdOrderId = null;
-  let productIdForRollback = null;
-  let originalProductStatus = null;
-
   try {
     const {
       productId,
@@ -550,30 +712,21 @@ const createOrder = async (
       useDeposit = false
     } = req.body || {};
 
-    const userId =
-      getUserId(req);
+    const prismaUser =
+      await resolvePrismaUser(req);
 
-    if (!userId) {
+    if (!prismaUser) {
       return res.status(401).json({
         success: false,
         message:
-          "Debes iniciar sesión para realizar una compra."
+          "Tu usuario autenticado todavía no existe en Supabase."
       });
     }
 
-    if (!productId) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "El identificador del producto es obligatorio."
-      });
-    }
+    const numericProductId =
+      parsePositiveInt(productId);
 
-    if (
-      !isValidObjectId(
-        productId
-      )
-    ) {
+    if (!numericProductId) {
       return res.status(400).json({
         success: false,
         message:
@@ -581,9 +734,15 @@ const createOrder = async (
       });
     }
 
+    const normalizedPaymentMethod =
+      normalizeUpper(paymentMethod);
+
+    const normalizedDeliveryMethod =
+      normalizeUpper(deliveryMethod);
+
     if (
       !PAYMENT_METHODS.includes(
-        paymentMethod
+        normalizedPaymentMethod
       )
     ) {
       return res.status(400).json({
@@ -595,7 +754,7 @@ const createOrder = async (
 
     if (
       !DELIVERY_METHODS.includes(
-        deliveryMethod
+        normalizedDeliveryMethod
       )
     ) {
       return res.status(400).json({
@@ -606,11 +765,9 @@ const createOrder = async (
     }
 
     if (
-      paymentMethod ===
+      normalizedPaymentMethod ===
         "BANK_TRANSFER" &&
-      !String(
-        bankName
-      ).trim()
+      !String(bankName).trim()
     ) {
       return res.status(400).json({
         success: false,
@@ -620,7 +777,8 @@ const createOrder = async (
     }
 
     if (
-      paymentMethod === "CARD" &&
+      normalizedPaymentMethod ===
+        "CARD" &&
       cardLast4 &&
       !/^\d{4}$/.test(
         String(cardLast4)
@@ -634,9 +792,16 @@ const createOrder = async (
     }
 
     const product =
-      await Product.findById(
-        productId
-      );
+      await prisma.product.findUnique({
+        where: {
+          id: numericProductId
+        },
+        include: {
+          seller: {
+            select: USER_SELECT
+          }
+        }
+      });
 
     if (!product) {
       return res.status(404).json({
@@ -646,13 +811,7 @@ const createOrder = async (
       });
     }
 
-    productIdForRollback =
-      product._id;
-
-    originalProductStatus =
-      product.status;
-
-    if (!product.seller) {
+    if (!product.sellerId) {
       return res.status(400).json({
         success: false,
         message:
@@ -661,10 +820,8 @@ const createOrder = async (
     }
 
     if (
-      normalizeId(
-        product.seller
-      ) ===
-      normalizeId(userId)
+      product.sellerId ===
+      prismaUser.id
     ) {
       return res.status(400).json({
         success: false,
@@ -673,74 +830,51 @@ const createOrder = async (
       });
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Recuperar una compra existente del mismo comprador
-    |--------------------------------------------------------------------------
-    */
-
     const ownExistingOrder =
-      await Order.findOne({
-        product:
-          product._id,
-
-        buyer:
-          userId,
-
-        status: {
-          $in:
-            ACTIVE_ORDER_STATUSES
-        }
-      }).sort({
-        createdAt: -1
+      await prisma.order.findFirst({
+        where: {
+          productId: numericProductId,
+          buyerId: prismaUser.id,
+          status: {
+            in: ACTIVE_ORDER_STATUSES
+          }
+        },
+        orderBy: {
+          createdAt: "desc"
+        },
+        include: ORDER_INCLUDE
       });
 
     if (ownExistingOrder) {
-      const populatedExisting =
-        await populateOrder(
-          ownExistingOrder._id
-        );
-
-      const finalExistingOrder =
-        populatedExisting ||
-        ownExistingOrder;
-
       return res.status(200).json({
         success: true,
-
         recovered: true,
-
         message:
           "La compra ya existía. Se recuperó el voucher correctamente.",
-
         voucher:
           buildVoucher(
-            finalExistingOrder
+            ownExistingOrder
           ),
-
         order:
-          finalExistingOrder
+          serializeOrder(
+            ownExistingOrder
+          )
       });
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Impedir una segunda compra activa de otro comprador
-    |--------------------------------------------------------------------------
-    */
-
     const otherExistingOrder =
-      await Order.findOne({
-        product:
-          product._id,
-
-        buyer: {
-          $ne: userId
+      await prisma.order.findFirst({
+        where: {
+          productId: numericProductId,
+          buyerId: {
+            not: prismaUser.id
+          },
+          status: {
+            in: ACTIVE_ORDER_STATUSES
+          }
         },
-
-        status: {
-          $in:
-            ACTIVE_ORDER_STATUSES
+        select: {
+          id: true
         }
       });
 
@@ -753,9 +887,7 @@ const createOrder = async (
     }
 
     if (
-      String(
-        product.status || ""
-      ).toUpperCase() !==
+      normalizeUpper(product.status) !==
       "ACTIVE"
     ) {
       return res.status(409).json({
@@ -765,10 +897,9 @@ const createOrder = async (
       });
     }
 
-    const price =
-      Number(
-        product.price || 0
-      );
+    const price = Number(
+      product.price || 0
+    );
 
     if (
       !Number.isFinite(price) ||
@@ -792,43 +923,74 @@ const createOrder = async (
       useDeposit === "true"
         ? 3
         : 0;
-            const protectionFee = 0;
+
+    const protectionFee = 0;
 
     const shippingFee =
-      deliveryMethod ===
+      normalizedDeliveryMethod ===
       "QSM_VERIFIED_DELIVERY"
         ? 500
         : 0;
 
+    const totalAmount =
+      price +
+      protectionFee +
+      shippingFee;
+
+    const depositAmount =
+      depositPercentage > 0
+        ? price *
+          (depositPercentage / 100)
+        : 0;
+
+    const remainingAmount =
+      Math.max(
+        price - depositAmount,
+        0
+      );
+
     let paymentStatus = "PENDING";
     let escrowStatus = "NOT_FUNDED";
 
-    switch (paymentMethod) {
+    switch (
+      normalizedPaymentMethod
+    ) {
       case "BANK_TRANSFER":
-        paymentStatus = "PENDING_PROOF";
-        escrowStatus = "PENDING";
+        paymentStatus =
+          "PENDING_PROOF";
+        escrowStatus =
+          "PENDING";
         break;
 
       case "CARD":
-        paymentStatus = "DEMO_AUTHORIZED";
-        escrowStatus = "HELD";
+        paymentStatus =
+          "DEMO_AUTHORIZED";
+        escrowStatus =
+          "HELD";
         break;
 
       case "CASH_ON_DELIVERY":
       default:
-        paymentStatus = "PENDING_DELIVERY";
-        escrowStatus = "NOT_FUNDED";
+        paymentStatus =
+          "PENDING_DELIVERY";
+        escrowStatus =
+          "NOT_FUNDED";
         break;
     }
 
-    let warehouseStatus = "NOT_REQUIRED";
-    let deliveryStatus = "PENDING";
-    let initialStatus = "WAITING_SELLER";
+    let warehouseStatus =
+      "NOT_REQUIRED";
 
-    switch (deliveryMethod) {
+    let deliveryStatus =
+      "PENDING";
 
+    let initialStatus =
+      "WAITING_SELLER";
+
+    switch (
+      normalizedDeliveryMethod
+    ) {
       case "QSM_WAREHOUSE":
-
         warehouseStatus =
           "WAITING_FOR_SELLER";
 
@@ -836,15 +998,13 @@ const createOrder = async (
           "WAITING_FOR_SELLER";
 
         initialStatus =
-          paymentMethod ===
+          normalizedPaymentMethod ===
           "BANK_TRANSFER"
             ? "WAITING_PAYMENT"
             : "WAITING_WAREHOUSE";
-
         break;
 
       case "QSM_VERIFIED_DELIVERY":
-
         warehouseStatus =
           "NOT_REQUIRED";
 
@@ -852,15 +1012,13 @@ const createOrder = async (
           "PICKUP_REQUESTED";
 
         initialStatus =
-          paymentMethod ===
+          normalizedPaymentMethod ===
           "BANK_TRANSFER"
             ? "WAITING_PAYMENT"
             : "WAITING_SELLER";
-
         break;
 
       default:
-
         warehouseStatus =
           "NOT_REQUIRED";
 
@@ -868,479 +1026,350 @@ const createOrder = async (
           "WAITING_FOR_SELLER";
 
         initialStatus =
-          paymentMethod ===
+          normalizedPaymentMethod ===
           "BANK_TRANSFER"
             ? "WAITING_PAYMENT"
             : "WAITING_SELLER";
     }
 
-    const timeline = [];
+    let timeline = [];
 
-    addTimelineEvent(order = { timeline }, {
-      status: "ORDER_CREATED",
-      description:
-        "La compra protegida fue creada correctamente.",
-      createdBy: userId,
-      metadata: {
-        paymentMethod,
-        deliveryMethod
+    timeline = addTimelineEvent(
+      timeline,
+      {
+        status:
+          "ORDER_CREATED",
+        description:
+          "La compra protegida fue creada correctamente.",
+        createdBy:
+          prismaUser.id,
+        metadata: {
+          paymentMethod:
+            normalizedPaymentMethod,
+          deliveryMethod:
+            normalizedDeliveryMethod
+        }
       }
-    });
+    );
 
-    addTimelineEvent(order = { timeline }, {
-      status: "PIN_GENERATED",
-      description:
-        "Se generó el PIN único de entrega.",
-      createdBy: userId
-    });
+    timeline = addTimelineEvent(
+      timeline,
+      {
+        status:
+          "PIN_GENERATED",
+        description:
+          "Se generó el PIN único de entrega.",
+        createdBy:
+          prismaUser.id
+      }
+    );
 
-    if (paymentMethod === "CARD") {
-
-      addTimelineEvent(
-        { timeline },
+    if (
+      normalizedPaymentMethod ===
+      "CARD"
+    ) {
+      timeline = addTimelineEvent(
+        timeline,
         {
           status:
             "CARD_DEMO_AUTHORIZED",
-
           description:
             "Pago autorizado en modo demostración.",
-
           createdBy:
-            userId
+            prismaUser.id
         }
       );
-
     }
 
     if (
-      paymentMethod ===
+      normalizedPaymentMethod ===
       "BANK_TRANSFER"
     ) {
-
-      addTimelineEvent(
-        { timeline },
+      timeline = addTimelineEvent(
+        timeline,
         {
           status:
             "WAITING_TRANSFER_CONFIRMATION",
-
           description:
             "La transferencia será confirmada durante la entrega.",
-
           createdBy:
-            userId,
-
+            prismaUser.id,
           metadata: {
-            bankName
+            bankName:
+              String(bankName).trim()
           }
         }
       );
-
     }
 
     if (
-      paymentMethod ===
+      normalizedPaymentMethod ===
       "CASH_ON_DELIVERY"
     ) {
-
-      addTimelineEvent(
-        { timeline },
+      timeline = addTimelineEvent(
+        timeline,
         {
           status:
             "WAITING_CASH_PAYMENT",
-
           description:
             "El efectivo será entregado durante la entrega.",
-
           createdBy:
-            userId
+            prismaUser.id
         }
       );
-
     }
 
     if (
-      deliveryMethod ===
+      normalizedDeliveryMethod ===
       "QSM_WAREHOUSE"
     ) {
-
-      addTimelineEvent(
-        { timeline },
+      timeline = addTimelineEvent(
+        timeline,
         {
           status:
             "WAITING_FOR_SELLER",
-
           description:
             "Esperando que el vendedor entregue el producto al almacén QSM.",
-
           createdBy:
-            userId
+            prismaUser.id
         }
       );
-
     }
 
     if (
-      deliveryMethod ===
+      normalizedDeliveryMethod ===
       "QSM_VERIFIED_DELIVERY"
     ) {
-
-      addTimelineEvent(
-        { timeline },
+      timeline = addTimelineEvent(
+        timeline,
         {
           status:
             "PICKUP_REQUESTED",
-
           description:
             "Se solicitó un Delivery QSM verificado.",
-
           createdBy:
-            userId
+            prismaUser.id
+        }
+      );
+    }
+
+    const createdOrderId =
+      await prisma.$transaction(
+        async (tx) => {
+          const createdOrder =
+            await tx.order.create({
+              data: {
+                orderCode,
+                productId:
+                  numericProductId,
+                buyerId:
+                  prismaUser.id,
+                sellerId:
+                  product.sellerId,
+
+                price,
+                protectionFee,
+                shippingFee,
+                totalAmount,
+                reserveFee: 0,
+
+                depositPercentage,
+                depositAmount,
+                remainingAmount,
+                depositStatus:
+                  depositPercentage > 0
+                    ? "PENDING"
+                    : "NOT_REQUIRED",
+
+                status:
+                  initialStatus,
+
+                paymentMethod:
+                  normalizedPaymentMethod,
+                paymentStatus,
+                escrowStatus,
+
+                deliveryMethod:
+                  normalizedDeliveryMethod,
+                deliveryStatus,
+                warehouseStatus,
+
+                bankName:
+                  normalizedPaymentMethod ===
+                  "BANK_TRANSFER"
+                    ? String(
+                        bankName
+                      ).trim()
+                    : "",
+
+                transferReference:
+                  normalizedPaymentMethod ===
+                  "BANK_TRANSFER"
+                    ? String(
+                        transferReference
+                      ).trim()
+                    : "",
+
+                cardBrand:
+                  normalizedPaymentMethod ===
+                  "CARD"
+                    ? String(
+                        cardBrand
+                      ).trim()
+                    : "",
+
+                cardLast4:
+                  normalizedPaymentMethod ===
+                  "CARD"
+                    ? String(
+                        cardLast4
+                      ).trim()
+                    : "",
+
+                paymentTransactionId:
+                  normalizedPaymentMethod ===
+                  "CARD"
+                    ? generateDemoTransactionId()
+                    : "",
+
+                pickupAddress:
+                  String(
+                    pickupAddress
+                  ).trim(),
+
+                deliveryAddress:
+                  String(
+                    deliveryAddress
+                  ).trim(),
+
+                buyerNotes:
+                  String(
+                    buyerNotes
+                  ).trim(),
+
+                deliveryPin,
+                timeline
+              }
+            });
+
+          await tx.product.update({
+            where: {
+              id: numericProductId
+            },
+            data: {
+              status: "SOLD"
+            }
+          });
+
+          const sellerMessage =
+            normalizedDeliveryMethod ===
+            "QSM_WAREHOUSE"
+              ? `Tu producto "${product.title}" fue comprado. Debes prepararlo y entregarlo en el almacén QSM.`
+              : normalizedDeliveryMethod ===
+                "QSM_VERIFIED_DELIVERY"
+              ? `Tu producto "${product.title}" fue comprado. Se solicitó un Delivery QSM verificado para recogerlo.`
+              : `Tu producto "${product.title}" fue comprado. Debes coordinar la entrega con el comprador.`;
+
+          let buyerMessage =
+            `Tu compra protegida de "${product.title}" fue creada correctamente. ` +
+            `Código de orden: ${orderCode}. ` +
+            `Tu PIN de entrega es ${deliveryPin}.`;
+
+          if (
+            normalizedPaymentMethod ===
+            "BANK_TRANSFER"
+          ) {
+            buyerMessage +=
+              " La transferencia será validada durante la entrega.";
+          }
+
+          if (
+            normalizedPaymentMethod ===
+            "CASH_ON_DELIVERY"
+          ) {
+            buyerMessage +=
+              " El pago en efectivo será confirmado durante la entrega.";
+          }
+
+          if (
+            normalizedPaymentMethod ===
+            "CARD"
+          ) {
+            buyerMessage +=
+              " El pago con tarjeta fue autorizado en modo demostración.";
+          }
+
+          await createNotificationSafe(
+            tx,
+            product.sellerId,
+            "PRODUCT_SOLD",
+            "Nueva venta en QSM",
+            sellerMessage
+          );
+
+          await createNotificationSafe(
+            tx,
+            prismaUser.id,
+            "ORDER_CREATED",
+            "Compra protegida creada",
+            buyerMessage
+          );
+
+          return createdOrder.id;
+        },
+        {
+          maxWait: 20000,
+          timeout: 60000
         }
       );
 
-    }
-
-    const order = new Order({
-
-      orderCode,
-
-      product:
-        product._id,
-
-      buyer:
-        userId,
-
-      seller:
-        product.seller,
-
-      price,
-
-      protectionFee,
-
-      shippingFee,
-
-      depositPercentage,
-
-      status:
-        initialStatus,
-
-      paymentMethod,
-
-      paymentStatus,
-
-      escrowStatus,
-
-      deliveryMethod,
-
-      warehouseStatus,
-
-      deliveryStatus,
-
-      bankName:
-        paymentMethod ===
-        "BANK_TRANSFER"
-          ? bankName.trim()
-          : "",
-
-      transferReference:
-        paymentMethod ===
-        "BANK_TRANSFER"
-          ? transferReference.trim()
-          : "",
-
-      cardBrand:
-        paymentMethod ===
-        "CARD"
-          ? cardBrand.trim()
-          : "",
-
-      cardLast4:
-        paymentMethod ===
-        "CARD"
-          ? cardLast4.trim()
-          : "",
-
-      paymentTransactionId:
-        paymentMethod ===
-        "CARD"
-          ? generateDemoTransactionId()
-          : "",
-
-      pickupAddress,
-
-      deliveryAddress,
-
-      buyerNotes,
-
-      deliveryPin,
-
-      timeline
-    });
-
-    await order.validate();
-
-    await order.save();
-
-    createdOrderId =
-      order._id;
-
-    product.status = "SOLD";
-
-    await product.save();
-        const sellerMessage =
-      deliveryMethod ===
-      "QSM_WAREHOUSE"
-        ? `Tu producto "${product.title}" fue comprado. Debes prepararlo y entregarlo en el almacén QSM.`
-        : deliveryMethod ===
-          "QSM_VERIFIED_DELIVERY"
-        ? `Tu producto "${product.title}" fue comprado. Se solicitó un Delivery QSM verificado para recogerlo.`
-        : `Tu producto "${product.title}" fue comprado. Debes coordinar la entrega con el comprador.`;
-
-    let buyerMessage =
-      `Tu compra protegida de "${product.title}" fue creada correctamente. ` +
-      `Código de orden: ${orderCode}. ` +
-      `Tu PIN de entrega es ${deliveryPin}.`;
-
-    if (
-      paymentMethod ===
-      "BANK_TRANSFER"
-    ) {
-      buyerMessage +=
-        " La transferencia será validada durante la entrega.";
-    }
-
-    if (
-      paymentMethod ===
-      "CASH_ON_DELIVERY"
-    ) {
-      buyerMessage +=
-        " El pago en efectivo será confirmado durante la entrega.";
-    }
-
-    if (
-      paymentMethod === "CARD"
-    ) {
-      buyerMessage +=
-        " El pago con tarjeta fue autorizado en modo demostración.";
-    }
-
-    await sendNotificationSafe(
-      product.seller,
-      "PRODUCT_SOLD",
-      "Nueva venta en QSM",
-      sellerMessage
-    );
-
-    await sendNotificationSafe(
-      userId,
-      "ORDER_CREATED",
-      "Compra protegida creada",
-      buyerMessage
-    );
-
-    const populatedOrder =
-      await populateOrder(
-        order._id
-      );
-
     const finalOrder =
-      populatedOrder || order;
+      await getOrderRecord(
+        createdOrderId
+      );
 
     return res.status(201).json({
       success: true,
-
       recovered: false,
-
       message:
         "Compra protegida creada correctamente.",
-
       voucher:
         buildVoucher(
           finalOrder
         ),
-
       order:
-        finalOrder
+        serializeOrder(
+          finalOrder
+        )
     });
   } catch (error) {
-    console.error(
-      "ERROR COMPLETO CREANDO ORDEN:",
-      error
+    return handleError(
+      res,
+      error,
+      "No se pudo crear la compra protegida."
     );
-
-    /*
-    |--------------------------------------------------------------------------
-    | Rollback de la orden
-    |--------------------------------------------------------------------------
-    | Si la orden llegó a guardarse, pero algo falló después, se elimina para
-    | evitar órdenes incompletas.
-    |--------------------------------------------------------------------------
-    */
-
-    if (createdOrderId) {
-      try {
-        await Order.findByIdAndDelete(
-          createdOrderId
-        );
-      } catch (rollbackOrderError) {
-        console.error(
-          "No se pudo eliminar la orden incompleta:",
-          rollbackOrderError.message
-        );
-      }
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Rollback del producto
-    |--------------------------------------------------------------------------
-    | Restaura el estado que tenía el producto antes de intentar la compra.
-    |--------------------------------------------------------------------------
-    */
-
-    if (
-      productIdForRollback &&
-      originalProductStatus
-    ) {
-      try {
-        await Product.findByIdAndUpdate(
-          productIdForRollback,
-          {
-            status:
-              originalProductStatus
-          }
-        );
-      } catch (
-        rollbackProductError
-      ) {
-        console.error(
-          "No se pudo restaurar el producto:",
-          rollbackProductError.message
-        );
-      }
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Conflicto de índice único
-    |--------------------------------------------------------------------------
-    */
-
-    if (error.code === 11000) {
-      const duplicatedField =
-        Object.keys(
-          error.keyPattern || {}
-        )[0] ||
-        "dato único";
-
-      return res.status(409).json({
-        success: false,
-
-        message:
-          duplicatedField ===
-          "orderCode"
-            ? "No se pudo generar un código único para la orden. Intenta nuevamente."
-            : `Ya existe una orden con ese ${duplicatedField}.`,
-
-        error:
-          process.env.NODE_ENV ===
-          "production"
-            ? undefined
-            : error.message
-      });
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Errores de validación de Mongoose
-    |--------------------------------------------------------------------------
-    */
-
-    if (
-      error.name ===
-      "ValidationError"
-    ) {
-      const validationErrors =
-        Object.values(
-          error.errors || {}
-        ).map((item) => ({
-          field:
-            item.path,
-
-          message:
-            item.message,
-
-          value:
-            item.value
-        }));
-
-      return res.status(400).json({
-        success: false,
-
-        message:
-          validationErrors[0]
-            ?.message ||
-          "La orden contiene datos no válidos.",
-
-        errors:
-          process.env.NODE_ENV ===
-          "production"
-            ? undefined
-            : validationErrors
-      });
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | ObjectId inválido
-    |--------------------------------------------------------------------------
-    */
-
-    if (
-      error.name ===
-      "CastError"
-    ) {
-      return res.status(400).json({
-        success: false,
-
-        message:
-          "Uno de los identificadores enviados no es válido.",
-
-        error:
-          process.env.NODE_ENV ===
-          "production"
-            ? undefined
-            : error.message
-      });
-    }
-
-    return res.status(500).json({
-      success: false,
-
-      message:
-        "No se pudo crear la compra protegida.",
-
-      error:
-        process.env.NODE_ENV ===
-        "production"
-          ? undefined
-          : error.message
-    });
   }
 };
+
+/*
+|--------------------------------------------------------------------------
+| Obtener compras y ventas
+|--------------------------------------------------------------------------
+*/
+
 const getMyOrders = async (
   req,
   res
 ) => {
   try {
-    const userId =
-      getUserId(req);
+    const prismaUser =
+      await resolvePrismaUser(req);
 
-    if (!userId) {
+    if (!prismaUser) {
       return res.status(401).json({
         success: false,
         message:
-          "Debes iniciar sesión para consultar tus órdenes."
+          "Tu usuario autenticado todavía no existe en Supabase."
       });
     }
 
@@ -1350,30 +1379,34 @@ const getMyOrders = async (
       limit = 100
     } = req.query || {};
 
-    const query = {};
+    const where = {};
 
     if (type === "buy") {
-      query.buyer = userId;
+      where.buyerId =
+        prismaUser.id;
     } else if (type === "sell") {
-      query.seller = userId;
+      where.sellerId =
+        prismaUser.id;
     } else {
-      query.$or = [
+      where.OR = [
         {
-          buyer: userId
+          buyerId:
+            prismaUser.id
         },
         {
-          seller: userId
+          sellerId:
+            prismaUser.id
         }
       ];
     }
 
     if (
       status &&
-      String(status).toUpperCase() !==
-        "ALL"
+      normalizeUpper(status) !==
+      "ALL"
     ) {
-      query.status =
-        String(status).toUpperCase();
+      where.status =
+        normalizeUpper(status);
     }
 
     const safeLimit = Math.min(
@@ -1384,114 +1417,57 @@ const getMyOrders = async (
       200
     );
 
+    const records =
+      await prisma.order.findMany({
+        where,
+        include: ORDER_INCLUDE,
+        orderBy: {
+          createdAt: "desc"
+        },
+        take: safeLimit
+      });
+
     const orders =
-      await Order.find(query)
-        .populate(
-          "product",
-          [
-            "title",
-            "description",
-            "price",
-            "category",
-            "condition",
-            "images",
-            "status",
-            "riskLevel",
-            "confidenceScore",
-            "location"
-          ].join(" ")
-        )
-        .populate(
-          "buyer",
-          [
-            "firstName",
-            "lastName",
-            "email",
-            "trustScore",
-            "isVerified",
-            "role"
-          ].join(" ")
-        )
-        .populate(
-          "seller",
-          [
-            "firstName",
-            "lastName",
-            "email",
-            "trustScore",
-            "isVerified",
-            "role"
-          ].join(" ")
-        )
-        .populate(
-          "warehouseAgent",
-          "firstName lastName email role"
-        )
-        .populate(
-          "deliveryAgent",
-          "firstName lastName email role"
-        )
-        .sort({
-          createdAt: -1
-        })
-        .limit(safeLimit);
+      records.map(
+        serializeOrder
+      );
 
     const purchases =
-      orders.filter(
+      records.filter(
         (order) =>
-          normalizeId(
-            order?.buyer
-          ) ===
-          normalizeId(userId)
+          order.buyerId ===
+          prismaUser.id
       );
 
     const sales =
-      orders.filter(
+      records.filter(
         (order) =>
-          normalizeId(
-            order?.seller
-          ) ===
-          normalizeId(userId)
+          order.sellerId ===
+          prismaUser.id
       );
 
     return res.status(200).json({
       success: true,
-
       count:
         orders.length,
-
       purchaseCount:
         purchases.length,
-
       salesCount:
         sales.length,
-
       orders
     });
   } catch (error) {
-    console.error(
-      "Error obteniendo órdenes:",
-      error
+    return handleError(
+      res,
+      error,
+      "No se pudieron obtener tus compras y ventas."
     );
-
-    return res.status(500).json({
-      success: false,
-
-      message:
-        "No se pudieron obtener tus compras y ventas.",
-
-      error:
-        process.env.NODE_ENV ===
-        "production"
-          ? undefined
-          : error.message
-    });
   }
 };
 
 /*
 |--------------------------------------------------------------------------
-| Obtener una orden específica
+| Obtener una orden
 |--------------------------------------------------------------------------
 */
 
@@ -1500,12 +1476,12 @@ const getOrderById = async (
   res
 ) => {
   try {
-    const { id } =
-      req.params;
+    const orderId =
+      parsePositiveInt(
+        req.params.id
+      );
 
-    if (
-      !isValidObjectId(id)
-    ) {
+    if (!orderId) {
       return res.status(400).json({
         success: false,
         message:
@@ -1513,8 +1489,27 @@ const getOrderById = async (
       });
     }
 
+    const prismaUser =
+      await resolvePrismaUser(req);
+
+    if (!prismaUser) {
+      return res.status(401).json({
+        success: false,
+        message:
+          "Tu usuario autenticado todavía no existe en Supabase."
+      });
+    }
+
+    const role =
+      getRequestRole(
+        req,
+        prismaUser
+      );
+
     const order =
-      await populateOrder(id);
+      await getOrderRecord(
+        orderId
+      );
 
     if (!order) {
       return res.status(404).json({
@@ -1527,7 +1522,8 @@ const getOrderById = async (
     if (
       !canAccessOrder(
         order,
-        req
+        prismaUser,
+        role
       )
     ) {
       return res.status(403).json({
@@ -1540,7 +1536,8 @@ const getOrderById = async (
     const permissions =
       getOrderPermissions(
         order,
-        req
+        prismaUser,
+        role
       );
 
     return res.status(200).json({
@@ -1549,16 +1546,12 @@ const getOrderById = async (
       permissions: {
         isBuyer:
           permissions.isBuyer,
-
         isSeller:
           permissions.isSeller,
-
         isWarehouseAgent:
           permissions.isWarehouseAgent,
-
         isDeliveryAgent:
           permissions.isDeliveryAgent,
-
         isInternal:
           permissions.isInternal
       },
@@ -1566,37 +1559,15 @@ const getOrderById = async (
       voucher:
         buildVoucher(order),
 
-      order
+      order:
+        serializeOrder(order)
     });
   } catch (error) {
-    console.error(
-      "Error obteniendo la orden:",
-      error
+    return handleError(
+      res,
+      error,
+      "No se pudo obtener la orden."
     );
-
-    if (
-      error.name ===
-      "CastError"
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          "El identificador de la orden no es válido."
-      });
-    }
-
-    return res.status(500).json({
-      success: false,
-
-      message:
-        "No se pudo obtener la orden.",
-
-      error:
-        process.env.NODE_ENV ===
-        "production"
-          ? undefined
-          : error.message
-    });
   }
 };
 
@@ -1611,28 +1582,17 @@ const cancelOrder = async (
   res
 ) => {
   try {
-    const { id } =
-      req.params;
+    const orderId =
+      parsePositiveInt(
+        req.params.id
+      );
 
     const {
       reason = "",
       requestedBy = ""
     } = req.body || {};
 
-    const userId =
-      getUserId(req);
-
-    if (!userId) {
-      return res.status(401).json({
-        success: false,
-        message:
-          "Debes iniciar sesión para cancelar una orden."
-      });
-    }
-
-    if (
-      !isValidObjectId(id)
-    ) {
+    if (!orderId) {
       return res.status(400).json({
         success: false,
         message:
@@ -1653,8 +1613,27 @@ const cancelOrder = async (
       });
     }
 
+    const prismaUser =
+      await resolvePrismaUser(req);
+
+    if (!prismaUser) {
+      return res.status(401).json({
+        success: false,
+        message:
+          "Tu usuario autenticado todavía no existe en Supabase."
+      });
+    }
+
+    const role =
+      getRequestRole(
+        req,
+        prismaUser
+      );
+
     const order =
-      await Order.findById(id);
+      await getOrderRecord(
+        orderId
+      );
 
     if (!order) {
       return res.status(404).json({
@@ -1667,7 +1646,8 @@ const cancelOrder = async (
     const permissions =
       getOrderPermissions(
         order,
-        req
+        prismaUser,
+        role
       );
 
     if (
@@ -1686,24 +1666,15 @@ const cancelOrder = async (
       order.status ===
       "CANCELLED"
     ) {
-      const existingOrder =
-        await populateOrder(
-          order._id
-        );
-
       return res.status(200).json({
         success: true,
         recovered: true,
         message:
           "La orden ya estaba cancelada.",
         voucher:
-          buildVoucher(
-            existingOrder ||
-              order
-          ),
+          buildVoucher(order),
         order:
-          existingOrder ||
-          order
+          serializeOrder(order)
       });
     }
 
@@ -1733,31 +1704,24 @@ const cancelOrder = async (
     ) {
       cancellationRequestedBy =
         "SELLER";
-    } else {
-      const role =
-        getUserRole(req);
-
-      if (
-        role === "WAREHOUSE" ||
-        role ===
-          "VERIFICATION_AGENT"
-      ) {
-        cancellationRequestedBy =
-          "WAREHOUSE";
-      }
-
-      if (
-        role === "DELIVERY"
-      ) {
-        cancellationRequestedBy =
-          "DELIVERY";
-      }
+    } else if (
+      role === "WAREHOUSE" ||
+      role ===
+        "VERIFICATION_AGENT"
+    ) {
+      cancellationRequestedBy =
+        "WAREHOUSE";
+    } else if (
+      role === "DELIVERY"
+    ) {
+      cancellationRequestedBy =
+        "DELIVERY";
     }
 
     const requestedByValue =
-      String(
-        requestedBy || ""
-      ).toUpperCase();
+      normalizeUpper(
+        requestedBy
+      );
 
     if (
       permissions.isInternal &&
@@ -1778,54 +1742,43 @@ const cancelOrder = async (
     const now =
       new Date();
 
-    order.status =
-      "CANCELLED";
+    const previousStatus =
+      order.status;
 
-    order.cancellationReason =
-      cleanReason;
+    let refundAmount =
+      Number(
+        order.refundAmount || 0
+      );
 
-    order.cancellationRequestedBy =
-      cancellationRequestedBy;
-
-    order.cancelledBy =
-      userId;
-
-    order.cancelledAt =
-      now;
-
-    /*
-    |--------------------------------------------------------------------------
-    | Reembolso y depósito
-    |--------------------------------------------------------------------------
-    */
+    let depositStatus =
+      order.depositStatus;
 
     if (
       order.depositAmount > 0
     ) {
       if (
-        cancellationRequestedBy ===
-          "SELLER" ||
-        cancellationRequestedBy ===
-          "WAREHOUSE" ||
-        cancellationRequestedBy ===
-          "DELIVERY" ||
-        cancellationRequestedBy ===
+        [
+          "SELLER",
+          "WAREHOUSE",
+          "DELIVERY",
           "ADMIN"
+        ].includes(
+          cancellationRequestedBy
+        )
       ) {
-        order.refundAmount =
+        refundAmount =
           Number(
-            order.depositAmount ||
-            0
+            order.depositAmount || 0
           );
 
-        order.depositStatus =
+        depositStatus =
           "REFUNDED";
       } else if (
         cancellationRequestedBy ===
         "BUYER"
       ) {
         const cancellationFee =
-          order.status ===
+          previousStatus ===
           "WAITING_WAREHOUSE"
             ? Number(
                 order.depositAmount ||
@@ -1833,7 +1786,7 @@ const cancelOrder = async (
               ) * 0.25
             : 0;
 
-        order.refundAmount =
+        refundAmount =
           Math.max(
             Number(
               order.depositAmount ||
@@ -1843,20 +1796,23 @@ const cancelOrder = async (
             0
           );
 
-        order.depositStatus =
+        depositStatus =
           cancellationFee > 0
             ? "PARTIALLY_REFUNDED"
             : "REFUNDED";
       }
     } else {
-      order.refundAmount = 0;
+      refundAmount = 0;
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Estado financiero después de cancelar
-    |--------------------------------------------------------------------------
-    */
+    let escrowStatus =
+      order.escrowStatus;
+
+    let paymentStatus =
+      order.paymentStatus;
+
+    let refundedAt =
+      order.refundedAt;
 
     if (
       [
@@ -1868,129 +1824,131 @@ const cancelOrder = async (
         order.escrowStatus
       )
     ) {
-      order.escrowStatus =
+      escrowStatus =
         "REFUNDED";
 
-      order.paymentStatus =
+      paymentStatus =
         "REFUNDED";
 
-      order.refundedAt =
+      refundedAt =
         now;
     }
 
-    addTimelineEvent(
-      order,
-      {
-        status:
-          "ORDER_CANCELLED",
-
-        description:
-          `La orden fue cancelada por ${cancellationRequestedBy.toLowerCase()}. Motivo: ${cleanReason}`,
-
-        createdBy:
-          userId,
-
-        metadata: {
-          requestedBy:
-            cancellationRequestedBy,
-
-          refundAmount:
-            Number(
-              order.refundAmount ||
-              0
-            ),
-
-          depositStatus:
-            order.depositStatus
+    const timeline =
+      addTimelineEvent(
+        order.timeline,
+        {
+          status:
+            "ORDER_CANCELLED",
+          description:
+            `La orden fue cancelada por ${cancellationRequestedBy.toLowerCase()}. Motivo: ${cleanReason}`,
+          createdBy:
+            prismaUser.id,
+          metadata: {
+            requestedBy:
+              cancellationRequestedBy,
+            refundAmount,
+            depositStatus
+          }
         }
+      );
+
+    await prisma.$transaction(
+      async (tx) => {
+        await tx.order.update({
+          where: {
+            id: order.id
+          },
+          data: {
+            status:
+              "CANCELLED",
+            cancellationReason:
+              cleanReason,
+            cancellationRequestedBy,
+            cancelledById:
+              prismaUser.id,
+            cancelledAt:
+              now,
+            refundAmount,
+            depositStatus,
+            escrowStatus,
+            paymentStatus,
+            refundedAt,
+            timeline
+          }
+        });
+
+        const anotherActiveOrder =
+          await tx.order.findFirst({
+            where: {
+              id: {
+                not: order.id
+              },
+              productId:
+                order.productId,
+              status: {
+                in: ACTIVE_ORDER_STATUSES
+              }
+            },
+            select: {
+              id: true
+            }
+          });
+
+        if (!anotherActiveOrder) {
+          await tx.product.update({
+            where: {
+              id: order.productId
+            },
+            data: {
+              status: "ACTIVE"
+            }
+          });
+        }
+
+        const notificationText =
+          `La orden ${order.orderCode} fue cancelada. ` +
+          `Motivo: ${cleanReason}`;
+
+        if (
+          order.buyerId !==
+          prismaUser.id
+        ) {
+          await createNotificationSafe(
+            tx,
+            order.buyerId,
+            "ORDER_CANCELLED",
+            "Compra cancelada",
+            notificationText
+          );
+        }
+
+        if (
+          order.sellerId !==
+          prismaUser.id
+        ) {
+          await createNotificationSafe(
+            tx,
+            order.sellerId,
+            "ORDER_CANCELLED",
+            "Venta cancelada",
+            notificationText
+          );
+        }
+      },
+      {
+        maxWait: 20000,
+        timeout: 60000
       }
     );
 
-    await order.save();
-
-    /*
-    |--------------------------------------------------------------------------
-    | Restaurar producto
-    |--------------------------------------------------------------------------
-    | El producto vuelve a estar disponible si no existe otra orden activa.
-    |--------------------------------------------------------------------------
-    */
-
-    const anotherActiveOrder =
-      await Order.findOne({
-        _id: {
-          $ne: order._id
-        },
-
-        product:
-          order.product,
-
-        status: {
-          $in:
-            ACTIVE_ORDER_STATUSES
-        }
-      });
-
-    if (!anotherActiveOrder) {
-      await Product.findByIdAndUpdate(
-        order.product,
-        {
-          status: "ACTIVE"
-        }
-      );
-    }
-
-    const buyerId =
-      normalizeId(
-        order.buyer
-      );
-
-    const sellerId =
-      normalizeId(
-        order.seller
-      );
-
-    const notificationText =
-      `La orden ${order.orderCode} fue cancelada. ` +
-      `Motivo: ${cleanReason}`;
-
-    if (
-      buyerId &&
-      buyerId !==
-        normalizeId(userId)
-    ) {
-      await sendNotificationSafe(
-        buyerId,
-        "ORDER_CANCELLED",
-        "Compra cancelada",
-        notificationText
-      );
-    }
-
-    if (
-      sellerId &&
-      sellerId !==
-        normalizeId(userId)
-    ) {
-      await sendNotificationSafe(
-        sellerId,
-        "ORDER_CANCELLED",
-        "Venta cancelada",
-        notificationText
-      );
-    }
-
-    const populatedOrder =
-      await populateOrder(
-        order._id
-      );
-
     const finalOrder =
-      populatedOrder || order;
+      await getOrderRecord(
+        order.id
+      );
 
     return res.status(200).json({
       success: true,
-
       message:
         "La orden fue cancelada correctamente.",
 
@@ -2000,10 +1958,8 @@ const cancelOrder = async (
             finalOrder.refundAmount ||
             0
           ),
-
         depositStatus:
           finalOrder.depositStatus,
-
         escrowStatus:
           finalOrder.escrowStatus
       },
@@ -2014,45 +1970,22 @@ const cancelOrder = async (
         ),
 
       order:
-        finalOrder
+        serializeOrder(
+          finalOrder
+        )
     });
   } catch (error) {
-    console.error(
-      "Error cancelando orden:",
-      error
+    return handleError(
+      res,
+      error,
+      "No se pudo cancelar la orden."
     );
-
-    if (
-      error.name ===
-      "ValidationError"
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          Object.values(
-            error.errors || {}
-          )[0]?.message ||
-          "La cancelación contiene datos no válidos."
-      });
-    }
-
-    return res.status(500).json({
-      success: false,
-
-      message:
-        "No se pudo cancelar la orden.",
-
-      error:
-        process.env.NODE_ENV ===
-        "production"
-          ? undefined
-          : error.message
-    });
   }
 };
+
 /*
 |--------------------------------------------------------------------------
-| Confirmar recepción del producto
+| Confirmar recepción
 |--------------------------------------------------------------------------
 */
 
@@ -2061,23 +1994,12 @@ const confirmReceipt = async (
   res
 ) => {
   try {
-    const { id } =
-      req.params;
+    const orderId =
+      parsePositiveInt(
+        req.params.id
+      );
 
-    const userId =
-      getUserId(req);
-
-    if (!userId) {
-      return res.status(401).json({
-        success: false,
-        message:
-          "Debes iniciar sesión para confirmar la recepción."
-      });
-    }
-
-    if (
-      !isValidObjectId(id)
-    ) {
+    if (!orderId) {
       return res.status(400).json({
         success: false,
         message:
@@ -2085,8 +2007,27 @@ const confirmReceipt = async (
       });
     }
 
+    const prismaUser =
+      await resolvePrismaUser(req);
+
+    if (!prismaUser) {
+      return res.status(401).json({
+        success: false,
+        message:
+          "Tu usuario autenticado todavía no existe en Supabase."
+      });
+    }
+
+    const role =
+      getRequestRole(
+        req,
+        prismaUser
+      );
+
     const order =
-      await Order.findById(id);
+      await getOrderRecord(
+        orderId
+      );
 
     if (!order) {
       return res.status(404).json({
@@ -2099,7 +2040,8 @@ const confirmReceipt = async (
     const permissions =
       getOrderPermissions(
         order,
-        req
+        prismaUser,
+        role
       );
 
     if (
@@ -2117,24 +2059,15 @@ const confirmReceipt = async (
       order.status ===
       "COMPLETED"
     ) {
-      const existingOrder =
-        await populateOrder(
-          order._id
-        );
-
       return res.status(200).json({
         success: true,
         recovered: true,
         message:
           "La recepción ya había sido confirmada.",
         voucher:
-          buildVoucher(
-            existingOrder ||
-              order
-          ),
+          buildVoucher(order),
         order:
-          existingOrder ||
-          order
+          serializeOrder(order)
       });
     }
 
@@ -2161,57 +2094,39 @@ const confirmReceipt = async (
     const now =
       new Date();
 
-    order.buyerConfirmedReceipt =
-      true;
+    let paymentStatus =
+      order.paymentStatus;
 
-    order.buyerConfirmedReceiptAt =
-      now;
+    let paymentConfirmedAt =
+      order.paymentConfirmedAt;
 
-    order.status =
-      "COMPLETED";
-
-    order.deliveryStatus =
-      "DELIVERED";
-
-    order.deliveredAt =
-      order.deliveredAt ||
-      now;
-
-    order.completedAt =
-      now;
+    let paymentConfirmedById =
+      order.paymentConfirmedById;
 
     if (
-      order.deliveryMethod ===
-      "QSM_WAREHOUSE"
-    ) {
-      order.warehouseStatus =
-        "DELIVERED";
-
-      order.warehouseConfirmedDelivery =
-        true;
-
-      order.warehouseConfirmedDeliveryAt =
-        order
-          .warehouseConfirmedDeliveryAt ||
-        now;
-    }
-
-    if (
-      order.paymentMethod ===
-        "CASH_ON_DELIVERY" ||
-      order.paymentMethod ===
+      [
+        "CASH_ON_DELIVERY",
         "BANK_TRANSFER"
+      ].includes(
+        order.paymentMethod
+      )
     ) {
-      order.paymentStatus =
+      paymentStatus =
         "CONFIRMED";
 
-      order.paymentConfirmedAt =
-        order.paymentConfirmedAt ||
+      paymentConfirmedAt =
+        paymentConfirmedAt ||
         now;
 
-      order.paymentConfirmedBy =
-        userId;
+      paymentConfirmedById =
+        prismaUser.id;
     }
+
+    let escrowStatus =
+      order.escrowStatus;
+
+    let releasedAt =
+      order.releasedAt;
 
     if (
       [
@@ -2223,131 +2138,144 @@ const confirmReceipt = async (
         order.escrowStatus
       )
     ) {
-      order.escrowStatus =
+      escrowStatus =
         "RELEASED";
 
-      order.releasedAt =
+      releasedAt =
         now;
     }
 
-    if (
+    const depositStatus =
       order.depositAmount > 0
-    ) {
-      order.depositStatus =
-        "APPLIED_TO_TOTAL";
-    }
+        ? "APPLIED_TO_TOTAL"
+        : order.depositStatus;
 
-    addTimelineEvent(
-      order,
-      {
-        status:
-          "BUYER_CONFIRMED_RECEIPT",
-
-        description:
-          "El comprador confirmó que recibió el producto correctamente.",
-
-        createdBy:
-          userId,
-
-        metadata: {
-          paymentStatus:
-            order.paymentStatus,
-
-          escrowStatus:
-            order.escrowStatus
+    let timeline =
+      addTimelineEvent(
+        order.timeline,
+        {
+          status:
+            "BUYER_CONFIRMED_RECEIPT",
+          description:
+            "El comprador confirmó que recibió el producto correctamente.",
+          createdBy:
+            prismaUser.id,
+          metadata: {
+            paymentStatus,
+            escrowStatus
+          }
         }
-      }
-    );
-
-    addTimelineEvent(
-      order,
-      {
-        status:
-          "ORDER_COMPLETED",
-
-        description:
-          "La compra protegida fue completada y el pago quedó liberado.",
-
-        createdBy:
-          userId,
-
-        metadata: {
-          completedAt:
-            now
-        }
-      }
-    );
-
-    await order.save();
-
-    await sendNotificationSafe(
-      normalizeId(
-        order.seller
-      ),
-      "ORDER_COMPLETED",
-      "Venta completada",
-      `La orden ${order.orderCode} fue completada. El comprador confirmó la recepción del producto.`
-    );
-
-    const populatedOrder =
-      await populateOrder(
-        order._id
       );
 
+    timeline =
+      addTimelineEvent(
+        timeline,
+        {
+          status:
+            "ORDER_COMPLETED",
+          description:
+            "La compra protegida fue completada y el pago quedó liberado.",
+          createdBy:
+            prismaUser.id,
+          metadata: {
+            completedAt:
+              now.toISOString()
+          }
+        }
+      );
+
+    await prisma.$transaction(
+      async (tx) => {
+        await tx.order.update({
+          where: {
+            id: order.id
+          },
+          data: {
+            buyerConfirmedReceipt:
+              true,
+            buyerConfirmedReceiptAt:
+              now,
+            status:
+              "COMPLETED",
+            deliveryStatus:
+              "DELIVERED",
+            deliveredAt:
+              order.deliveredAt ||
+              now,
+            completedAt:
+              now,
+            warehouseStatus:
+              order.deliveryMethod ===
+              "QSM_WAREHOUSE"
+                ? "DELIVERED"
+                : order.warehouseStatus,
+            warehouseConfirmedDelivery:
+              order.deliveryMethod ===
+              "QSM_WAREHOUSE"
+                ? true
+                : order.warehouseConfirmedDelivery,
+            warehouseConfirmedDeliveryAt:
+              order.deliveryMethod ===
+              "QSM_WAREHOUSE"
+                ? order
+                    .warehouseConfirmedDeliveryAt ||
+                  now
+                : order
+                    .warehouseConfirmedDeliveryAt,
+            paymentStatus,
+            paymentConfirmedAt,
+            paymentConfirmedById,
+            escrowStatus,
+            releasedAt,
+            depositStatus,
+            timeline
+          }
+        });
+
+        await createNotificationSafe(
+          tx,
+          order.sellerId,
+          "ORDER_COMPLETED",
+          "Venta completada",
+          `La orden ${order.orderCode} fue completada. El comprador confirmó la recepción del producto.`
+        );
+      },
+      {
+        maxWait: 20000,
+        timeout: 60000
+      }
+    );
+
     const finalOrder =
-      populatedOrder ||
-      order;
+      await getOrderRecord(
+        order.id
+      );
 
     return res.status(200).json({
       success: true,
-
       message:
         "Recepción confirmada. La compra fue completada correctamente.",
-
       voucher:
         buildVoucher(
           finalOrder
         ),
-
       order:
-        finalOrder
+        serializeOrder(
+          finalOrder
+        )
     });
   } catch (error) {
-    console.error(
-      "Error confirmando recepción:",
-      error
+    return handleError(
+      res,
+      error,
+      "No se pudo confirmar la recepción del producto."
     );
-
-    if (
-      error.name ===
-      "ValidationError"
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          Object.values(
-            error.errors || {}
-          )[0]?.message ||
-          "Los datos de confirmación no son válidos."
-      });
-    }
-
-    return res.status(500).json({
-      success: false,
-      message:
-        "No se pudo confirmar la recepción del producto.",
-      error:
-        process.env.NODE_ENV ===
-        "production"
-          ? undefined
-          : error.message
-    });
   }
 };
 
 /*
 |--------------------------------------------------------------------------
-| Abrir un reclamo
+| Abrir reclamo
 |--------------------------------------------------------------------------
 */
 
@@ -2356,36 +2284,23 @@ const openDispute = async (
   res
 ) => {
   try {
-    const { id } =
-      req.params;
+    const orderId =
+      parsePositiveInt(
+        req.params.id
+      );
 
-    const {
-      reason = ""
-    } = req.body || {};
+    const cleanReason =
+      String(
+        req.body?.reason || ""
+      ).trim();
 
-    const userId =
-      getUserId(req);
-
-    if (!userId) {
-      return res.status(401).json({
-        success: false,
-        message:
-          "Debes iniciar sesión para abrir un reclamo."
-      });
-    }
-
-    if (
-      !isValidObjectId(id)
-    ) {
+    if (!orderId) {
       return res.status(400).json({
         success: false,
         message:
           "El identificador de la orden no es válido."
       });
     }
-
-    const cleanReason =
-      String(reason).trim();
 
     if (
       cleanReason.length < 10
@@ -2397,8 +2312,27 @@ const openDispute = async (
       });
     }
 
+    const prismaUser =
+      await resolvePrismaUser(req);
+
+    if (!prismaUser) {
+      return res.status(401).json({
+        success: false,
+        message:
+          "Tu usuario autenticado todavía no existe en Supabase."
+      });
+    }
+
+    const role =
+      getRequestRole(
+        req,
+        prismaUser
+      );
+
     const order =
-      await Order.findById(id);
+      await getOrderRecord(
+        orderId
+      );
 
     if (!order) {
       return res.status(404).json({
@@ -2411,7 +2345,8 @@ const openDispute = async (
     const permissions =
       getOrderPermissions(
         order,
-        req
+        prismaUser,
+        role
       );
 
     if (
@@ -2428,26 +2363,18 @@ const openDispute = async (
 
     if (
       order.status ===
-      "DISPUTED"
+      "DISPUTED" ||
+      order.dispute
     ) {
-      const existingOrder =
-        await populateOrder(
-          order._id
-        );
-
       return res.status(200).json({
         success: true,
         recovered: true,
         message:
           "Esta orden ya tiene un reclamo abierto.",
         voucher:
-          buildVoucher(
-            existingOrder ||
-              order
-          ),
+          buildVoucher(order),
         order:
-          existingOrder ||
-          order
+          serializeOrder(order)
       });
     }
 
@@ -2467,19 +2394,7 @@ const openDispute = async (
     const now =
       new Date();
 
-    order.status =
-      "DISPUTED";
-
-    order.disputeReason =
-      cleanReason;
-
-    order.disputeOpenedBy =
-      userId;
-
-    order.disputeOpenedAt =
-      now;
-
-    if (
+    const escrowStatus =
       [
         "HELD",
         "PENDING",
@@ -2487,131 +2402,118 @@ const openDispute = async (
       ].includes(
         order.escrowStatus
       )
-    ) {
-      order.escrowStatus =
-        "UNDER_REVIEW";
-    }
+        ? "UNDER_REVIEW"
+        : order.escrowStatus;
 
-    addTimelineEvent(
-      order,
-      {
-        status:
-          "DISPUTE_OPENED",
-
-        description:
-          `Se abrió un reclamo: ${cleanReason}`,
-
-        createdBy:
-          userId,
-
-        metadata: {
-          openedBy:
-            permissions.isBuyer
-              ? "BUYER"
-              : permissions.isSeller
-              ? "SELLER"
-              : "INTERNAL",
-
-          escrowStatus:
-            order.escrowStatus
+    const timeline =
+      addTimelineEvent(
+        order.timeline,
+        {
+          status:
+            "DISPUTE_OPENED",
+          description:
+            `Se abrió un reclamo: ${cleanReason}`,
+          createdBy:
+            prismaUser.id,
+          metadata: {
+            openedBy:
+              permissions.isBuyer
+                ? "BUYER"
+                : permissions.isSeller
+                ? "SELLER"
+                : "INTERNAL",
+            escrowStatus
+          }
         }
+      );
+
+    await prisma.$transaction(
+      async (tx) => {
+        await tx.order.update({
+          where: {
+            id: order.id
+          },
+          data: {
+            status:
+              "DISPUTED",
+            disputeReason:
+              cleanReason,
+            disputeOpenedById:
+              prismaUser.id,
+            disputeOpenedAt:
+              now,
+            escrowStatus,
+            timeline
+          }
+        });
+
+        await tx.dispute.create({
+          data: {
+            orderId:
+              order.id,
+            reason:
+              cleanReason,
+            status:
+              "OPEN"
+          }
+        });
+
+        if (
+          order.buyerId !==
+          prismaUser.id
+        ) {
+          await createNotificationSafe(
+            tx,
+            order.buyerId,
+            "DISPUTE_OPENED",
+            "Reclamo abierto",
+            `Se abrió un reclamo en la orden ${order.orderCode}. QSM revisará el caso.`
+          );
+        }
+
+        if (
+          order.sellerId !==
+          prismaUser.id
+        ) {
+          await createNotificationSafe(
+            tx,
+            order.sellerId,
+            "DISPUTE_OPENED",
+            "Reclamo abierto",
+            `Se abrió un reclamo en la orden ${order.orderCode}. QSM revisará el caso.`
+          );
+        }
+      },
+      {
+        maxWait: 20000,
+        timeout: 60000
       }
     );
 
-    await order.save();
-
-    const buyerId =
-      normalizeId(
-        order.buyer
-      );
-
-    const sellerId =
-      normalizeId(
-        order.seller
-      );
-
-    const currentUserId =
-      normalizeId(userId);
-
-    if (
-      buyerId &&
-      buyerId !==
-        currentUserId
-    ) {
-      await sendNotificationSafe(
-        buyerId,
-        "DISPUTE_OPENED",
-        "Reclamo abierto",
-        `Se abrió un reclamo en la orden ${order.orderCode}. QSM revisará el caso.`
-      );
-    }
-
-    if (
-      sellerId &&
-      sellerId !==
-        currentUserId
-    ) {
-      await sendNotificationSafe(
-        sellerId,
-        "DISPUTE_OPENED",
-        "Reclamo abierto",
-        `Se abrió un reclamo en la orden ${order.orderCode}. QSM revisará el caso.`
-      );
-    }
-
-    const populatedOrder =
-      await populateOrder(
-        order._id
-      );
-
     const finalOrder =
-      populatedOrder ||
-      order;
+      await getOrderRecord(
+        order.id
+      );
 
     return res.status(201).json({
       success: true,
-
       message:
         "El reclamo fue abierto correctamente.",
-
       voucher:
         buildVoucher(
           finalOrder
         ),
-
       order:
-        finalOrder
+        serializeOrder(
+          finalOrder
+        )
     });
   } catch (error) {
-    console.error(
-      "Error abriendo reclamo:",
-      error
+    return handleError(
+      res,
+      error,
+      "No se pudo abrir el reclamo."
     );
-
-    if (
-      error.name ===
-      "ValidationError"
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          Object.values(
-            error.errors || {}
-          )[0]?.message ||
-          "Los datos del reclamo no son válidos."
-      });
-    }
-
-    return res.status(500).json({
-      success: false,
-      message:
-        "No se pudo abrir el reclamo.",
-      error:
-        process.env.NODE_ENV ===
-        "production"
-          ? undefined
-          : error.message
-    });
   }
 };
 
@@ -2626,8 +2528,10 @@ const sendToWarehouse = async (
   res
 ) => {
   try {
-    const { id } =
-      req.params;
+    const orderId =
+      parsePositiveInt(
+        req.params.id
+      );
 
     const {
       notes = "",
@@ -2635,20 +2539,7 @@ const sendToWarehouse = async (
       trackingCompany = ""
     } = req.body || {};
 
-    const userId =
-      getUserId(req);
-
-    if (!userId) {
-      return res.status(401).json({
-        success: false,
-        message:
-          "Debes iniciar sesión para actualizar la entrega."
-      });
-    }
-
-    if (
-      !isValidObjectId(id)
-    ) {
+    if (!orderId) {
       return res.status(400).json({
         success: false,
         message:
@@ -2656,8 +2547,27 @@ const sendToWarehouse = async (
       });
     }
 
+    const prismaUser =
+      await resolvePrismaUser(req);
+
+    if (!prismaUser) {
+      return res.status(401).json({
+        success: false,
+        message:
+          "Tu usuario autenticado todavía no existe en Supabase."
+      });
+    }
+
+    const role =
+      getRequestRole(
+        req,
+        prismaUser
+      );
+
     const order =
-      await Order.findById(id);
+      await getOrderRecord(
+        orderId
+      );
 
     if (!order) {
       return res.status(404).json({
@@ -2670,7 +2580,8 @@ const sendToWarehouse = async (
     const permissions =
       getOrderPermissions(
         order,
-        req
+        prismaUser,
+        role
       );
 
     if (
@@ -2720,142 +2631,112 @@ const sendToWarehouse = async (
       order.warehouseStatus ===
       "IN_TRANSIT_TO_WAREHOUSE"
     ) {
-      const existingOrder =
-        await populateOrder(
-          order._id
-        );
-
       return res.status(200).json({
         success: true,
         recovered: true,
         message:
           "El producto ya estaba marcado como enviado al almacén.",
         voucher:
-          buildVoucher(
-            existingOrder ||
-              order
-          ),
+          buildVoucher(order),
         order:
-          existingOrder ||
-          order
+          serializeOrder(order)
       });
     }
 
-    order.status =
-      "WAITING_WAREHOUSE";
-
-    order.warehouseStatus =
-      "IN_TRANSIT_TO_WAREHOUSE";
-
-    order.deliveryStatus =
-      "IN_TRANSIT_TO_WAREHOUSE";
-
-    order.sellerNotes =
+    const sellerNotes =
       String(notes).trim();
 
-    if (trackingNumber) {
-      order.trackingNumber =
-        String(
-          trackingNumber
-        ).trim();
-    }
+    const cleanTrackingNumber =
+      String(
+        trackingNumber
+      ).trim();
 
-    if (trackingCompany) {
-      order.trackingCompany =
-        String(
-          trackingCompany
-        ).trim();
-    }
+    const cleanTrackingCompany =
+      String(
+        trackingCompany
+      ).trim();
 
-    addTimelineEvent(
-      order,
-      {
-        status:
-          "PRODUCT_SENT_TO_WAREHOUSE",
-
-        description:
-          "El vendedor confirmó que el producto fue enviado o entregado al almacén QSM.",
-
-        createdBy:
-          userId,
-
-        metadata: {
-          trackingNumber:
-            order.trackingNumber,
-
-          trackingCompany:
-            order.trackingCompany,
-
-          notes:
-            order.sellerNotes
+    const timeline =
+      addTimelineEvent(
+        order.timeline,
+        {
+          status:
+            "PRODUCT_SENT_TO_WAREHOUSE",
+          description:
+            "El vendedor confirmó que el producto fue enviado o entregado al almacén QSM.",
+          createdBy:
+            prismaUser.id,
+          metadata: {
+            trackingNumber:
+              cleanTrackingNumber,
+            trackingCompany:
+              cleanTrackingCompany,
+            notes:
+              sellerNotes
+          }
         }
+      );
+
+    await prisma.$transaction(
+      async (tx) => {
+        await tx.order.update({
+          where: {
+            id: order.id
+          },
+          data: {
+            status:
+              "WAITING_WAREHOUSE",
+            warehouseStatus:
+              "IN_TRANSIT_TO_WAREHOUSE",
+            deliveryStatus:
+              "IN_TRANSIT_TO_WAREHOUSE",
+            sellerNotes,
+            trackingNumber:
+              cleanTrackingNumber,
+            trackingCompany:
+              cleanTrackingCompany,
+            timeline
+          }
+        });
+
+        await createNotificationSafe(
+          tx,
+          order.buyerId,
+          "PRODUCT_SENT_TO_WAREHOUSE",
+          "Producto enviado al almacén",
+          `El vendedor envió el producto de la orden ${order.orderCode} al almacén QSM.`
+        );
+      },
+      {
+        maxWait: 20000,
+        timeout: 60000
       }
     );
 
-    await order.save();
-
-    await sendNotificationSafe(
-      normalizeId(
-        order.buyer
-      ),
-      "PRODUCT_SENT_TO_WAREHOUSE",
-      "Producto enviado al almacén",
-      `El vendedor envió el producto de la orden ${order.orderCode} al almacén QSM.`
-    );
-
-    const populatedOrder =
-      await populateOrder(
-        order._id
-      );
-
     const finalOrder =
-      populatedOrder ||
-      order;
+      await getOrderRecord(
+        order.id
+      );
 
     return res.status(200).json({
       success: true,
-
       message:
         "El producto fue marcado como enviado al almacén QSM.",
-
       voucher:
         buildVoucher(
           finalOrder
         ),
-
       order:
-        finalOrder
+        serializeOrder(
+          finalOrder
+        )
     });
   } catch (error) {
-    console.error(
-      "Error enviando producto al almacén:",
-      error
+    return handleError(
+      res,
+      error,
+      "No se pudo registrar el envío al almacén."
     );
-
-    if (
-      error.name ===
-      "ValidationError"
-    ) {
-      return res.status(400).json({
-        success: false,
-        message:
-          Object.values(
-            error.errors || {}
-          )[0]?.message ||
-          "Los datos del envío no son válidos."
-      });
-    }
-
-    return res.status(500).json({
-      success: false,
-      message:
-        "No se pudo registrar el envío al almacén.",
-      error:
-        process.env.NODE_ENV ===
-        "production"
-          ? undefined
-          : error.message
-    });
   }
 };
 
@@ -2871,8 +2752,10 @@ const requestVerifiedDelivery =
     res
   ) => {
     try {
-      const { id } =
-        req.params;
+      const orderId =
+        parsePositiveInt(
+          req.params.id
+        );
 
       const {
         pickupAddress = "",
@@ -2880,20 +2763,7 @@ const requestVerifiedDelivery =
         notes = ""
       } = req.body || {};
 
-      const userId =
-        getUserId(req);
-
-      if (!userId) {
-        return res.status(401).json({
-          success: false,
-          message:
-            "Debes iniciar sesión para solicitar el delivery."
-        });
-      }
-
-      if (
-        !isValidObjectId(id)
-      ) {
+      if (!orderId) {
         return res.status(400).json({
           success: false,
           message:
@@ -2901,8 +2771,27 @@ const requestVerifiedDelivery =
         });
       }
 
+      const prismaUser =
+        await resolvePrismaUser(req);
+
+      if (!prismaUser) {
+        return res.status(401).json({
+          success: false,
+          message:
+            "Tu usuario autenticado todavía no existe en Supabase."
+        });
+      }
+
+      const role =
+        getRequestRole(
+          req,
+          prismaUser
+        );
+
       const order =
-        await Order.findById(id);
+        await getOrderRecord(
+          orderId
+        );
 
       if (!order) {
         return res.status(404).json({
@@ -2915,7 +2804,8 @@ const requestVerifiedDelivery =
       const permissions =
         getOrderPermissions(
           order,
-          req
+          prismaUser,
+          role
         );
 
       if (
@@ -2971,150 +2861,111 @@ const requestVerifiedDelivery =
           order.deliveryStatus
         )
       ) {
-        const existingOrder =
-          await populateOrder(
-            order._id
-          );
-
         return res.status(200).json({
           success: true,
           recovered: true,
           message:
             "La recogida por Delivery QSM ya había sido solicitada.",
           voucher:
-            buildVoucher(
-              existingOrder ||
-                order
-            ),
+            buildVoucher(order),
           order:
-            existingOrder ||
-            order
+            serializeOrder(order)
         });
       }
 
-      order.status =
-        "WAITING_SELLER";
+      const finalPickupAddress =
+        String(pickupAddress).trim() ||
+        order.pickupAddress;
 
-      order.deliveryStatus =
-        "PICKUP_REQUESTED";
+      const finalDeliveryAddress =
+        String(deliveryAddress).trim() ||
+        order.deliveryAddress;
 
-      if (
-        String(
-          pickupAddress
-        ).trim()
-      ) {
-        order.pickupAddress =
-          String(
-            pickupAddress
-          ).trim();
-      }
-
-      if (
-        String(
-          deliveryAddress
-        ).trim()
-      ) {
-        order.deliveryAddress =
-          String(
-            deliveryAddress
-          ).trim();
-      }
-
-      order.deliveryNotes =
+      const deliveryNotes =
         String(notes).trim();
 
-      addTimelineEvent(
-        order,
-        {
-          status:
-            "VERIFIED_DELIVERY_REQUESTED",
-
-          description:
-            "El vendedor solicitó un Delivery QSM verificado para recoger el producto.",
-
-          createdBy:
-            userId,
-
-          metadata: {
-            pickupAddress:
-              order.pickupAddress,
-
-            deliveryAddress:
-              order.deliveryAddress,
-
-            shippingFee:
-              Number(
-                order.shippingFee ||
-                0
-              )
+      const timeline =
+        addTimelineEvent(
+          order.timeline,
+          {
+            status:
+              "VERIFIED_DELIVERY_REQUESTED",
+            description:
+              "El vendedor solicitó un Delivery QSM verificado para recoger el producto.",
+            createdBy:
+              prismaUser.id,
+            metadata: {
+              pickupAddress:
+                finalPickupAddress,
+              deliveryAddress:
+                finalDeliveryAddress,
+              shippingFee:
+                Number(
+                  order.shippingFee ||
+                  0
+                )
+            }
           }
+        );
+
+      await prisma.$transaction(
+        async (tx) => {
+          await tx.order.update({
+            where: {
+              id: order.id
+            },
+            data: {
+              status:
+                "WAITING_SELLER",
+              deliveryStatus:
+                "PICKUP_REQUESTED",
+              pickupAddress:
+                finalPickupAddress,
+              deliveryAddress:
+                finalDeliveryAddress,
+              deliveryNotes,
+              timeline
+            }
+          });
+
+          await createNotificationSafe(
+            tx,
+            order.buyerId,
+            "DELIVERY_REQUESTED",
+            "Delivery QSM solicitado",
+            `Se solicitó un Delivery QSM verificado para la orden ${order.orderCode}.`
+          );
+        },
+        {
+          maxWait: 20000,
+          timeout: 60000
         }
       );
 
-      await order.save();
-
-      await sendNotificationSafe(
-        normalizeId(
-          order.buyer
-        ),
-        "DELIVERY_REQUESTED",
-        "Delivery QSM solicitado",
-        `Se solicitó un Delivery QSM verificado para la orden ${order.orderCode}.`
-      );
-
-      const populatedOrder =
-        await populateOrder(
-          order._id
-        );
-
       const finalOrder =
-        populatedOrder ||
-        order;
+        await getOrderRecord(
+          order.id
+        );
 
       return res.status(200).json({
         success: true,
-
         message:
           "La recogida por Delivery QSM fue solicitada correctamente.",
-
         voucher:
           buildVoucher(
             finalOrder
           ),
-
         order:
-          finalOrder
+          serializeOrder(
+            finalOrder
+          )
       });
     } catch (error) {
-      console.error(
-        "Error solicitando Delivery QSM:",
-        error
+      return handleError(
+        res,
+        error,
+        "No se pudo solicitar el Delivery QSM."
       );
-
-      if (
-        error.name ===
-        "ValidationError"
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            Object.values(
-              error.errors || {}
-            )[0]?.message ||
-            "Los datos del delivery no son válidos."
-        });
-      }
-
-      return res.status(500).json({
-        success: false,
-        message:
-          "No se pudo solicitar el Delivery QSM.",
-        error:
-          process.env.NODE_ENV ===
-          "production"
-            ? undefined
-            : error.message
-      });
     }
   };
 

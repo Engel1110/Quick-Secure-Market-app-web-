@@ -1,7 +1,17 @@
+"use strict";
+
 const express = require("express");
 const router = express.Router();
 
-const authMiddleware = require("../middleware/auth.middleware");
+const authMiddleware = require(
+  "../middleware/auth.middleware"
+);
+
+const {
+  privateResponseSigningMiddleware
+} = require(
+  "../services/storage.service"
+);
 
 const {
   getConversations,
@@ -11,7 +21,6 @@ const {
   sendMessage,
   editMessage,
   deleteMessage,
-
   muteConversation,
   archiveConversation,
   blockConversation,
@@ -20,16 +29,25 @@ const {
   pinMessage,
   searchMessages,
   exportConversation
-} = require("../controllers/messages/message.controller");
+} = require(
+  "../controllers/messages/message.controller"
+);
 
+router.use(
+  privateResponseSigningMiddleware
+);
 
-// ===========================
-// Conversaciones
-// ===========================
+router.get(
+  "/conversations",
+  authMiddleware,
+  getConversations
+);
 
-router.get("/conversations", authMiddleware, getConversations);
-
-router.post("/conversations", authMiddleware, createConversation);
+router.post(
+  "/conversations",
+  authMiddleware,
+  createConversation
+);
 
 router.get(
   "/conversations/:conversationId",
@@ -73,10 +91,6 @@ router.post(
   addConversationLabel
 );
 
-// ===========================
-// Buscar mensajes
-// ===========================
-
 router.get(
   "/search",
   authMiddleware,
@@ -88,11 +102,6 @@ router.get(
   authMiddleware,
   exportConversation
 );
-
-
-// ===========================
-// Mensajes
-// ===========================
 
 router.post(
   "/",

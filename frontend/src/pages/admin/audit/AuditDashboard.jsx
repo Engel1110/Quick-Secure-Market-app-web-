@@ -1,4 +1,5 @@
-﻿import {
+import { API_BASE_URL as QSM_RUNTIME_API_URL } from "../../../config/runtime";
+import {
   useCallback,
   useEffect,
   useMemo,
@@ -8,14 +9,9 @@
 import { useNavigate } from "react-router-dom";
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_URL ||
-  "http://localhost:5000/api";
+  QSM_RUNTIME_API_URL;
 
-const USE_MOCK_DATA =
-  String(
-    import.meta.env.VITE_USE_MOCK_ADMIN ??
-      "true"
-  ).toLowerCase() === "true";
+const USE_MOCK_DATA = false;
 
 const MOCK_DATA = {
   generatedAt: new Date().toISOString(),
@@ -277,6 +273,57 @@ function AuditDashboard() {
 
   const [selectedEvent, setSelectedEvent] =
     useState(null);
+
+  const exportReport = useCallback(async () => {
+    try {
+      setError("");
+
+      const token =
+        localStorage.getItem("qsm_admin_token") ||
+        sessionStorage.getItem("qsm_admin_token");
+
+      const response = await fetch(
+        `${API_BASE_URL}/admin/audit/export`,
+        {
+          headers: {
+            Authorization: token
+              ? `Bearer ${token}`
+              : ""
+          }
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          `No fue posible exportar Auditor?a (${response.status}).`
+        );
+      }
+
+      const blob =
+        await response.blob();
+
+      const url =
+        URL.createObjectURL(blob);
+
+      const anchor =
+        document.createElement("a");
+
+      anchor.href = url;
+      anchor.download =
+        `qsm-audit-${Date.now()}.json`;
+
+      anchor.click();
+
+      URL.revokeObjectURL(url);
+
+      await loadDashboard();
+    } catch (requestError) {
+      setError(
+        requestError.message ||
+          "No fue posible exportar Auditor?a."
+      );
+    }
+  }, []);
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);

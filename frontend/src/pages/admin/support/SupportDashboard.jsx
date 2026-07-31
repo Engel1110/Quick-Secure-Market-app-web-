@@ -1,4 +1,5 @@
-﻿import {
+import { API_BASE_URL as QSM_RUNTIME_API_URL } from "../../../config/runtime";
+import {
   useCallback,
   useEffect,
   useMemo,
@@ -8,13 +9,9 @@
 import { useNavigate } from "react-router-dom";
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_URL ||
-  "http://localhost:5000/api";
+  QSM_RUNTIME_API_URL;
 
-const USE_MOCK_DATA =
-  String(
-    import.meta.env.VITE_USE_MOCK_ADMIN ?? "true"
-  ).toLowerCase() === "true";
+const USE_MOCK_DATA = false;
 
 const TICKET_STATUS = {
   OPEN: "Abierto",
@@ -307,6 +304,9 @@ function SupportDashboard() {
   const [isSaving, setIsSaving] =
     useState(false);
 
+  const [showCreateTicket, setShowCreateTicket] =
+    useState(false);
+
   const loadDashboard = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -314,7 +314,8 @@ function SupportDashboard() {
     try {
       const token =
         localStorage.getItem("qsm_admin_token") ||
-        sessionStorage.getItem("qsm_admin_token");
+        sessionStorage.getItem("qsm_admin_token") ||
+        localStorage.getItem("token");
 
       const response = await fetch(
         `${API_BASE_URL}/admin/support/dashboard`,
@@ -419,61 +420,67 @@ function SupportDashboard() {
     setIsSaving(true);
 
     try {
-      if (!USE_MOCK_DATA) {
-        const token =
-          localStorage.getItem("qsm_admin_token") ||
-          sessionStorage.getItem("qsm_admin_token");
+      const token =
+        localStorage.getItem("qsm_admin_token") ||
+        sessionStorage.getItem("qsm_admin_token") ||
+        localStorage.getItem("token");
 
-        const response = await fetch(
-          `${API_BASE_URL}/admin/support/tickets/${ticketId}`,
-          {
-            method: "PATCH",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: token
+      const response = await fetch(
+        `${API_BASE_URL}/admin/support/tickets/${ticketId}`,
+        {
+          method: "PATCH",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+
+            Authorization:
+              token
                 ? `Bearer ${token}`
                 : ""
-            },
-            body: JSON.stringify({
-              status,
-              ...extraData
-            })
-          }
-        );
+          },
 
-        if (!response.ok) {
-          throw new Error(
-            "No fue posible actualizar el ticket."
-          );
+          body: JSON.stringify({
+            status,
+            ...extraData
+          })
         }
+      );
+
+      const result =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result?.message ||
+            "No fue posible actualizar el ticket."
+        );
       }
+
+      const updatedTicket =
+        result.ticket;
 
       setDashboardData((current) => ({
         ...current,
-        tickets: current.tickets.map((ticket) =>
-          ticket.id === ticketId
-            ? {
-                ...ticket,
-                status,
-                ...extraData,
-                lastUpdate: "Actualizado ahora"
-              }
-            : ticket
-        )
+
+        tickets:
+          current.tickets.map(
+            (ticket) =>
+              ticket.id === ticketId
+                ? updatedTicket
+                : ticket
+          )
       }));
 
-      setSelectedTicket((current) =>
-        current?.id === ticketId
-          ? {
-              ...current,
-              status,
-              ...extraData,
-              lastUpdate: "Actualizado ahora"
-            }
-          : current
+      setSelectedTicket(
+        updatedTicket
       );
+
+      await loadDashboard();
     } catch (updateError) {
-      window.alert(updateError.message);
+      window.alert(
+        updateError.message
+      );
     } finally {
       setIsSaving(false);
     }
@@ -490,6 +497,135 @@ function SupportDashboard() {
         assignedAgent: agent
       }
     );
+  }
+
+  async function sendTicketMessage(
+    ticketId,
+    message
+  ) {
+    setIsSaving(true);
+
+    try {
+      const token =
+        localStorage.getItem("qsm_admin_token") ||
+        sessionStorage.getItem("qsm_admin_token") ||
+        localStorage.getItem("token");
+
+      const response = await fetch(
+        `${API_BASE_URL}/admin/support/tickets/${ticketId}/messages`,
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+
+            Authorization:
+              token
+                ? `Bearer ${token}`
+                : ""
+          },
+
+          body:
+            JSON.stringify({
+              message
+            })
+        }
+      );
+
+      const result =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result?.message ||
+            "No fue posible enviar el mensaje."
+        );
+      }
+
+      setSelectedTicket(
+        result.ticket
+      );
+
+      setDashboardData((current) => ({
+        ...current,
+
+        tickets:
+          current.tickets.map(
+            (ticket) =>
+              ticket.id === ticketId
+                ? result.ticket
+                : ticket
+          )
+      }));
+
+      return true;
+    } catch (messageError) {
+      window.alert(
+        messageError.message
+      );
+
+      return false;
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function createTicket(
+    form
+  ) {
+    setIsSaving(true);
+
+    try {
+      const token =
+        localStorage.getItem("qsm_admin_token") ||
+        sessionStorage.getItem("qsm_admin_token") ||
+        localStorage.getItem("token");
+
+      const response = await fetch(
+        `${API_BASE_URL}/admin/support/tickets`,
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+
+            Authorization:
+              token
+                ? `Bearer ${token}`
+                : ""
+          },
+
+          body:
+            JSON.stringify(form)
+        }
+      );
+
+      const result =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result?.message ||
+            "No fue posible crear el ticket."
+        );
+      }
+
+      setShowCreateTicket(false);
+
+      await loadDashboard();
+
+      return true;
+    } catch (createError) {
+      window.alert(
+        createError.message
+      );
+
+      return false;
+    } finally {
+      setIsSaving(false);
+    }
   }
 
   if (loading) {
@@ -919,6 +1055,16 @@ function SupportDashboard() {
         </section>
       </div>
 
+      {showCreateTicket && (
+        <NewTicketModal
+          isSaving={isSaving}
+          onClose={() =>
+            setShowCreateTicket(false)
+          }
+          onCreate={createTicket}
+        />
+      )}
+
       {selectedTicket && (
         <SupportModal
           ticket={selectedTicket}
@@ -929,6 +1075,7 @@ function SupportDashboard() {
           }
           onAssignAgent={assignAgent}
           onUpdateTicket={updateTicket}
+          onSendMessage={sendTicketMessage}
         />
       )}
     </div>
@@ -941,7 +1088,8 @@ function SupportModal({
   isSaving,
   onClose,
   onAssignAgent,
-  onUpdateTicket
+  onUpdateTicket,
+  onSendMessage
 }) {
   const [selectedAgentId, setSelectedAgentId] =
     useState(
@@ -957,23 +1105,12 @@ function SupportModal({
         agent.id === selectedAgentId
     );
 
-  const messages = [
-    {
-      id: "MSG-001",
-      author: ticket.user?.name,
-      role: "Usuario",
-      message: ticket.description,
-      time: ticket.lastUpdate
-    },
-    {
-      id: "MSG-002",
-      author: "Sistema QSM",
-      role: "Sistema",
-      message:
-        "El ticket fue registrado y enviado al área correspondiente.",
-      time: "Automático"
-    }
-  ];
+  const messages =
+    Array.isArray(
+      ticket.messages
+    )
+      ? ticket.messages
+      : [];
 
   return (
     <div
@@ -1222,6 +1359,272 @@ function SupportModal({
   );
 }
 
+function NewTicketModal({
+  isSaving,
+  onClose,
+  onCreate
+}) {
+  const [form, setForm] =
+    useState({
+      userEmail: "",
+      subject: "",
+      description: "",
+      category: "TECHNICAL",
+      priority: "NORMAL",
+      channel: "WEB",
+      relatedEntityType: "",
+      relatedEntityId: ""
+    });
+
+  const updateField = (
+    field,
+    value
+  ) => {
+    setForm((current) => ({
+      ...current,
+      [field]: value
+    }));
+  };
+
+  return (
+    <div
+      className="support-modal-backdrop"
+      onMouseDown={(event) => {
+        if (
+          event.target ===
+          event.currentTarget
+        ) {
+          onClose();
+        }
+      }}
+    >
+      <div className="support-modal support-create-modal">
+        <div className="support-modal-header">
+          <div>
+            <p className="support-eyebrow">
+              Nuevo caso
+            </p>
+
+            <h2>Crear ticket</h2>
+
+            <p>
+              Registra una solicitud real de soporte.
+            </p>
+          </div>
+
+          <button
+            className="support-button"
+            onClick={onClose}
+          >
+            ?
+          </button>
+        </div>
+
+        <div className="support-modal-content">
+          <div className="support-create-grid">
+            <label className="support-form-field">
+              <span>Correo del usuario</span>
+
+              <input
+                className="support-input"
+                type="email"
+                value={form.userEmail}
+                onChange={(event) =>
+                  updateField(
+                    "userEmail",
+                    event.target.value
+                  )
+                }
+                placeholder="usuario@correo.com"
+              />
+            </label>
+
+            <label className="support-form-field">
+              <span>Asunto</span>
+
+              <input
+                className="support-input"
+                value={form.subject}
+                onChange={(event) =>
+                  updateField(
+                    "subject",
+                    event.target.value
+                  )
+                }
+                placeholder="Describe el problema"
+              />
+            </label>
+
+            <label className="support-form-field">
+              <span>Categor?a</span>
+
+              <select
+                className="support-select"
+                value={form.category}
+                onChange={(event) =>
+                  updateField(
+                    "category",
+                    event.target.value
+                  )
+                }
+              >
+                {Object.entries(
+                  TICKET_CATEGORY
+                ).map(
+                  ([value, label]) => (
+                    <option
+                      key={value}
+                      value={value}
+                    >
+                      {label}
+                    </option>
+                  )
+                )}
+              </select>
+            </label>
+
+            <label className="support-form-field">
+              <span>Prioridad</span>
+
+              <select
+                className="support-select"
+                value={form.priority}
+                onChange={(event) =>
+                  updateField(
+                    "priority",
+                    event.target.value
+                  )
+                }
+              >
+                <option value="LOW">
+                  Baja
+                </option>
+                <option value="NORMAL">
+                  Normal
+                </option>
+                <option value="MEDIUM">
+                  Media
+                </option>
+                <option value="HIGH">
+                  Alta
+                </option>
+                <option value="CRITICAL">
+                  Cr?tica
+                </option>
+              </select>
+            </label>
+
+            <label className="support-form-field">
+              <span>Canal</span>
+
+              <select
+                className="support-select"
+                value={form.channel}
+                onChange={(event) =>
+                  updateField(
+                    "channel",
+                    event.target.value
+                  )
+                }
+              >
+                <option value="WEB">
+                  Web
+                </option>
+                <option value="CHAT">
+                  Chat
+                </option>
+                <option value="EMAIL">
+                  Correo
+                </option>
+                <option value="PHONE">
+                  Tel?fono
+                </option>
+              </select>
+            </label>
+
+            <label className="support-form-field">
+              <span>Tipo relacionado</span>
+
+              <input
+                className="support-input"
+                value={
+                  form.relatedEntityType
+                }
+                onChange={(event) =>
+                  updateField(
+                    "relatedEntityType",
+                    event.target.value
+                  )
+                }
+                placeholder="ORDER, DISPUTE..."
+              />
+            </label>
+
+            <label className="support-form-field">
+              <span>ID relacionado</span>
+
+              <input
+                className="support-input"
+                value={
+                  form.relatedEntityId
+                }
+                onChange={(event) =>
+                  updateField(
+                    "relatedEntityId",
+                    event.target.value
+                  )
+                }
+                placeholder="ORD-100, DSP-20..."
+              />
+            </label>
+          </div>
+
+          <label className="support-form-field">
+            <span>Descripci?n</span>
+
+            <textarea
+              className="support-create-textarea"
+              value={form.description}
+              onChange={(event) =>
+                updateField(
+                  "description",
+                  event.target.value
+                )
+              }
+              placeholder="Explica el problema reportado..."
+            />
+          </label>
+        </div>
+
+        <div className="support-modal-actions">
+          <button
+            className="support-button"
+            onClick={onClose}
+          >
+            Cancelar
+          </button>
+
+          <button
+            className="support-button support-button-primary"
+            disabled={
+              isSaving ||
+              !form.userEmail.trim() ||
+              !form.subject.trim()
+            }
+            onClick={() =>
+              onCreate(form)
+            }
+          >
+            {isSaving
+              ? "Creando..."
+              : "Crear ticket"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Detail({
   label,
   value
@@ -1422,6 +1825,43 @@ const styles = `
   .support-container {
     width: min(1650px,100%);
     margin: 0 auto;
+  }
+
+  .support-create-modal {
+    width: min(900px,100%);
+  }
+
+  .support-create-grid {
+    display: grid;
+    grid-template-columns:
+      repeat(2,minmax(0,1fr));
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  .support-form-field {
+    display: grid;
+    gap: 8px;
+    color: #aeb8dc;
+    font-size: 13px;
+  }
+
+  .support-create-textarea {
+    width: 100%;
+    min-height: 130px;
+    resize: vertical;
+    border: 1px solid #25305a;
+    border-radius: 10px;
+    padding: 12px;
+    color: #f7f8ff;
+    background: #080d24;
+    font: inherit;
+  }
+
+  @media (max-width: 760px) {
+    .support-create-grid {
+      grid-template-columns: 1fr;
+    }
   }
 
   .support-header {

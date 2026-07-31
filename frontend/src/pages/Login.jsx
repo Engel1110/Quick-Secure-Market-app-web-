@@ -70,7 +70,7 @@ function Login() {
         localStorage.setItem("user", JSON.stringify(user));
       }
 
-      navigate("/dashboard");
+      window.location.assign("/dashboard");
     } catch (error) {
       const backendMessage =
         error?.response?.data?.message ||

@@ -1,226 +1,94 @@
-const mongoose = require("mongoose");
 const validator = require("validator");
-
-const Review = require("../models/Review");
-const Order = require("../models/Order");
-const User = require("../models/User");
-
+const { prisma, parsePositiveInt, getRequestUserId } = require("../utils/prismaCompat");
 const { analyzeReview } = require("../services/reviewAI.service");
 
-const isValidObjectId = (id) => {
-  return mongoose.Types.ObjectId.isValid(id);
-};
+const sanitizeText = (value) => validator.escape(String(value || "").trim());
+const userSelect = { id: true, firstName: true, lastName: true, email: true, trustScore: true, isVerified: true };
+const productSelect = { id: true, title: true, price: true, category: true };
 
-const sanitizeText = (value) => {
-  return validator.escape(String(value || "").trim());
-};
+function serialize(review) {
+  return {
+    ...review,
+    _id: String(review.id),
+    order: review.order ? { ...review.order, _id: String(review.order.id) } : review.orderId,
+    product: review.product ? { ...review.product, _id: String(review.product.id) } : review.productId,
+    reviewer: review.reviewer ? { ...review.reviewer, _id: String(review.reviewer.id) } : review.reviewerId,
+    reviewedUser: review.reviewed ? { ...review.reviewed, _id: String(review.reviewed.id) } : review.reviewedId,
+    reviewed: review.reviewed ? { ...review.reviewed, _id: String(review.reviewed.id) } : undefined
+  };
+}
 
-const createReview = async (req, res) => {
+const include = { reviewer: { select: userSelect }, reviewed: { select: userSelect }, product: { select: productSelect }, order: true };
+
+async function createReview(req, res) {
   try {
-    const { orderId, rating, comment } = req.body;
+    const orderId = parsePositiveInt(req.body?.orderId);
+    const reviewerId = await getRequestUserId(req);
+    const rating = Number(req.body?.rating);
+    if (!orderId || !rating) return res.status(400).json({ success: false, message: "orderId y rating son obligatorios" });
+    if (!Number.isFinite(rating) || rating < 1 || rating > 5) return res.status(400).json({ success: false, message: "El rating debe ser un número entre 1 y 5" });
+    const comment = sanitizeText(req.body?.comment || "");
+    if (comment.length > 500) return res.status(400).json({ success: false, message: "El comentario no puede superar los 500 caracteres" });
 
-    if (!orderId || !rating) {
-      return res.status(400).json({
-        success: false,
-        message: "orderId y rating son obligatorios"
+    const order = await prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) return res.status(404).json({ success: false, message: "Orden no encontrada" });
+    if (![order.buyerId, order.sellerId].includes(reviewerId)) return res.status(403).json({ success: false, message: "Solo comprador o vendedor pueden calificar esta orden" });
+    if (!["DELIVERED", "COMPLETED"].includes(String(order.status).toUpperCase())) return res.status(400).json({ success: false, message: "Solo puedes calificar una orden entregada o completada" });
+
+    const existing = await prisma.review.findFirst({ where: { orderId, reviewerId } });
+    if (existing) return res.status(400).json({ success: false, message: "Ya calificaste esta orden" });
+
+    const reviewedId = order.buyerId === reviewerId ? order.sellerId : order.buyerId;
+    const analysis = analyzeReview(comment);
+
+    const result = await prisma.$transaction(async (tx) => {
+      const review = await tx.review.create({
+        data: { orderId, productId: order.productId, reviewerId, reviewedId, rating: Math.round(rating), comment, sentimentLabel: analysis.sentimentLabel, sentimentScore: analysis.sentimentScore }
       });
-    }
-
-    if (!isValidObjectId(orderId)) {
-      return res.status(400).json({
-        success: false,
-        message: "orderId no es válido"
-      });
-    }
-
-    const numericRating = Number(rating);
-
-    if (
-      Number.isNaN(numericRating) ||
-      numericRating < 1 ||
-      numericRating > 5
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "El rating debe ser un número entre 1 y 5"
-      });
-    }
-
-    const safeComment = sanitizeText(comment || "");
-
-    if (safeComment.length > 500) {
-      return res.status(400).json({
-        success: false,
-        message: "El comentario no puede superar los 500 caracteres"
-      });
-    }
-
-    const order = await Order.findById(orderId);
-
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        message: "Orden no encontrada"
-      });
-    }
-
-    if (
-      order.buyer.toString() !== req.user._id.toString() &&
-      order.seller.toString() !== req.user._id.toString()
-    ) {
-      return res.status(403).json({
-        success: false,
-        message: "Solo comprador o vendedor pueden calificar esta orden"
-      });
-    }
-
-    if (!["DELIVERED", "COMPLETED"].includes(order.status)) {
-      return res.status(400).json({
-        success: false,
-        message: "Solo puedes calificar una orden entregada o completada"
-      });
-    }
-
-    const existingReview = await Review.findOne({
-      order: order._id,
-      reviewer: req.user._id
+      const reviews = await tx.review.findMany({ where: { reviewedId }, select: { rating: true, sentimentLabel: true } });
+      const target = await tx.user.findUnique({ where: { id: reviewedId } });
+      const average = reviews.reduce((sum, item) => sum + item.rating, 0) / Math.max(reviews.length, 1);
+      const positive = reviews.filter((item) => item.sentimentLabel === "POSITIVE").length;
+      const negative = reviews.filter((item) => item.sentimentLabel === "NEGATIVE").length;
+      let trustScore = target?.isVerified ? 70 : 50;
+      trustScore += average * 5 + positive * 2 - negative * 5;
+      trustScore = Math.max(0, Math.min(100, Math.round(trustScore)));
+      await tx.user.update({ where: { id: reviewedId }, data: { trustScore } });
+      const full = await tx.review.findUnique({ where: { id: review.id }, include });
+      return { review: full, trustScore };
     });
-
-    if (existingReview) {
-      return res.status(400).json({
-        success: false,
-        message: "Ya calificaste esta orden"
-      });
-    }
-
-    const reviewedUser =
-      order.buyer.toString() === req.user._id.toString()
-        ? order.seller
-        : order.buyer;
-
-    const analysis = analyzeReview(safeComment);
-
-    const review = await Review.create({
-      order: order._id,
-      reviewer: req.user._id,
-      reviewedUser,
-      product: order.product,
-      rating: numericRating,
-      comment: safeComment,
-      sentimentLabel: analysis.sentimentLabel,
-      sentimentScore: analysis.sentimentScore
-    });
-
-    const userReviews = await Review.find({ reviewedUser });
-
-    const averageRating =
-      userReviews.reduce((sum, item) => sum + item.rating, 0) /
-      userReviews.length;
-
-    const positiveReviews = userReviews.filter(
-      (item) => item.sentimentLabel === "POSITIVE"
-    ).length;
-
-    const negativeReviews = userReviews.filter(
-      (item) => item.sentimentLabel === "NEGATIVE"
-    ).length;
-
-    const reviewedUserData = await User.findById(reviewedUser);
-
-    if (reviewedUserData) {
-      let trustScore = reviewedUserData.isVerified ? 70 : 50;
-
-      trustScore += averageRating * 5;
-      trustScore += positiveReviews * 2;
-      trustScore -= negativeReviews * 5;
-
-      if (trustScore > 100) trustScore = 100;
-      if (trustScore < 0) trustScore = 0;
-
-      reviewedUserData.trustScore = Math.round(trustScore);
-      await reviewedUserData.save();
-    }
 
     return res.status(201).json({
       success: true,
       message: "Review creada correctamente",
-      resultado: {
-        usuarioCalificado: reviewedUser,
-        rating: numericRating,
-        sentimiento: analysis.sentimentLabel,
-        puntajeSentimiento: analysis.sentimentScore,
-        nuevoTrustScore: reviewedUserData ? reviewedUserData.trustScore : null
-      },
-      review
+      resultado: { usuarioCalificado: reviewedId, rating, sentimiento: analysis.sentimentLabel, puntajeSentimiento: analysis.sentimentScore, nuevoTrustScore: result.trustScore },
+      review: serialize(result.review)
     });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Error creando review",
-      error: error.message
-    });
+    console.error("Error creando review:", error);
+    return res.status(500).json({ success: false, message: "Error creando review", error: error.message });
   }
-};
+}
 
-const getMyReviews = async (req, res) => {
+async function getMyReviews(req, res) {
   try {
-    const reviews = await Review.find({
-      reviewer: req.user._id
-    })
-      .populate("reviewedUser", "firstName lastName email trustScore isVerified")
-      .populate("product", "title price category")
-      .sort({ createdAt: -1 });
-
-    return res.json({
-      success: true,
-      message: "Mis reviews obtenidas correctamente",
-      count: reviews.length,
-      reviews
-    });
+    const reviewerId = await getRequestUserId(req);
+    const reviews = await prisma.review.findMany({ where: { reviewerId }, include, orderBy: { createdAt: "desc" } });
+    return res.json({ success: true, message: "Mis reviews obtenidas correctamente", count: reviews.length, reviews: reviews.map(serialize) });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Error obteniendo mis reviews",
-      error: error.message
-    });
+    return res.status(500).json({ success: false, message: "Error obteniendo mis reviews", error: error.message });
   }
-};
+}
 
-const getUserReviews = async (req, res) => {
+async function getUserReviews(req, res) {
   try {
-    const { userId } = req.params;
-
-    if (!isValidObjectId(userId)) {
-      return res.status(400).json({
-        success: false,
-        message: "userId no es válido"
-      });
-    }
-
-    const reviews = await Review.find({
-      reviewedUser: userId
-    })
-      .populate("reviewer", "firstName lastName email trustScore isVerified")
-      .populate("product", "title price category")
-      .sort({ createdAt: -1 });
-
-    return res.json({
-      success: true,
-      message: "Reviews del usuario obtenidas correctamente",
-      count: reviews.length,
-      reviews
-    });
+    const reviewedId = parsePositiveInt(req.params.userId);
+    if (!reviewedId) return res.status(400).json({ success: false, message: "userId no es válido" });
+    const reviews = await prisma.review.findMany({ where: { reviewedId }, include, orderBy: { createdAt: "desc" } });
+    return res.json({ success: true, message: "Reviews del usuario obtenidas correctamente", count: reviews.length, reviews: reviews.map(serialize) });
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: "Error obteniendo reviews del usuario",
-      error: error.message
-    });
+    return res.status(500).json({ success: false, message: "Error obteniendo reviews del usuario", error: error.message });
   }
-};
+}
 
-module.exports = {
-  createReview,
-  getMyReviews,
-  getUserReviews
-};
+module.exports = { createReview, getMyReviews, getUserReviews };

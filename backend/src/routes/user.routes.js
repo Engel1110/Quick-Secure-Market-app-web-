@@ -14,6 +14,7 @@ const {
 
 const {
   getMe,
+  getPublicProfile,
   updateMe,
   updateProfilePhoto,
   deleteProfilePhoto
@@ -37,6 +38,13 @@ router.patch(
   "/me",
   authMiddleware,
   updateMe
+);
+
+
+router.get(
+  "/:userId/public",
+  authMiddleware,
+  getPublicProfile
 );
 
 /*

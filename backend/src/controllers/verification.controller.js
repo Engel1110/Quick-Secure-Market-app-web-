@@ -1,8 +1,8 @@
-import Verification from "../models/Verification.js";
-import User from "../models/User.js";
+﻿const Verification = require("../models/Verification");
+const User = require("../models/User");
 
 /* =========================================================
-   CONFIGURACIÓN
+   CONFIGURACIÃ“N
 ========================================================= */
 
 const VERIFICATION_UPLOAD_PATH = "/uploads/verification";
@@ -119,7 +119,7 @@ const getVerificationOrFail = async (verificationId, res) => {
   if (!verification) {
     res.status(404).json({
       success: false,
-      message: "Verificación no encontrada."
+      message: "VerificaciÃ³n no encontrada."
     });
 
     return null;
@@ -219,7 +219,7 @@ const syncVerificationStatusWithUser = async ({
 /**
  * GET /api/verifications/me
  */
-export const getMyVerification = async (req, res) => {
+const getMyVerification = async (req, res) => {
   try {
     const userId = getUserId(req);
 
@@ -242,7 +242,7 @@ export const getMyVerification = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "No se pudo obtener la verificación."
+      message: "No se pudo obtener la verificaciÃ³n."
     });
   }
 };
@@ -250,7 +250,7 @@ export const getMyVerification = async (req, res) => {
 /**
  * PUT /api/verifications/me/draft
  */
-export const saveVerificationDraft = async (req, res) => {
+const saveVerificationDraft = async (req, res) => {
   try {
     const userId = getUserId(req);
 
@@ -266,7 +266,7 @@ export const saveVerificationDraft = async (req, res) => {
       return res.status(400).json({
         success: false,
         message:
-          "No puedes editar esta verificación en su estado actual."
+          "No puedes editar esta verificaciÃ³n en su estado actual."
       });
     }
 
@@ -319,7 +319,7 @@ export const saveVerificationDraft = async (req, res) => {
 /**
  * POST /api/verifications/me/submit
  */
-export const submitVerification = async (req, res) => {
+const submitVerification = async (req, res) => {
   try {
     const userId = getUserId(req);
 
@@ -351,7 +351,7 @@ export const submitVerification = async (req, res) => {
       return res.status(400).json({
         success: false,
         message:
-          "Esta verificación no puede enviarse nuevamente en su estado actual."
+          "Esta verificaciÃ³n no puede enviarse nuevamente en su estado actual."
       });
     }
 
@@ -497,7 +497,7 @@ export const submitVerification = async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: "Verificación enviada correctamente.",
+      message: "VerificaciÃ³n enviada correctamente.",
       verification
     });
   } catch (error) {
@@ -505,7 +505,7 @@ export const submitVerification = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "No se pudo enviar la verificación."
+      message: "No se pudo enviar la verificaciÃ³n."
     });
   }
 };
@@ -513,7 +513,7 @@ export const submitVerification = async (req, res) => {
 /**
  * POST /api/verifications/me/resubmit
  */
-export const resubmitVerification = async (req, res) => {
+const resubmitVerification = async (req, res) => {
   try {
     const userId = getUserId(req);
 
@@ -524,7 +524,7 @@ export const resubmitVerification = async (req, res) => {
     if (!verification) {
       return res.status(404).json({
         success: false,
-        message: "No existe una verificación para reenviar."
+        message: "No existe una verificaciÃ³n para reenviar."
       });
     }
 
@@ -537,7 +537,7 @@ export const resubmitVerification = async (req, res) => {
       return res.status(400).json({
         success: false,
         message:
-          "Esta verificación no requiere un nuevo envío."
+          "Esta verificaciÃ³n no requiere un nuevo envÃ­o."
       });
     }
 
@@ -549,7 +549,7 @@ export const resubmitVerification = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "No se pudo reenviar la verificación."
+      message: "No se pudo reenviar la verificaciÃ³n."
     });
   }
 };
@@ -558,7 +558,7 @@ export const resubmitVerification = async (req, res) => {
    SUBIDA INDIVIDUAL DE ARCHIVOS
 ========================================================= */
 
-export const uploadProfilePhoto = async (req, res) => {
+const uploadProfilePhoto = async (req, res) => {
   try {
     const userId = getUserId(req);
     const file = req.file || req.files?.profilePhoto?.[0];
@@ -608,7 +608,7 @@ export const uploadProfilePhoto = async (req, res) => {
   }
 };
 
-export const uploadDocumentFront = async (req, res) => {
+const uploadDocumentFront = async (req, res) => {
   try {
     const userId = getUserId(req);
     const file = req.file || req.files?.documentFront?.[0];
@@ -652,7 +652,7 @@ export const uploadDocumentFront = async (req, res) => {
   }
 };
 
-export const uploadDocumentBack = async (req, res) => {
+const uploadDocumentBack = async (req, res) => {
   try {
     const userId = getUserId(req);
     const file = req.file || req.files?.documentBack?.[0];
@@ -696,7 +696,7 @@ export const uploadDocumentBack = async (req, res) => {
   }
 };
 
-export const uploadSelfie = async (req, res) => {
+const uploadSelfie = async (req, res) => {
   try {
     const userId = getUserId(req);
     const file = req.file || req.files?.selfie?.[0];
@@ -741,10 +741,10 @@ export const uploadSelfie = async (req, res) => {
 };
 
 /* =========================================================
-   COMPROBACIÓN FACIAL PERIÓDICA
+   COMPROBACIÃ“N FACIAL PERIÃ“DICA
 ========================================================= */
 
-export const dailyCheck = async (req, res) => {
+const dailyCheck = async (req, res) => {
   try {
     const userId = getUserId(req);
 
@@ -755,7 +755,7 @@ export const dailyCheck = async (req, res) => {
     if (!verification) {
       return res.status(404).json({
         success: false,
-        message: "Primero debes iniciar tu verificación."
+        message: "Primero debes iniciar tu verificaciÃ³n."
       });
     }
 
@@ -763,7 +763,7 @@ export const dailyCheck = async (req, res) => {
       return res.status(400).json({
         success: false,
         message:
-          "Debes tener la identidad aprobada para realizar esta validación."
+          "Debes tener la identidad aprobada para realizar esta validaciÃ³n."
       });
     }
 
@@ -801,7 +801,7 @@ export const dailyCheck = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Validación facial completada correctamente.",
+      message: "ValidaciÃ³n facial completada correctamente.",
       verification
     });
   } catch (error) {
@@ -809,7 +809,7 @@ export const dailyCheck = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "No se pudo completar la validación facial."
+      message: "No se pudo completar la validaciÃ³n facial."
     });
   }
 };
@@ -821,7 +821,7 @@ export const dailyCheck = async (req, res) => {
 /**
  * GET /api/admin/verifications
  */
-export const getAllVerifications = async (req, res) => {
+const getAllVerifications = async (req, res) => {
   try {
     if (!isAdminUser(req.user)) {
       return res.status(403).json({
@@ -902,12 +902,12 @@ export const getAllVerifications = async (req, res) => {
 /**
  * GET /api/admin/verifications/stats
  */
-export const getVerificationStats = async (req, res) => {
+const getVerificationStats = async (req, res) => {
   try {
     if (!isAdminUser(req.user)) {
       return res.status(403).json({
         success: false,
-        message: "No tienes permisos para ver estadísticas."
+        message: "No tienes permisos para ver estadÃ­sticas."
       });
     }
 
@@ -946,7 +946,7 @@ export const getVerificationStats = async (req, res) => {
     return res.status(500).json({
       success: false,
       message:
-        "No se pudieron obtener las estadísticas de verificación."
+        "No se pudieron obtener las estadÃ­sticas de verificaciÃ³n."
     });
   }
 };
@@ -954,13 +954,13 @@ export const getVerificationStats = async (req, res) => {
 /**
  * GET /api/admin/verifications/:id
  */
-export const getVerificationById = async (req, res) => {
+const getVerificationById = async (req, res) => {
   try {
     if (!isAdminUser(req.user)) {
       return res.status(403).json({
         success: false,
         message:
-          "No tienes permisos para ver esta verificación."
+          "No tienes permisos para ver esta verificaciÃ³n."
       });
     }
 
@@ -979,7 +979,7 @@ export const getVerificationById = async (req, res) => {
     if (!verification) {
       return res.status(404).json({
         success: false,
-        message: "Verificación no encontrada."
+        message: "VerificaciÃ³n no encontrada."
       });
     }
 
@@ -992,7 +992,7 @@ export const getVerificationById = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "No se pudo obtener la verificación."
+      message: "No se pudo obtener la verificaciÃ³n."
     });
   }
 };
@@ -1000,13 +1000,13 @@ export const getVerificationById = async (req, res) => {
 /**
  * PUT /api/admin/verifications/:id/start-review
  */
-export const startVerificationReview = async (req, res) => {
+const startVerificationReview = async (req, res) => {
   try {
     if (!isAdminUser(req.user)) {
       return res.status(403).json({
         success: false,
         message:
-          "No tienes permisos para iniciar esta revisión."
+          "No tienes permisos para iniciar esta revisiÃ³n."
       });
     }
 
@@ -1023,7 +1023,7 @@ export const startVerificationReview = async (req, res) => {
       return res.status(400).json({
         success: false,
         message:
-          "Una verificación aprobada no puede iniciarse nuevamente."
+          "Una verificaciÃ³n aprobada no puede iniciarse nuevamente."
       });
     }
 
@@ -1047,7 +1047,7 @@ export const startVerificationReview = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Revisión iniciada correctamente.",
+      message: "RevisiÃ³n iniciada correctamente.",
       verification
     });
   } catch (error) {
@@ -1055,16 +1055,16 @@ export const startVerificationReview = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "No se pudo iniciar la revisión."
+      message: "No se pudo iniciar la revisiÃ³n."
     });
   }
 };
 
 /* =========================================================
-   REVISIÓN DE CAMPOS
+   REVISIÃ“N DE CAMPOS
 ========================================================= */
 
-export const approveVerificationField = async (req, res) => {
+const approveVerificationField = async (req, res) => {
   try {
     if (!isAdminUser(req.user)) {
       return res.status(403).json({
@@ -1080,7 +1080,7 @@ export const approveVerificationField = async (req, res) => {
     if (!VERIFICATION_FIELDS[field]) {
       return res.status(400).json({
         success: false,
-        message: "Campo de verificación inválido."
+        message: "Campo de verificaciÃ³n invÃ¡lido."
       });
     }
 
@@ -1123,7 +1123,7 @@ export const approveVerificationField = async (req, res) => {
   }
 };
 
-export const rejectVerificationField = async (req, res) => {
+const rejectVerificationField = async (req, res) => {
   try {
     if (!isAdminUser(req.user)) {
       return res.status(403).json({
@@ -1140,7 +1140,7 @@ export const rejectVerificationField = async (req, res) => {
     if (!VERIFICATION_FIELDS[field]) {
       return res.status(400).json({
         success: false,
-        message: "Campo de verificación inválido."
+        message: "Campo de verificaciÃ³n invÃ¡lido."
       });
     }
 
@@ -1205,7 +1205,7 @@ export const rejectVerificationField = async (req, res) => {
     return res.status(200).json({
       success: true,
       message:
-        "Campo rechazado. Se solicitó una corrección al usuario.",
+        "Campo rechazado. Se solicitÃ³ una correcciÃ³n al usuario.",
       field,
       verification
     });
@@ -1220,10 +1220,10 @@ export const rejectVerificationField = async (req, res) => {
 };
 
 /* =========================================================
-   APROBACIÓN GENERAL
+   APROBACIÃ“N GENERAL
 ========================================================= */
 
-export const approveVerification = async (req, res) => {
+const approveVerification = async (req, res) => {
   try {
     if (!isAdminUser(req.user)) {
       return res.status(403).json({
@@ -1269,7 +1269,7 @@ export const approveVerification = async (req, res) => {
       return res.status(404).json({
         success: false,
         message:
-          "El usuario relacionado con esta verificación no existe."
+          "El usuario relacionado con esta verificaciÃ³n no existe."
       });
     }
 
@@ -1342,7 +1342,7 @@ export const approveVerification = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Verificación aprobada correctamente.",
+      message: "VerificaciÃ³n aprobada correctamente.",
       verification,
       user
     });
@@ -1351,12 +1351,12 @@ export const approveVerification = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "No se pudo aprobar la verificación."
+      message: "No se pudo aprobar la verificaciÃ³n."
     });
   }
 };
 
-export const rejectVerification = async (req, res) => {
+const rejectVerification = async (req, res) => {
   try {
     if (!isAdminUser(req.user)) {
       return res.status(403).json({
@@ -1416,7 +1416,7 @@ export const rejectVerification = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Verificación rechazada correctamente.",
+      message: "VerificaciÃ³n rechazada correctamente.",
       verification
     });
   } catch (error) {
@@ -1424,12 +1424,12 @@ export const rejectVerification = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "No se pudo rechazar la verificación."
+      message: "No se pudo rechazar la verificaciÃ³n."
     });
   }
 };
 
-export const requestVerificationResubmission = async (
+const requestVerificationResubmission = async (
   req,
   res
 ) => {
@@ -1449,7 +1449,7 @@ export const requestVerificationResubmission = async (
       return res.status(400).json({
         success: false,
         message:
-          "Debes indicar qué debe corregir el usuario."
+          "Debes indicar quÃ© debe corregir el usuario."
       });
     }
 
@@ -1501,7 +1501,7 @@ export const requestVerificationResubmission = async (
     return res.status(200).json({
       success: true,
       message:
-        "Se solicitó correctamente el reenvío de información.",
+        "Se solicitÃ³ correctamente el reenvÃ­o de informaciÃ³n.",
       verification
     });
   } catch (error) {
@@ -1513,7 +1513,7 @@ export const requestVerificationResubmission = async (
     return res.status(500).json({
       success: false,
       message:
-        "No se pudo solicitar el reenvío de información."
+        "No se pudo solicitar el reenvÃ­o de informaciÃ³n."
     });
   }
 };
@@ -1526,7 +1526,7 @@ export const requestVerificationResubmission = async (
  * Conserva compatibilidad con el frontend anterior.
  * PUT /api/verifications/:id/review
  */
-export const reviewVerification = async (req, res) => {
+const reviewVerification = async (req, res) => {
   const { status } = req.body;
 
   if (status === "APPROVED") {
@@ -1554,15 +1554,15 @@ export const reviewVerification = async (req, res) => {
 
   return res.status(400).json({
     success: false,
-    message: "Estado de revisión inválido."
+    message: "Estado de revisiÃ³n invÃ¡lido."
   });
 };
 
 /* =========================================================
-   REABRIR VERIFICACIÓN
+   REABRIR VERIFICACIÃ“N
 ========================================================= */
 
-export const reopenVerification = async (req, res) => {
+const reopenVerification = async (req, res) => {
   try {
     if (!isVerificationManager(req.user)) {
       return res.status(403).json({
@@ -1579,7 +1579,7 @@ export const reopenVerification = async (req, res) => {
       return res.status(400).json({
         success: false,
         message:
-          "Debes indicar el motivo para reabrir la verificación."
+          "Debes indicar el motivo para reabrir la verificaciÃ³n."
       });
     }
 
@@ -1609,7 +1609,7 @@ export const reopenVerification = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Verificación reabierta correctamente.",
+      message: "VerificaciÃ³n reabierta correctamente.",
       verification
     });
   } catch (error) {
@@ -1617,7 +1617,30 @@ export const reopenVerification = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "No se pudo reabrir la verificación."
+      message: "No se pudo reabrir la verificaciÃ³n."
     });
   }
+};
+
+module.exports = {
+  getMyVerification,
+  saveVerificationDraft,
+  submitVerification,
+  resubmitVerification,
+  uploadProfilePhoto,
+  uploadDocumentFront,
+  uploadDocumentBack,
+  uploadSelfie,
+  dailyCheck,
+  getAllVerifications,
+  getVerificationStats,
+  getVerificationById,
+  startVerificationReview,
+  approveVerificationField,
+  rejectVerificationField,
+  approveVerification,
+  rejectVerification,
+  requestVerificationResubmission,
+  reviewVerification,
+  reopenVerification
 };

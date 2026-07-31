@@ -1,1174 +1,198 @@
 const validator = require("validator");
+const { prisma, getRequestUserId, getClientIp, getDeviceInfo } = require("../utils/prismaCompat");
 
-const SystemSetting = require(
-  "../models/SystemSetting"
-);
-
-const AuditLog = require(
-  "../models/AuditLog"
-);
-
-/*
-|--------------------------------------------------------------------------
-| Constantes
-|--------------------------------------------------------------------------
-*/
-
-const GLOBAL_SETTINGS_KEY =
-  "GLOBAL_SYSTEM_SETTINGS";
-
-const ALLOWED_CURRENCIES = [
-  "DOP",
-  "USD"
-];
-
-/*
-|--------------------------------------------------------------------------
-| Campos permitidos
-|--------------------------------------------------------------------------
-*/
+const GLOBAL_SETTINGS_KEY = "GLOBAL_SYSTEM_SETTINGS";
+const ALLOWED_CURRENCIES = ["DOP", "USD"];
+const SECTIONS = ["platform", "verification", "finance", "operations", "security", "communication", "moderation", "automation"];
 
 const BOOLEAN_FIELDS = {
-  platform: [
-    "marketplaceEnabled",
-    "registrationEnabled",
-    "loginEnabled",
-    "purchasesEnabled",
-    "salesEnabled",
-    "maintenanceMode"
-  ],
-
-  verification: [
-    "kycRequiredForBuying",
-    "kycRequiredForSelling",
-    "kycRequiredForWithdrawals",
-    "faceVerificationEnabled",
-    "periodicFaceCheckEnabled"
-  ],
-
-  finance: [
-    "escrowEnabled",
-    "walletEnabled",
-    "withdrawalsEnabled",
-    "refundsEnabled"
-  ],
-
-  operations: [
-    "warehouseInspectionRequired",
-    "deliveryPinRequired",
-    "buyerConfirmationRequired"
-  ],
-
-  security: [
-    "adminTwoFactorRequired",
-    "userTwoFactorAvailable",
-    "suspiciousIpDetectionEnabled",
-    "suspiciousDeviceDetectionEnabled",
-    "forcePasswordChangeForInternalUsers"
-  ],
-
-  communication: [
-    "emailNotificationsEnabled",
-    "pushNotificationsEnabled",
-    "smsNotificationsEnabled",
-    "adminAlertsEnabled",
-    "securityAlertsEnabled",
-    "orderNotificationsEnabled",
-    "disputeNotificationsEnabled"
-  ],
-
-  moderation: [
-    "automaticProductReviewEnabled",
-    "requireProductApproval",
-    "hideReportedProductsAutomatically",
-    "allowUserReviews",
-    "allowProductComments"
-  ],
-
-  automation: [
-    "fraudDetectionEnabled",
-    "aiModerationEnabled",
-    "automaticRiskScoringEnabled",
-    "automaticDisputePrioritizationEnabled",
-    "automaticSecurityAlertsEnabled"
-  ]
+  platform: ["marketplaceEnabled", "registrationEnabled", "loginEnabled", "purchasesEnabled", "salesEnabled", "maintenanceMode"],
+  verification: ["kycRequiredForBuying", "kycRequiredForSelling", "kycRequiredForWithdrawals", "faceVerificationEnabled", "periodicFaceCheckEnabled"],
+  finance: ["escrowEnabled", "walletEnabled", "withdrawalsEnabled", "refundsEnabled"],
+  operations: ["warehouseInspectionRequired", "deliveryPinRequired", "buyerConfirmationRequired"],
+  security: ["adminTwoFactorRequired", "userTwoFactorAvailable", "suspiciousIpDetectionEnabled", "suspiciousDeviceDetectionEnabled", "forcePasswordChangeForInternalUsers"],
+  communication: ["emailNotificationsEnabled", "pushNotificationsEnabled", "smsNotificationsEnabled", "adminAlertsEnabled", "securityAlertsEnabled", "orderNotificationsEnabled", "disputeNotificationsEnabled"],
+  moderation: ["automaticProductReviewEnabled", "requireProductApproval", "hideReportedProductsAutomatically", "allowUserReviews", "allowProductComments"],
+  automation: ["fraudDetectionEnabled", "aiModerationEnabled", "automaticRiskScoringEnabled", "automaticDisputePrioritizationEnabled", "automaticSecurityAlertsEnabled"]
 };
 
 const NUMBER_FIELDS = {
-  verification: {
-    periodicFaceCheckHours: {
-      min: 1,
-      max: 8760
-    },
-
-    minimumSellerTrustScore: {
-      min: 0,
-      max: 100
-    },
-
-    minimumBuyerTrustScore: {
-      min: 0,
-      max: 100
-    }
-  },
-
-  finance: {
-    platformCommissionPercent: {
-      min: 0,
-      max: 100
-    },
-
-    sellerCommissionPercent: {
-      min: 0,
-      max: 100
-    },
-
-    buyerServiceFeePercent: {
-      min: 0,
-      max: 100
-    },
-
-    minimumWithdrawalAmount: {
-      min: 0,
-      max: 1000000000
-    },
-
-    maximumWithdrawalAmount: {
-      min: 0,
-      max: 1000000000
-    },
-
-    escrowReleaseHours: {
-      min: 0,
-      max: 720
-    }
-  },
-
-  operations: {
-    maximumDeliveryDays: {
-      min: 1,
-      max: 90
-    },
-
-    orderCancellationMinutes: {
-      min: 0,
-      max: 10080
-    },
-
-    disputeOpeningDays: {
-      min: 1,
-      max: 90
-    },
-
-    disputeResolutionDays: {
-      min: 1,
-      max: 180
-    }
-  },
-
-  security: {
-    adminSessionTimeoutMinutes: {
-      min: 5,
-      max: 1440
-    },
-
-    userSessionTimeoutMinutes: {
-      min: 5,
-      max: 10080
-    },
-
-    maximumLoginAttempts: {
-      min: 1,
-      max: 20
-    },
-
-    accountLockMinutes: {
-      min: 1,
-      max: 1440
-    }
-  },
-
-  moderation: {
-    reportsBeforeAutomaticHide: {
-      min: 1,
-      max: 1000
-    }
-  }
+  verification: { periodicFaceCheckHours: [1, 8760], minimumSellerTrustScore: [0, 100], minimumBuyerTrustScore: [0, 100] },
+  finance: { platformCommissionPercent: [0, 100], sellerCommissionPercent: [0, 100], buyerServiceFeePercent: [0, 100], minimumWithdrawalAmount: [0, 1e9], maximumWithdrawalAmount: [0, 1e9], escrowReleaseHours: [0, 720] },
+  operations: { maximumDeliveryDays: [1, 90], orderCancellationMinutes: [0, 10080], disputeOpeningDays: [1, 90], disputeResolutionDays: [1, 180] },
+  security: { adminSessionTimeoutMinutes: [5, 1440], userSessionTimeoutMinutes: [5, 10080], maximumLoginAttempts: [1, 20], accountLockMinutes: [1, 1440] },
+  moderation: { reportsBeforeAutomaticHide: [1, 1000] }
 };
 
-const STRING_FIELDS = {
-  platform: {
-    maintenanceMessage: {
-      maxLength: 1000
-    }
-  },
+function defaults() {
+  return {
+    platform: { marketplaceEnabled: true, registrationEnabled: true, loginEnabled: true, purchasesEnabled: true, salesEnabled: true, maintenanceMode: false, maintenanceMessage: "" },
+    verification: { kycRequiredForBuying: false, kycRequiredForSelling: true, kycRequiredForWithdrawals: true, faceVerificationEnabled: true, periodicFaceCheckEnabled: true, periodicFaceCheckHours: 720, minimumSellerTrustScore: 50, minimumBuyerTrustScore: 30 },
+    finance: { escrowEnabled: true, walletEnabled: true, withdrawalsEnabled: true, refundsEnabled: true, currency: "DOP", platformCommissionPercent: 5, sellerCommissionPercent: 0, buyerServiceFeePercent: 0, minimumWithdrawalAmount: 500, maximumWithdrawalAmount: 1000000, escrowReleaseHours: 24 },
+    operations: { warehouseInspectionRequired: true, deliveryPinRequired: true, buyerConfirmationRequired: true, maximumDeliveryDays: 7, orderCancellationMinutes: 30, disputeOpeningDays: 3, disputeResolutionDays: 15 },
+    security: { adminTwoFactorRequired: false, userTwoFactorAvailable: true, suspiciousIpDetectionEnabled: true, suspiciousDeviceDetectionEnabled: true, forcePasswordChangeForInternalUsers: true, adminSessionTimeoutMinutes: 60, userSessionTimeoutMinutes: 240, maximumLoginAttempts: 5, accountLockMinutes: 30 },
+    communication: { emailNotificationsEnabled: true, pushNotificationsEnabled: true, smsNotificationsEnabled: false, adminAlertsEnabled: true, securityAlertsEnabled: true, orderNotificationsEnabled: true, disputeNotificationsEnabled: true, supportEmail: "support@qsm.local", noReplyEmail: "noreply@qsm.local" },
+    moderation: { automaticProductReviewEnabled: true, requireProductApproval: false, hideReportedProductsAutomatically: true, allowUserReviews: true, allowProductComments: true, reportsBeforeAutomaticHide: 5 },
+    automation: { fraudDetectionEnabled: true, aiModerationEnabled: true, automaticRiskScoringEnabled: true, automaticDisputePrioritizationEnabled: true, automaticSecurityAlertsEnabled: true }
+  };
+}
 
-  communication: {
-    supportEmail: {
-      maxLength: 160,
-      isEmail: true
-    },
+function mergeDefaults(data) {
+  const base = defaults();
+  for (const section of SECTIONS) base[section] = { ...base[section], ...(data?.[section] || {}) };
+  return base;
+}
 
-    noReplyEmail: {
-      maxLength: 160,
-      isEmail: true
-    }
-  }
-};
-
-/*
-|--------------------------------------------------------------------------
-| Utilidades
-|--------------------------------------------------------------------------
-*/
-
-const getActorId = (req) =>
-  req.user?._id ||
-  req.user?.id ||
-  null;
-
-const getActorRole = (req) =>
-  String(
-    req.user?.role || ""
-  )
-    .trim()
-    .toUpperCase();
-
-const getClientIp = (req) => {
-  const forwarded =
-    req.headers[
-      "x-forwarded-for"
-    ];
-
-  if (forwarded) {
-    return String(forwarded)
-      .split(",")[0]
-      .trim();
-  }
-
-  return String(
-    req.ip ||
-      req.socket?.remoteAddress ||
-      ""
-  );
-};
-
-const getDeviceInfo = (req) =>
-  String(
-    req.headers[
-      "user-agent"
-    ] ||
-      "Dispositivo desconocido"
-  ).slice(0, 300);
-
-const hasOwn = (
-  object,
-  property
-) =>
-  Object.prototype.hasOwnProperty.call(
-    object || {},
-    property
-  );
-
-const isPlainObject = (
-  value
-) =>
-  value !== null &&
-  typeof value === "object" &&
-  !Array.isArray(value);
-
-const normalizeEmail = (
-  value
-) =>
-  String(value || "")
-    .trim()
-    .toLowerCase();
-
-const normalizeString = (
-  value
-) =>
-  String(value || "")
-    .trim();
-
-const createAuditLogSafe = (
-  data
-) => {
-  AuditLog.create(data).catch(
-    (error) => {
-      console.error(
-        "Error creando AuditLog de System Settings:",
-        error.message
-      );
-    }
-  );
-};
-
-const serializeForComparison = (
-  value
-) => {
-  if (
-    value &&
-    typeof value.toObject ===
-      "function"
-  ) {
-    return value.toObject();
-  }
-
-  return JSON.parse(
-    JSON.stringify(value || {})
-  );
-};
-
-const describeChanges = (
-  before,
-  after
-) => {
-  const changes = [];
-
-  const sections = [
-    "platform",
-    "verification",
-    "finance",
-    "operations",
-    "security",
-    "communication",
-    "moderation",
-    "automation"
-  ];
-
-  for (
-    const section
-    of sections
-  ) {
-    const previousSection =
-      before?.[section] || {};
-
-    const currentSection =
-      after?.[section] || {};
-
-    const keys = new Set([
-      ...Object.keys(
-        previousSection
-      ),
-      ...Object.keys(
-        currentSection
-      )
-    ]);
-
-    for (
-      const key
-      of keys
-    ) {
-      const previousValue =
-        previousSection[key];
-
-      const currentValue =
-        currentSection[key];
-
-      if (
-        JSON.stringify(
-          previousValue
-        ) !==
-        JSON.stringify(
-          currentValue
-        )
-      ) {
-        changes.push({
-          field:
-            `${section}.${key}`,
-          previousValue,
-          currentValue
-        });
-      }
-    }
-  }
-
-  return changes;
-};
-
-/*
-|--------------------------------------------------------------------------
-| Validar y aplicar booleanos
-|--------------------------------------------------------------------------
-*/
-
-const applyBooleanFields = ({
-  sectionName,
-  source,
-  target,
-  errors
-}) => {
-  const allowedFields =
-    BOOLEAN_FIELDS[
-      sectionName
-    ] || [];
-
-  for (
-    const field
-    of allowedFields
-  ) {
-    if (
-      !hasOwn(
-        source,
-        field
-      )
-    ) {
-      continue;
-    }
-
-    if (
-      typeof source[field] !==
-      "boolean"
-    ) {
-      errors.push(
-        `${sectionName}.${field} debe ser verdadero o falso.`
-      );
-
-      continue;
-    }
-
-    target[field] =
-      source[field];
-  }
-};
-
-/*
-|--------------------------------------------------------------------------
-| Validar y aplicar números
-|--------------------------------------------------------------------------
-*/
-
-const applyNumberFields = ({
-  sectionName,
-  source,
-  target,
-  errors
-}) => {
-  const fieldDefinitions =
-    NUMBER_FIELDS[
-      sectionName
-    ] || {};
-
-  for (
-    const [
-      field,
-      rules
-    ]
-    of Object.entries(
-      fieldDefinitions
-    )
-  ) {
-    if (
-      !hasOwn(
-        source,
-        field
-      )
-    ) {
-      continue;
-    }
-
-    const numericValue =
-      Number(
-        source[field]
-      );
-
-    if (
-      !Number.isFinite(
-        numericValue
-      )
-    ) {
-      errors.push(
-        `${sectionName}.${field} debe ser numérico.`
-      );
-
-      continue;
-    }
-
-    if (
-      numericValue <
-        rules.min ||
-      numericValue >
-        rules.max
-    ) {
-      errors.push(
-        `${sectionName}.${field} debe estar entre ${rules.min} y ${rules.max}.`
-      );
-
-      continue;
-    }
-
-    target[field] =
-      numericValue;
-  }
-};
-
-/*
-|--------------------------------------------------------------------------
-| Validar y aplicar textos
-|--------------------------------------------------------------------------
-*/
-
-const applyStringFields = ({
-  sectionName,
-  source,
-  target,
-  errors
-}) => {
-  const fieldDefinitions =
-    STRING_FIELDS[
-      sectionName
-    ] || {};
-
-  for (
-    const [
-      field,
-      rules
-    ]
-    of Object.entries(
-      fieldDefinitions
-    )
-  ) {
-    if (
-      !hasOwn(
-        source,
-        field
-      )
-    ) {
-      continue;
-    }
-
-    let normalizedValue =
-      rules.isEmail
-        ? normalizeEmail(
-            source[field]
-          )
-        : normalizeString(
-            source[field]
-          );
-
-    if (
-      normalizedValue.length >
-      rules.maxLength
-    ) {
-      errors.push(
-        `${sectionName}.${field} no puede superar ${rules.maxLength} caracteres.`
-      );
-
-      continue;
-    }
-
-    if (
-      rules.isEmail &&
-      normalizedValue &&
-      !validator.isEmail(
-        normalizedValue
-      )
-    ) {
-      errors.push(
-        `${sectionName}.${field} debe contener un correo válido.`
-      );
-
-      continue;
-    }
-
-    target[field] =
-      normalizedValue;
-  }
-};
-
-/*
-|--------------------------------------------------------------------------
-| Aplicar actualización parcial
-|--------------------------------------------------------------------------
-*/
-
-const applySettingsUpdate = (
-  settings,
-  body
-) => {
+function validateAndMerge(current, body) {
+  const next = mergeDefaults(current);
   const errors = [];
-
-  const sections = [
-    "platform",
-    "verification",
-    "finance",
-    "operations",
-    "security",
-    "communication",
-    "moderation",
-    "automation"
-  ];
-
-  for (
-    const sectionName
-    of sections
-  ) {
-    if (
-      !hasOwn(
-        body,
-        sectionName
-      )
-    ) {
+  for (const section of SECTIONS) {
+    if (!Object.prototype.hasOwnProperty.call(body || {}, section)) continue;
+    const incoming = body[section];
+    if (!incoming || typeof incoming !== "object" || Array.isArray(incoming)) {
+      errors.push(`${section} debe ser un objeto.`);
       continue;
     }
-
-    const incomingSection =
-      body[sectionName];
-
-    if (
-      !isPlainObject(
-        incomingSection
-      )
-    ) {
-      errors.push(
-        `${sectionName} debe ser un objeto.`
-      );
-
-      continue;
+    for (const field of BOOLEAN_FIELDS[section] || []) {
+      if (!Object.prototype.hasOwnProperty.call(incoming, field)) continue;
+      if (typeof incoming[field] !== "boolean") errors.push(`${section}.${field} debe ser verdadero o falso.`);
+      else next[section][field] = incoming[field];
     }
-
-    if (
-      !settings[
-        sectionName
-      ]
-    ) {
-      settings[
-        sectionName
-      ] = {};
-    }
-
-    applyBooleanFields({
-      sectionName,
-      source:
-        incomingSection,
-      target:
-        settings[
-          sectionName
-        ],
-      errors
-    });
-
-    applyNumberFields({
-      sectionName,
-      source:
-        incomingSection,
-      target:
-        settings[
-          sectionName
-        ],
-      errors
-    });
-
-    applyStringFields({
-      sectionName,
-      source:
-        incomingSection,
-      target:
-        settings[
-          sectionName
-        ],
-      errors
-    });
-
-    /*
-    |--------------------------------------------------------------------------
-    | Campos especiales
-    |--------------------------------------------------------------------------
-    */
-
-    if (
-      sectionName ===
-        "finance" &&
-      hasOwn(
-        incomingSection,
-        "currency"
-      )
-    ) {
-      const currency =
-        String(
-          incomingSection.currency ||
-            ""
-        )
-          .trim()
-          .toUpperCase();
-
-      if (
-        !ALLOWED_CURRENCIES.includes(
-          currency
-        )
-      ) {
-        errors.push(
-          "finance.currency debe ser DOP o USD."
-        );
-      } else {
-        settings.finance.currency =
-          currency;
-      }
+    for (const [field, [min, max]] of Object.entries(NUMBER_FIELDS[section] || {})) {
+      if (!Object.prototype.hasOwnProperty.call(incoming, field)) continue;
+      const value = Number(incoming[field]);
+      if (!Number.isFinite(value) || value < min || value > max) errors.push(`${section}.${field} debe estar entre ${min} y ${max}.`);
+      else next[section][field] = value;
     }
   }
-
-  return errors;
-};
-
-/*
-|--------------------------------------------------------------------------
-| Obtener configuración global
-|--------------------------------------------------------------------------
-| GET /api/admin/system-settings
-|--------------------------------------------------------------------------
-*/
-
-const getSystemSettings = async (
-  req,
-  res
-) => {
-  try {
-    const settings =
-      await SystemSetting.getGlobal();
-
-    return res
-      .status(200)
-      .json({
-        success: true,
-        settings
-      });
-  } catch (error) {
-    console.error(
-      "Error obteniendo configuración global:",
-      error
-    );
-
-    return res
-      .status(500)
-      .json({
-        success: false,
-        message:
-          "No se pudo obtener la configuración global de QSM.",
-        error:
-          process.env.NODE_ENV ===
-          "development"
-            ? error.message
-            : undefined
-      });
+  if (body?.platform && Object.prototype.hasOwnProperty.call(body.platform, "maintenanceMessage")) next.platform.maintenanceMessage = String(body.platform.maintenanceMessage || "").trim().slice(0, 1000);
+  for (const field of ["supportEmail", "noReplyEmail"]) {
+    if (body?.communication && Object.prototype.hasOwnProperty.call(body.communication, field)) {
+      const value = String(body.communication[field] || "").trim().toLowerCase();
+      if (value && !validator.isEmail(value)) errors.push(`communication.${field} debe contener un correo válido.`);
+      else next.communication[field] = value;
+    }
   }
-};
+  if (body?.finance && Object.prototype.hasOwnProperty.call(body.finance, "currency")) {
+    const value = String(body.finance.currency || "").trim().toUpperCase();
+    if (!ALLOWED_CURRENCIES.includes(value)) errors.push("finance.currency debe ser DOP o USD.");
+    else next.finance.currency = value;
+  }
+  return { next, errors };
+}
 
-/*
-|--------------------------------------------------------------------------
-| Actualizar configuración global
-|--------------------------------------------------------------------------
-| PATCH /api/admin/system-settings
-|--------------------------------------------------------------------------
-*/
+async function getRow() {
+  return prisma.systemSetting.upsert({
+    where: { key: GLOBAL_SETTINGS_KEY },
+    update: {},
+    create: { key: GLOBAL_SETTINGS_KEY, data: defaults() }
+  });
+}
 
-const updateSystemSettings = async (
-  req,
-  res
-) => {
+function serialize(row) {
+  return { ...mergeDefaults(row.data), id: row.id, _id: String(row.id), key: row.key, updatedBy: row.updatedById, lastResetBy: row.lastResetById, lastResetAt: row.lastResetAt, createdAt: row.createdAt, updatedAt: row.updatedAt };
+}
+
+async function audit(req, action, description, before, after) {
   try {
-    const actorId =
-      getActorId(req);
-
-    if (!actorId) {
-      return res
-        .status(401)
-        .json({
-          success: false,
-          message:
-            "Usuario administrativo no autenticado."
-        });
-    }
-
-    const body =
-      req.body || {};
-
-    if (
-      !isPlainObject(body) ||
-      Object.keys(body).length ===
-        0
-    ) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message:
-            "Debes enviar al menos una configuración para actualizar."
-        });
-    }
-
-    const settings =
-      await SystemSetting.getGlobal();
-
-    const before =
-      serializeForComparison(
-        settings
-      );
-
-    const validationErrors =
-      applySettingsUpdate(
-        settings,
-        body
-      );
-
-    if (
-      validationErrors.length >
-      0
-    ) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message:
-            "Una o más configuraciones no son válidas.",
-          errors:
-            validationErrors
-        });
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Validaciones cruzadas
-    |--------------------------------------------------------------------------
-    */
-
-    if (
-      settings.finance
-        .maximumWithdrawalAmount <
-      settings.finance
-        .minimumWithdrawalAmount
-    ) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message:
-            "El retiro máximo no puede ser menor que el retiro mínimo."
-        });
-    }
-
-    if (
-      settings.platform
-        .maintenanceMode &&
-      !String(
-        settings.platform
-          .maintenanceMessage ||
-          ""
-      ).trim()
-    ) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message:
-            "Debes indicar un mensaje cuando el modo mantenimiento esté activado."
-        });
-    }
-
-    settings.updatedBy =
-      actorId;
-
-    await settings.save();
-
-    const after =
-      serializeForComparison(
-        settings
-      );
-
-    const changes =
-      describeChanges(
+    const actorId = await getRequestUserId(req);
+    await prisma.auditLog.create({
+      data: {
+        actorId,
+        actorName: [req.user?.firstName, req.user?.lastName].filter(Boolean).join(" "),
+        actorRole: String(req.user?.role || "").toUpperCase(),
+        module: "SYSTEM_SETTINGS",
+        action,
+        description,
+        entityType: "SYSTEM_SETTING",
+        entityId: GLOBAL_SETTINGS_KEY,
+        method: req.method || "",
+        endpoint: req.originalUrl || "",
+        ipAddress: getClientIp(req),
+        deviceInfo: getDeviceInfo(req),
+        severity: "HIGH",
+        status: "SUCCESS",
         before,
-        after
-      );
-
-    createAuditLogSafe({
-      actor:
-        actorId,
-
-      actorRole:
-        getActorRole(req),
-
-      action:
-        "SYSTEM_SETTINGS_UPDATED",
-
-      targetType:
-        "SYSTEM",
-
-      targetId:
-        String(settings._id),
-
-      description:
-        `Configuración global actualizada. Campos modificados: ${
-          changes.length
-        }.`,
-
-      ipAddress:
-        getClientIp(req),
-
-      deviceInfo:
-        getDeviceInfo(req)
+        after,
+        metadata: {}
+      }
     });
-
-    return res
-      .status(200)
-      .json({
-        success: true,
-        message:
-          "Configuración global actualizada correctamente.",
-        settings,
-        changes
-      });
   } catch (error) {
-    console.error(
-      "Error actualizando configuración global:",
-      error
-    );
-
-    if (
-      error.name ===
-      "ValidationError"
-    ) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message:
-            "Una o más configuraciones no son válidas.",
-          error:
-            process.env.NODE_ENV ===
-            "development"
-              ? error.message
-              : undefined
-        });
-    }
-
-    return res
-      .status(500)
-      .json({
-        success: false,
-        message:
-          "No se pudo actualizar la configuración global de QSM.",
-        error:
-          process.env.NODE_ENV ===
-          "development"
-            ? error.message
-            : undefined
-      });
+    console.error("No se pudo registrar auditoría de System Settings:", error.message);
   }
-};
+}
 
-/*
-|--------------------------------------------------------------------------
-| Restaurar configuración global
-|--------------------------------------------------------------------------
-| POST /api/admin/system-settings/reset
-|--------------------------------------------------------------------------
-*/
-
-const resetSystemSettings = async (
-  req,
-  res
-) => {
+async function getSystemSettings(_req, res) {
   try {
-    const actorId =
-      getActorId(req);
-
-    if (!actorId) {
-      return res
-        .status(401)
-        .json({
-          success: false,
-          message:
-            "Usuario administrativo no autenticado."
-        });
-    }
-
-    const confirmation =
-      String(
-        req.body?.confirmation ||
-          ""
-      )
-        .trim()
-        .toUpperCase();
-
-    if (
-      confirmation !==
-      "RESET_SYSTEM_SETTINGS"
-    ) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          message:
-            "Debes confirmar la restauración enviando confirmation: RESET_SYSTEM_SETTINGS."
-        });
-    }
-
-    const previousSettings =
-      await SystemSetting.findOne({
-        key:
-          GLOBAL_SETTINGS_KEY
-      });
-
-    const previousId =
-      previousSettings?._id ||
-      null;
-
-    await SystemSetting.deleteOne({
-      key:
-        GLOBAL_SETTINGS_KEY
-    });
-
-    const settings =
-      await SystemSetting.create({
-        key:
-          GLOBAL_SETTINGS_KEY,
-
-        updatedBy:
-          actorId,
-
-        lastResetBy:
-          actorId,
-
-        lastResetAt:
-          new Date()
-      });
-
-    createAuditLogSafe({
-      actor:
-        actorId,
-
-      actorRole:
-        getActorRole(req),
-
-      action:
-        "SYSTEM_SETTINGS_RESET",
-
-      targetType:
-        "SYSTEM",
-
-      targetId:
-        String(
-          settings._id ||
-            previousId ||
-            ""
-        ),
-
-      description:
-        "La configuración global de QSM fue restaurada a sus valores predeterminados.",
-
-      ipAddress:
-        getClientIp(req),
-
-      deviceInfo:
-        getDeviceInfo(req)
-    });
-
-    return res
-      .status(200)
-      .json({
-        success: true,
-        message:
-          "Configuración global restaurada correctamente.",
-        settings
-      });
+    const row = await getRow();
+    return res.status(200).json({ success: true, settings: serialize(row) });
   } catch (error) {
-    console.error(
-      "Error restaurando configuración global:",
-      error
-    );
-
-    return res
-      .status(500)
-      .json({
-        success: false,
-        message:
-          "No se pudo restaurar la configuración global de QSM.",
-        error:
-          process.env.NODE_ENV ===
-          "development"
-            ? error.message
-            : undefined
-      });
+    return res.status(500).json({ success: false, message: "No se pudo obtener la configuración global de QSM.", error: process.env.NODE_ENV === "development" ? error.message : undefined });
   }
-};
+}
 
-/*
-|--------------------------------------------------------------------------
-| Estado público de la plataforma
-|--------------------------------------------------------------------------
-| GET /api/admin/system-settings/status
-|--------------------------------------------------------------------------
-| Sigue siendo una ruta administrativa.
-| Más adelante puedes crear una ruta pública separada para mantenimiento.
-|--------------------------------------------------------------------------
-*/
-
-const getSystemStatus = async (
-  req,
-  res
-) => {
+async function updateSystemSettings(req, res) {
   try {
-    const settings =
-      await SystemSetting.getGlobal();
-
-    return res
-      .status(200)
-      .json({
-        success: true,
-
-        status: {
-          marketplaceEnabled:
-            settings.platform
-              .marketplaceEnabled,
-
-          registrationEnabled:
-            settings.platform
-              .registrationEnabled,
-
-          loginEnabled:
-            settings.platform
-              .loginEnabled,
-
-          purchasesEnabled:
-            settings.platform
-              .purchasesEnabled,
-
-          salesEnabled:
-            settings.platform
-              .salesEnabled,
-
-          maintenanceMode:
-            settings.platform
-              .maintenanceMode,
-
-          maintenanceMessage:
-            settings.platform
-              .maintenanceMessage,
-
-          currency:
-            settings.finance
-              .currency
-        }
-      });
+    const actorId = await getRequestUserId(req);
+    if (!actorId) return res.status(401).json({ success: false, message: "Usuario administrativo no autenticado." });
+    const row = await getRow();
+    const before = mergeDefaults(row.data);
+    const { next, errors } = validateAndMerge(before, req.body || {});
+    if (errors.length) return res.status(400).json({ success: false, message: "Una o más configuraciones no son válidas.", errors });
+    const updated = await prisma.systemSetting.update({ where: { key: GLOBAL_SETTINGS_KEY }, data: { data: next, updatedById: actorId } });
+    await audit(req, "SYSTEM_SETTINGS_UPDATED", "Configuración global de QSM actualizada.", before, next);
+    return res.status(200).json({ success: true, message: "Configuración global actualizada correctamente.", settings: serialize(updated) });
   } catch (error) {
-    console.error(
-      "Error obteniendo estado global:",
-      error
-    );
-
-    return res
-      .status(500)
-      .json({
-        success: false,
-        message:
-          "No se pudo obtener el estado global de QSM."
-      });
+    console.error("Error actualizando configuración global:", error);
+    return res.status(500).json({ success: false, message: "No se pudo actualizar la configuración global de QSM.", error: process.env.NODE_ENV === "development" ? error.message : undefined });
   }
-};
+}
 
-module.exports = {
-  getSystemSettings,
-  updateSystemSettings,
-  resetSystemSettings,
-  getSystemStatus
-};
+async function resetSystemSettings(req, res) {
+  try {
+    const actorId = await getRequestUserId(req);
+    if (!actorId) return res.status(401).json({ success: false, message: "Usuario administrativo no autenticado." });
+
+    const confirmation = String(req.body?.confirmation || "").trim().toUpperCase();
+    if (confirmation !== "RESET_SYSTEM_SETTINGS") {
+      return res.status(400).json({
+        success: false,
+        message: "Debes confirmar la restauración enviando confirmation: RESET_SYSTEM_SETTINGS."
+      });
+    }
+
+    const row = await getRow();
+    const before = mergeDefaults(row.data);
+    const next = defaults();
+    const updated = await prisma.systemSetting.update({ where: { key: GLOBAL_SETTINGS_KEY }, data: { data: next, updatedById: actorId, lastResetById: actorId, lastResetAt: new Date() } });
+    await audit(req, "SYSTEM_SETTINGS_RESET", "Configuración global restaurada a sus valores predeterminados.", before, next);
+    return res.status(200).json({ success: true, message: "Configuración global restaurada correctamente.", settings: serialize(updated) });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "No se pudo restaurar la configuración global de QSM.", error: process.env.NODE_ENV === "development" ? error.message : undefined });
+  }
+}
+
+async function getSystemStatus(_req, res) {
+  try {
+    const row = await getRow();
+    const settings = mergeDefaults(row.data);
+    await prisma.$queryRaw`SELECT 1`;
+    return res.status(200).json({
+      success: true,
+      status: settings.platform.maintenanceMode ? "MAINTENANCE" : "OPERATIONAL",
+      database: "connected",
+      settings: {
+        marketplaceEnabled: settings.platform.marketplaceEnabled,
+        registrationEnabled: settings.platform.registrationEnabled,
+        loginEnabled: settings.platform.loginEnabled,
+        maintenanceMode: settings.platform.maintenanceMode,
+        maintenanceMessage: settings.platform.maintenanceMessage
+      },
+      updatedAt: row.updatedAt
+    });
+  } catch (error) {
+    return res.status(503).json({ success: false, status: "DEGRADED", database: "disconnected", message: "No se pudo consultar el estado del sistema." });
+  }
+}
+
+module.exports = { getSystemSettings, updateSystemSettings, resetSystemSettings, getSystemStatus };

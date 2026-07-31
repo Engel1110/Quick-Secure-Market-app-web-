@@ -1,96 +1,22 @@
+"use strict";
+
 const express = require("express");
 const multer = require("multer");
-const path = require("path");
-const fs = require("fs");
 
 const authMiddleware = require(
   "../middleware/auth.middleware"
 );
 
+const {
+  uploadPublicFile,
+  uploadPrivateFile,
+  deletePublicObjectPaths,
+  deletePrivateObjectPaths
+} = require(
+  "../services/storage.service"
+);
+
 const router = express.Router();
-
-/*
-|--------------------------------------------------------------------------
-| Carpetas
-|--------------------------------------------------------------------------
-*/
-
-const uploadsRootFolder = path.join(
-  __dirname,
-  "../../uploads"
-);
-
-const productImageFolder = path.join(
-  uploadsRootFolder,
-  "products",
-  "images"
-);
-
-const productVideoFolder = path.join(
-  uploadsRootFolder,
-  "products",
-  "videos"
-);
-
-const chatFolder = path.join(
-  uploadsRootFolder,
-  "chat"
-);
-
-[
-  uploadsRootFolder,
-  productImageFolder,
-  productVideoFolder,
-  chatFolder
-].forEach((folder) => {
-  fs.mkdirSync(folder, {
-    recursive: true
-  });
-});
-
-/*
-|--------------------------------------------------------------------------
-| Utilidades
-|--------------------------------------------------------------------------
-*/
-
-const sanitizeFileName = (fileName = "") => {
-  const extension = path
-    .extname(fileName)
-    .toLowerCase();
-
-  const baseName = path
-    .basename(fileName, extension)
-    .replace(/[^a-zA-Z0-9_-]/g, "-")
-    .replace(/-+/g, "-")
-    .slice(0, 70);
-
-  return {
-    baseName:
-      baseName || "qsm-file",
-    extension
-  };
-};
-
-const generateFileName = (
-  originalName
-) => {
-  const {
-    baseName,
-    extension
-  } = sanitizeFileName(
-    originalName
-  );
-
-  const uniqueSuffix = [
-    Date.now(),
-    Math.round(
-      Math.random() * 1000000
-    )
-  ].join("-");
-
-  return `${uniqueSuffix}-${baseName}${extension}`;
-};
 
 const isImageFile = (file) =>
   Boolean(
@@ -107,157 +33,71 @@ const isVideoFile = (file) =>
   );
 
 const buildUploadedFile = (
-  file
+  uploaded,
+  {
+    privateFile = false
+  } = {}
 ) => {
-  if (!file) {
+  if (!uploaded) {
     return null;
   }
 
-  let url = "";
-
-  if (isImageFile(file)) {
-    url =
-      `/uploads/products/images/${file.filename}`;
-  } else if (
-    isVideoFile(file)
-  ) {
-    url =
-      `/uploads/products/videos/${file.filename}`;
-  }
+  const persistedUrl =
+    privateFile
+      ? uploaded.storageRef
+      : uploaded.url;
 
   return {
     originalName:
-      file.originalname,
-
+      uploaded.originalName,
     filename:
-      file.filename,
-
+      uploaded.filename,
     mimeType:
-      file.mimetype,
-
+      uploaded.mimeType,
     mimetype:
-      file.mimetype,
-
+      uploaded.mimetype,
     size:
-      file.size,
-
-    url,
-
+      uploaded.size,
+    url:
+      persistedUrl,
     path:
-      url,
-
+      persistedUrl,
     fileUrl:
-      url
+      persistedUrl,
+    previewUrl:
+      privateFile
+        ? uploaded.signedUrl
+        : uploaded.url,
+    signedUrl:
+      privateFile
+        ? uploaded.signedUrl
+        : undefined,
+    storageRef:
+      privateFile
+        ? uploaded.storageRef
+        : undefined,
+    storagePath:
+      uploaded.objectPath,
+    bucket:
+      uploaded.bucket
   };
 };
-
-/*
-|--------------------------------------------------------------------------
-| Almacenamiento de productos
-|--------------------------------------------------------------------------
-*/
-
-const productStorage =
-  multer.diskStorage({
-    destination(
-      req,
-      file,
-      callback
-    ) {
-      if (
-        isImageFile(file)
-      ) {
-        return callback(
-          null,
-          productImageFolder
-        );
-      }
-
-      if (
-        isVideoFile(file)
-      ) {
-        return callback(
-          null,
-          productVideoFolder
-        );
-      }
-
-      return callback(
-        new Error(
-          "Tipo de archivo no soportado."
-        )
-      );
-    },
-
-    filename(
-      req,
-      file,
-      callback
-    ) {
-      return callback(
-        null,
-        generateFileName(
-          file.originalname
-        )
-      );
-    }
-  });
-
-/*
-|--------------------------------------------------------------------------
-| Almacenamiento del chat
-|--------------------------------------------------------------------------
-*/
-
-const chatStorage =
-  multer.diskStorage({
-    destination(
-      req,
-      file,
-      callback
-    ) {
-      return callback(
-        null,
-        chatFolder
-      );
-    },
-
-    filename(
-      req,
-      file,
-      callback
-    ) {
-      return callback(
-        null,
-        generateFileName(
-          file.originalname
-        )
-      );
-    }
-  });
-
-/*
-|--------------------------------------------------------------------------
-| Multer para productos
-|--------------------------------------------------------------------------
-*/
 
 const productUpload =
   multer({
     storage:
-      productStorage,
+      multer.memoryStorage(),
 
     limits: {
       fileSize:
         100 *
         1024 *
         1024,
-
       files: 9
     },
 
     fileFilter(
-      req,
+      _req,
       file,
       callback
     ) {
@@ -279,33 +119,40 @@ const productUpload =
     }
   });
 
-/*
-|--------------------------------------------------------------------------
-| Multer para chat
-|--------------------------------------------------------------------------
-*/
+const productUploadMiddleware =
+  productUpload.fields([
+    {
+      name: "images",
+      maxCount: 8
+    },
+    {
+      name: "video",
+      maxCount: 1
+    },
+    {
+      name: "file",
+      maxCount: 1
+    }
+  ]);
 
 const allowedChatTypes = [
   "image/jpeg",
   "image/png",
   "image/webp",
   "image/gif",
-
   "video/mp4",
   "video/webm",
-
   "audio/mpeg",
   "audio/mp3",
   "audio/wav",
   "audio/webm",
-
   "application/pdf"
 ];
 
 const chatUpload =
   multer({
     storage:
-      chatStorage,
+      multer.memoryStorage(),
 
     limits: {
       fileSize:
@@ -315,7 +162,7 @@ const chatUpload =
     },
 
     fileFilter(
-      req,
+      _req,
       file,
       callback
     ) {
@@ -338,38 +185,43 @@ const chatUpload =
     }
   });
 
-/*
-|--------------------------------------------------------------------------
-| Middleware de archivos de productos
-|--------------------------------------------------------------------------
-|
-| images = subida múltiple principal
-| video  = video principal
-| file   = subida individual de respaldo utilizada por NewProduct.jsx
-|--------------------------------------------------------------------------
-*/
+function handleMulterError(
+  error,
+  res,
+  fallbackMessage
+) {
+  if (
+    error instanceof
+    multer.MulterError
+  ) {
+    const messages = {
+      LIMIT_FILE_SIZE:
+        "Uno de los archivos supera el tamaño permitido.",
+      LIMIT_FILE_COUNT:
+        "Se enviaron demasiados archivos.",
+      LIMIT_UNEXPECTED_FILE:
+        "Se recibió un campo de archivo no permitido."
+    };
 
-const productUploadMiddleware =
-  productUpload.fields([
-    {
-      name: "images",
-      maxCount: 8
-    },
-    {
-      name: "video",
-      maxCount: 1
-    },
-    {
-      name: "file",
-      maxCount: 1
-    }
-  ]);
+    return res
+      .status(400)
+      .json({
+        success: false,
+        message:
+          messages[error.code] ||
+          error.message
+      });
+  }
 
-/*
-|--------------------------------------------------------------------------
-| Subir multimedia de productos
-|--------------------------------------------------------------------------
-*/
+  return res
+    .status(400)
+    .json({
+      success: false,
+      message:
+        error?.message ||
+        fallbackMessage
+    });
+}
 
 router.post(
   "/",
@@ -387,55 +239,22 @@ router.post(
           return next();
         }
 
-        if (
-          error instanceof
-          multer.MulterError
-        ) {
-          const messages = {
-            LIMIT_FILE_SIZE:
-              "Uno de los archivos supera el tamaño permitido.",
-
-            LIMIT_FILE_COUNT:
-              "Se enviaron demasiados archivos.",
-
-            LIMIT_UNEXPECTED_FILE:
-              "Se recibió un campo de archivo no permitido."
-          };
-
-          return res
-            .status(400)
-            .json({
-              success: false,
-
-              message:
-                messages[
-                  error.code
-                ] ||
-                error.message
-            });
-        }
-
-        return res
-          .status(400)
-          .json({
-            success: false,
-
-            message:
-              error.message ||
-              "No se pudieron procesar los archivos."
-          });
+        return handleMulterError(
+          error,
+          res,
+          "No se pudieron procesar los archivos."
+        );
       }
     );
   },
-  (req, res) => {
-    try {
-      /*
-      |--------------------------------------------------------------------------
-      | Nunca asumir que req.files existe
-      |--------------------------------------------------------------------------
-      */
+  async (
+    req,
+    res
+  ) => {
+    const uploadedObjectPaths = [];
 
-      const uploadedFields =
+    try {
+      const fields =
         req.files &&
         typeof req.files ===
           "object"
@@ -444,145 +263,175 @@ router.post(
 
       const imageFiles =
         Array.isArray(
-          uploadedFields.images
+          fields.images
         )
-          ? uploadedFields.images
+          ? fields.images
           : [];
 
       const videoFiles =
         Array.isArray(
-          uploadedFields.video
+          fields.video
         )
-          ? uploadedFields.video
-          : [];
-
-      const fallbackFiles =
-        Array.isArray(
-          uploadedFields.file
-        )
-          ? uploadedFields.file
+          ? fields.video
           : [];
 
       const fallbackFile =
-        fallbackFiles[0] ||
-        null;
-
-      /*
-      |--------------------------------------------------------------------------
-      | Subida combinada
-      |--------------------------------------------------------------------------
-      */
-
-      const images =
-        imageFiles.map(
-          (file) =>
-            `/uploads/products/images/${file.filename}`
-        );
-
-      const mainVideo =
-        videoFiles[0] ||
-        null;
-
-      const video =
-        mainVideo
-          ? {
-              url:
-                `/uploads/products/videos/${mainVideo.filename}`,
-
-              thumbnail:
-                "",
-
-              duration:
-                0
-            }
+        Array.isArray(
+          fields.file
+        )
+          ? fields.file[0] ||
+            null
           : null;
 
-      /*
-      |--------------------------------------------------------------------------
-      | Subida individual de respaldo
-      |--------------------------------------------------------------------------
-      */
-
-      const normalizedFallbackFile =
-        buildUploadedFile(
-          fallbackFile
-        );
-
       if (
-        images.length === 0 &&
-        !video &&
-        !normalizedFallbackFile
+        imageFiles.length === 0 &&
+        videoFiles.length === 0 &&
+        !fallbackFile
       ) {
         return res
           .status(400)
           .json({
             success: false,
-
             message:
               "No se recibió ninguna imagen o video."
           });
       }
 
-      /*
-      |--------------------------------------------------------------------------
-      | Respuesta compatible con NewProduct.jsx
-      |--------------------------------------------------------------------------
-      */
+      const uploadedImages = [];
+
+      for (const file of imageFiles) {
+        const uploaded =
+          await uploadPublicFile(
+            file,
+            {
+              folder:
+                "products/images"
+            }
+          );
+
+        uploadedObjectPaths.push(
+          uploaded.objectPath
+        );
+
+        uploadedImages.push(
+          uploaded
+        );
+      }
+
+      let uploadedVideo = null;
+
+      if (videoFiles[0]) {
+        uploadedVideo =
+          await uploadPublicFile(
+            videoFiles[0],
+            {
+              folder:
+                "products/videos"
+            }
+          );
+
+        uploadedObjectPaths.push(
+          uploadedVideo.objectPath
+        );
+      }
+
+      let uploadedFallback = null;
+
+      if (fallbackFile) {
+        uploadedFallback =
+          await uploadPublicFile(
+            fallbackFile,
+            {
+              folder:
+                isVideoFile(
+                  fallbackFile
+                )
+                  ? "products/videos"
+                  : "products/images"
+            }
+          );
+
+        uploadedObjectPaths.push(
+          uploadedFallback.objectPath
+        );
+      }
+
+      const images =
+        uploadedImages.map(
+          (file) =>
+            file.url
+        );
+
+      const video =
+        uploadedVideo
+          ? {
+              url:
+                uploadedVideo.url,
+              thumbnail:
+                "",
+              duration:
+                0,
+              storagePath:
+                uploadedVideo.objectPath
+            }
+          : null;
+
+      const normalizedFallbackFile =
+        buildUploadedFile(
+          uploadedFallback
+        );
 
       return res
         .status(201)
         .json({
           success: true,
-
           message:
-            "Archivos subidos correctamente.",
-
+            "Archivos subidos correctamente a Supabase Storage.",
           images,
-
           video,
-
           file:
             normalizedFallbackFile,
-
           data: {
             images,
-
             video,
-
             file:
               normalizedFallbackFile
           }
         });
     } catch (error) {
       console.error(
-        "Error procesando multimedia del producto:",
+        "Error subiendo multimedia del producto:",
         error
       );
+
+      try {
+        await deletePublicObjectPaths(
+          uploadedObjectPaths
+        );
+      } catch (
+        cleanupError
+      ) {
+        console.error(
+          "No se pudo limpiar la subida parcial:",
+          cleanupError.message
+        );
+      }
 
       return res
         .status(500)
         .json({
           success: false,
-
           message:
-            "Error procesando los archivos del producto.",
-
+            "No se pudieron subir los archivos del producto a Supabase Storage.",
           error:
-            process.env
-              .NODE_ENV ===
-            "development"
-              ? error.message
-              : undefined
+            process.env.NODE_ENV ===
+            "production"
+              ? undefined
+              : error.message
         });
     }
   }
 );
-
-/*
-|--------------------------------------------------------------------------
-| Subir archivo de chat
-|--------------------------------------------------------------------------
-*/
 
 router.post(
   "/chat",
@@ -602,83 +451,99 @@ router.post(
           return next();
         }
 
-        if (
-          error instanceof
-          multer.MulterError
-        ) {
-          return res
-            .status(400)
-            .json({
-              success: false,
+        return handleMulterError(
+          error,
+          res,
+          "No se pudo procesar el archivo."
+        );
+      }
+    );
+  },
+  async (
+    req,
+    res
+  ) => {
+    let uploaded = null;
 
-              message:
-                error.code ===
-                "LIMIT_FILE_SIZE"
-                  ? "El archivo supera el límite de 25 MB."
-                  : error.message
-            });
-        }
-
+    try {
+      if (!req.file) {
         return res
           .status(400)
           .json({
             success: false,
-
             message:
-              error.message ||
-              "No se pudo procesar el archivo."
+              "No se recibió ningún archivo."
           });
       }
-    );
-  },
-  (req, res) => {
-    if (!req.file) {
+
+      const userId =
+        Number(
+          req.prismaUser?.id ??
+          req.user?.id ??
+          0
+        );
+
+      uploaded =
+        await uploadPrivateFile(
+          req.file,
+          {
+            folder:
+              `chat/${userId || "user"}`
+          }
+        );
+
+      const file =
+        buildUploadedFile(
+          uploaded,
+          {
+            privateFile: true
+          }
+        );
+
       return res
-        .status(400)
+        .status(201)
+        .json({
+          success: true,
+          message:
+            "Archivo privado subido correctamente.",
+          file,
+          data:
+            file
+        });
+    } catch (error) {
+      console.error(
+        "Error subiendo archivo privado del chat:",
+        error
+      );
+
+      if (uploaded?.objectPath) {
+        try {
+          await deletePrivateObjectPaths([
+            uploaded.objectPath
+          ]);
+        } catch (
+          cleanupError
+        ) {
+          console.error(
+            "No se pudo limpiar la subida privada:",
+            cleanupError.message
+          );
+        }
+      }
+
+      return res
+        .status(500)
         .json({
           success: false,
-
           message:
-            "No se recibió ningún archivo."
+            "No se pudo subir el archivo privado del chat.",
+          error:
+            process.env.NODE_ENV ===
+            "production"
+              ? undefined
+              : error.message
         });
     }
-
-    const fileUrl =
-      `/uploads/chat/${req.file.filename}`;
-
-    return res
-      .status(201)
-      .json({
-        success: true,
-
-        message:
-          "Archivo subido correctamente.",
-
-        file: {
-          originalName:
-            req.file.originalname,
-
-          filename:
-            req.file.filename,
-
-          mimeType:
-            req.file.mimetype,
-
-          mimetype:
-            req.file.mimetype,
-
-          size:
-            req.file.size,
-
-          url:
-            fileUrl,
-
-          path:
-            fileUrl,
-
-          fileUrl
-        }
-      });
   }
 );
 

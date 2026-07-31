@@ -395,6 +395,10 @@ export default function Messages() {
               otherUser={
                 chat.activeOtherUser
               }
+              currentUserIds={
+                chat.currentUserIds ||
+                []
+              }
               actionLoading={
                 chat.actionLoading
               }

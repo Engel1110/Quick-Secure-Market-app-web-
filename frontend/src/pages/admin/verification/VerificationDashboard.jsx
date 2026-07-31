@@ -1,4 +1,5 @@
-﻿import {
+import { API_BASE_URL as QSM_RUNTIME_API_URL } from "../../../config/runtime";
+import {
   useCallback,
   useEffect,
   useMemo,
@@ -8,22 +9,114 @@
 import { useNavigate } from "react-router-dom";
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_URL ||
-  "http://localhost:5000/api";
+  QSM_RUNTIME_API_URL;
+
+
+const BACKEND_ORIGIN =
+  API_BASE_URL.replace(
+    /\/api\/?$/,
+    ""
+  );
+
+const resolveMediaUrl = (
+  value
+) => {
+  const normalized =
+    String(value || "").trim();
+
+  if (!normalized) {
+    return "";
+  }
+
+  if (
+    normalized.startsWith("http://") ||
+    normalized.startsWith("https://") ||
+    normalized.startsWith("blob:")
+  ) {
+    return normalized;
+  }
+
+  return normalized.startsWith("/")
+    ? BACKEND_ORIGIN + normalized
+    : BACKEND_ORIGIN + "/" + normalized;
+};
 
 const USE_MOCK_DATA =
   String(
-    import.meta.env.VITE_USE_MOCK_ADMIN ?? "true"
+    import.meta.env.VITE_USE_MOCK_ADMIN ?? "false"
   ).toLowerCase() === "true";
 
 const VERIFICATION_STATUS = {
   PENDING_REVIEW: "Pendiente",
   UNDER_REVIEW: "En revisión",
-  CHANGES_REQUIRED: "Correcciones requeridas",
+  RESUBMISSION_REQUIRED: "Correcciones requeridas",
   APPROVED: "Aprobada",
   REJECTED: "Rechazada",
   EXPIRED: "Documento vencido"
 };
+
+const KYC_CORRECTION_TEMPLATES = [
+  {
+    value: "DOCUMENT_FRONT_BLURRY",
+    label: "Documento frontal borroso",
+    message: "La imagen frontal del documento no se visualiza con suficiente claridad. Sube una nueva fotograf\u00eda enfocada, completa y con buena iluminaci\u00f3n."
+  },
+  {
+    value: "DOCUMENT_FRONT_INCOMPLETE",
+    label: "Documento frontal incompleto",
+    message: "La parte frontal del documento est\u00e1 recortada o incompleta. Deben visualizarse todos los bordes y la informaci\u00f3n del documento."
+  },
+  {
+    value: "DOCUMENT_BACK_BLURRY",
+    label: "Documento trasero borroso",
+    message: "La imagen trasera del documento no se visualiza con suficiente claridad. Sube una nueva fotograf\u00eda enfocada y completa."
+  },
+  {
+    value: "DOCUMENT_BACK_INCOMPLETE",
+    label: "Documento trasero incompleto",
+    message: "La parte trasera del documento est\u00e1 recortada o incompleta. Deben visualizarse todos sus bordes y datos."
+  },
+  {
+    value: "DOCUMENT_DATA_MISMATCH",
+    label: "Los datos no coinciden",
+    message: "Los datos ingresados en el perfil no coinciden con la informaci\u00f3n visible en el documento. Revisa y corrige los datos correspondientes."
+  },
+  {
+    value: "DOCUMENT_NUMBER_UNREADABLE",
+    label: "N\u00famero de documento ilegible",
+    message: "El n\u00famero del documento no puede leerse correctamente. Sube una nueva imagen donde el n\u00famero sea claramente visible."
+  },
+  {
+    value: "PROFILE_PHOTO_INVALID",
+    label: "Foto de perfil no adecuada",
+    message: "La foto de perfil no permite identificar claramente a la persona. Utiliza una fotograf\u00eda reciente, frontal, sin filtros y con buena iluminaci\u00f3n."
+  },
+  {
+    value: "SELFIE_INVALID",
+    label: "Selfie no adecuada",
+    message: "La selfie no permite visualizar claramente el rostro. Env\u00eda una nueva fotograf\u00eda frontal, sin accesorios que cubran el rostro y con buena iluminaci\u00f3n."
+  },
+  {
+    value: "PHOTOS_CANNOT_BE_CONFIRMED",
+    label: "No se puede confirmar coincidencia visual",
+    message: "Las fotograf\u00edas enviadas no permiten confirmar visualmente que correspondan a la misma persona. Env\u00eda nuevas im\u00e1genes claras y recientes."
+  },
+  {
+    value: "DOCUMENT_EXPIRED",
+    label: "Documento vencido",
+    message: "El documento presentado se encuentra vencido. Debes enviar un documento vigente."
+  },
+  {
+    value: "REFLECTIONS_OR_SHADOWS",
+    label: "Reflejos o sombras",
+    message: "La imagen contiene reflejos, sombras o poca iluminaci\u00f3n que impiden revisar correctamente el documento. Env\u00eda una nueva fotograf\u00eda."
+  },
+  {
+    value: "POSSIBLE_ALTERATION",
+    label: "Posible alteraci\u00f3n visible",
+    message: "Se observan elementos que requieren una nueva verificaci\u00f3n visual del documento. Env\u00eda fotograf\u00edas originales, completas y sin edici\u00f3n."
+  }
+];
 
 const MOCK_DATA = {
   generatedAt: new Date().toISOString(),
@@ -31,7 +124,7 @@ const MOCK_DATA = {
   kpis: {
     pending: 28,
     underReview: 12,
-    changesRequired: 9,
+    resubmissionRequired: 9,
     approvedToday: 34,
     rejectedToday: 4,
     expiredDocuments: 7,
@@ -105,7 +198,7 @@ const MOCK_DATA = {
       profilePhoto: null,
       documentFront: null,
       documentBack: null,
-      status: "CHANGES_REQUIRED",
+      status: "RESUBMISSION_REQUIRED",
       sellerRequest: true,
       trustScore: 45,
       priority: "HIGH",
@@ -312,29 +405,57 @@ function VerificationDashboard() {
         localStorage.getItem("qsm_admin_token") ||
         sessionStorage.getItem("qsm_admin_token");
 
-      const response = await fetch(
-        `${API_BASE_URL}/admin/verification/dashboard`,
-        {
-          headers: {
-            Accept: "application/json",
-            Authorization: token
-              ? `Bearer ${token}`
-              : ""
-          }
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(
-          `No fue posible cargar Verificación (${response.status}).`
-        );
+const [statsResponse, listResponse] = await Promise.all([
+  fetch(
+    `${API_BASE_URL}/verifications/admin/stats`,
+    {
+      headers: {
+        Accept: "application/json",
+        Authorization: token
+          ? `Bearer ${token}`
+          : ""
       }
+    }
+  ),
 
-      const result = await response.json();
+  fetch(
+    `${API_BASE_URL}/verifications/admin`,
+    {
+      headers: {
+        Accept: "application/json",
+        Authorization: token
+          ? `Bearer ${token}`
+          : ""
+      }
+    }
+  )
+]);
 
-      setDashboardData(
-        normalizeResponse(result)
-      );
+if (!statsResponse.ok || !listResponse.ok) {
+    throw new Error("No fue posible cargar el dashboard.");
+}
+
+const stats = await statsResponse.json();
+const list = await listResponse.json();
+
+const statsData =
+    stats.data || stats;
+
+const listData =
+    list.data || list;
+
+setDashboardData({
+    kpis: statsData,
+
+    verifications:
+        Array.isArray(listData)
+            ? listData.map(mapVerification)
+            : [],
+
+    agents: [],
+    alerts: [],
+    recentActivity: []
+});
     } catch (requestError) {
       console.error(
         "Error cargando Verificación:",
@@ -401,79 +522,107 @@ function VerificationDashboard() {
     status,
     extraData = {}
   ) {
+    if (isSaving) {
+      return null;
+    }
+
     setIsSaving(true);
 
     try {
       if (!USE_MOCK_DATA) {
         const token =
           localStorage.getItem("qsm_admin_token") ||
-          sessionStorage.getItem("qsm_admin_token");
+          sessionStorage.getItem("qsm_admin_token") ||
+          localStorage.getItem("token") ||
+          localStorage.getItem("qsm_token");
+
+        if (!token) {
+          throw new Error(
+            "La sesi\u00f3n administrativa no est\u00e1 disponible."
+          );
+        }
+
+        const ACTION_ROUTES = {
+          UNDER_REVIEW: "start-review",
+          APPROVED: "approve",
+          REJECTED: "reject",
+          RESUBMISSION_REQUIRED: "request-resubmission",
+          REOPEN: "reopen"
+        };
+
+        const action =
+          ACTION_ROUTES[status];
+
+        if (!action) {
+          throw new Error(
+            "Acci\u00f3n de verificaci\u00f3n no v\u00e1lida."
+          );
+        }
 
         const response = await fetch(
-          `${API_BASE_URL}/admin/verification/${verificationId}/status`,
+          `${API_BASE_URL}/verifications/admin/${verificationId}/${action}`,
           {
-            method: "PATCH",
+            method: "PUT",
             headers: {
               "Content-Type": "application/json",
-              Authorization: token
-                ? `Bearer ${token}`
-                : ""
+              Authorization:
+                `Bearer ${token}`
             },
-            body: JSON.stringify({
-              status,
-              ...extraData
-            })
+            body:
+              JSON.stringify(
+                extraData
+              )
           }
         );
 
+        const responseData =
+          await response
+            .json()
+            .catch(() => null);
+
         if (!response.ok) {
           throw new Error(
-            "No fue posible actualizar la verificación."
+            responseData?.message ||
+            "No fue posible actualizar la verificaci\u00f3n."
           );
         }
+
+        await loadDashboard();
+
+        setSelectedVerification(
+          null
+        );
+
+        return responseData;
       }
 
       setDashboardData((current) => ({
         ...current,
         verifications:
-          current.verifications.map((item) =>
-            item.id === verificationId
-              ? {
-                  ...item,
-                  status,
-                  ...extraData,
-                  lastUpdate: "Actualizado ahora",
-                  trustScore:
-                    status === "APPROVED"
-                      ? Math.max(
-                          item.trustScore,
-                          70
-                        )
-                      : item.trustScore
-                }
-              : item
+          current.verifications.map(
+            (item) =>
+              item.id === verificationId
+                ? {
+                    ...item,
+                    status,
+                    ...extraData,
+                    lastUpdate: "Actualizado ahora"
+                  }
+                : item
           )
       }));
 
-      setSelectedVerification((current) =>
-        current?.id === verificationId
-          ? {
-              ...current,
-              status,
-              ...extraData,
-              lastUpdate: "Actualizado ahora",
-              trustScore:
-                status === "APPROVED"
-                  ? Math.max(
-                      current.trustScore,
-                      70
-                    )
-                  : current.trustScore
-            }
-          : current
-      );
+      setSelectedVerification(null);
+
+      return {
+        success: true
+      };
     } catch (updateError) {
-      window.alert(updateError.message);
+      window.alert(
+        updateError.message
+      );
+
+      return null;
     } finally {
       setIsSaving(false);
     }
@@ -936,6 +1085,36 @@ function VerificationModal({
   const [correctionMessage, setCorrectionMessage] =
     useState("");
 
+  const [selectedTemplate, setSelectedTemplate] =
+    useState("");
+
+  const addCorrectionTemplate = () => {
+    const template =
+      KYC_CORRECTION_TEMPLATES.find(
+        (item) =>
+          item.value === selectedTemplate
+      );
+
+    if (!template) {
+      return;
+    }
+
+    setCorrectionMessage(
+      (current) => {
+        const previous =
+          String(current || "").trim();
+
+        return previous
+          ? previous +
+              "\n\n" +
+              template.message
+          : template.message;
+      }
+    );
+
+    setSelectedTemplate("");
+  };
+
   const selectedAgent =
     agents.find(
       (agent) =>
@@ -970,7 +1149,29 @@ function VerificationModal({
             </p>
           </div>
 
-          <button
+                    {verification.status === "APPROVED" && (
+            <button
+              className="verification-button verification-button-warning"
+              disabled={
+                isSaving ||
+                !correctionMessage.trim()
+              }
+              onClick={() =>
+                onUpdateStatus(
+                  verification.id,
+                  "REOPEN",
+                  {
+                    reason:
+                      correctionMessage.trim()
+                  }
+                )
+              }
+            >
+              {"Reabrir verificaci\u00f3n"}
+            </button>
+          )}
+
+<button
             className="verification-button"
             onClick={onClose}
           >
@@ -1021,16 +1222,26 @@ function VerificationModal({
             <DocumentCard
               title="Foto de perfil"
               icon="👤"
+              src={verification.profilePhoto}
             />
 
             <DocumentCard
               title="Cédula frontal"
               icon="🪪"
+              src={verification.documentFront}
             />
 
             <DocumentCard
               title="Cédula trasera"
               icon="🪪"
+              src={verification.documentBack}
+            />
+          
+
+            <DocumentCard
+              title="Selfie"
+              icon={"\uD83D\uDCF8"}
+              src={verification.selfie}
             />
           </div>
 
@@ -1038,6 +1249,12 @@ function VerificationModal({
             <h3>
               Comparación de identidad
             </h3>
+
+            <p className="verification-manual-note">
+              Lista de apoyo para la revisión manual.
+              La decisión real se guarda con los
+              botones inferiores.
+            </p>
 
             <div className="verification-comparison-grid">
               <CheckItem
@@ -1068,23 +1285,19 @@ function VerificationModal({
 
           <div className="verification-face-panel">
             <h3>
-              Preparación para Face ID
+              Comparación facial
             </h3>
 
             <p>
               Estado:{" "}
               <strong>
-                {verification.faceVerification?.status}
+                Revisión manual
               </strong>
             </p>
 
             <p>
-              Coincidencia:{" "}
-              <strong>
-                {verification.faceVerification?.matchScore
-                  ? `${verification.faceVerification.matchScore}%`
-                  : "Pendiente"}
-              </strong>
+              La comparación biométrica automática
+              todavía no está implementada.
             </p>
           </div>
 
@@ -1165,7 +1378,48 @@ function VerificationModal({
               Solicitar corrección
             </h3>
 
-            <textarea
+                        <div className="verification-template-row">
+              <select
+                className="verification-select"
+                value={selectedTemplate}
+                onChange={(event) =>
+                  setSelectedTemplate(
+                    event.target.value
+                  )
+                }
+              >
+                <option value="">
+                  Seleccionar mensaje predeterminado
+                </option>
+
+                {KYC_CORRECTION_TEMPLATES.map(
+                  (template) => (
+                    <option
+                      key={template.value}
+                      value={template.value}
+                    >
+                      {template.label}
+                    </option>
+                  )
+                )}
+              </select>
+
+              <button
+                type="button"
+                className="verification-button"
+                disabled={
+                  !selectedTemplate ||
+                  isSaving
+                }
+                onClick={
+                  addCorrectionTemplate
+                }
+              >
+                Agregar mensaje
+              </button>
+            </div>
+
+<textarea
               placeholder="Ejemplo: La foto frontal está borrosa o el nombre no coincide..."
               value={correctionMessage}
               onChange={(event) =>
@@ -1175,27 +1429,25 @@ function VerificationModal({
               }
             />
 
-            <button
+                        <button
               className="verification-button verification-button-warning"
               disabled={
                 !correctionMessage.trim() ||
-                isSaving
+                isSaving ||
+                ![
+                  "PENDING_REVIEW",
+                  "UNDER_REVIEW"
+                ].includes(
+                  verification.status
+                )
               }
               onClick={() =>
                 onUpdateStatus(
                   verification.id,
-                  "CHANGES_REQUIRED",
+                  "RESUBMISSION_REQUIRED",
                   {
-                    issues: [
-                      ...(
-                        verification.issues || []
-                      ),
-                      {
-                        field: "GENERAL",
-                        message:
-                          correctionMessage.trim()
-                      }
-                    ]
+                    reason:
+                      correctionMessage.trim()
                   }
                 )
               }
@@ -1206,9 +1458,13 @@ function VerificationModal({
         </div>
 
         <div className="verification-modal-actions">
-          <button
+                    <button
             className="verification-button verification-button-primary"
-            disabled={isSaving}
+            disabled={
+              isSaving ||
+              verification.status !==
+                "PENDING_REVIEW"
+            }
             onClick={() =>
               onUpdateStatus(
                 verification.id,
@@ -1219,17 +1475,19 @@ function VerificationModal({
             Iniciar revisión
           </button>
 
-          <button
+                    <button
             className="verification-button verification-button-success"
-            disabled={isSaving}
+            disabled={
+              isSaving ||
+              verification.status !==
+                "UNDER_REVIEW"
+            }
             onClick={() =>
               onUpdateStatus(
                 verification.id,
                 "APPROVED",
                 {
-                  isVerified: true,
-                  sellerEnabled:
-                    verification.sellerRequest
+                  notes: "Identidad revisada y aprobada desde el BackOffice QSM."
                 }
               )
             }
@@ -1237,13 +1495,26 @@ function VerificationModal({
             Aprobar identidad
           </button>
 
-          <button
+                    <button
             className="verification-button verification-button-danger"
-            disabled={isSaving}
+            disabled={
+              isSaving ||
+              !correctionMessage.trim() ||
+              ![
+                "PENDING_REVIEW",
+                "UNDER_REVIEW"
+              ].includes(
+                verification.status
+              )
+            }
             onClick={() =>
               onUpdateStatus(
                 verification.id,
-                "REJECTED"
+                "REJECTED",
+                {
+                  reason:
+                    correctionMessage.trim()
+                }
               )
             }
           >
@@ -1264,25 +1535,45 @@ function VerificationModal({
 
 function DocumentCard({
   title,
-  icon
+  icon,
+  src
 }) {
+  const resolvedSrc =
+    resolveMediaUrl(src);
+
   return (
     <article className="verification-document-card">
       <div className="verification-document-preview">
-        {icon}
+        {resolvedSrc ? (
+          <img
+            src={resolvedSrc}
+            alt={title}
+            loading="lazy"
+          />
+        ) : (
+          icon
+        )}
       </div>
 
       <strong>{title}</strong>
 
       <button
+        type="button"
         className="verification-button verification-button-small"
-        onClick={() =>
-          window.alert(
-            `Abriendo ${title}`
-          )
-        }
+        disabled={!resolvedSrc}
+        onClick={() => {
+          if (resolvedSrc) {
+            window.open(
+              resolvedSrc,
+              "_blank",
+              "noopener,noreferrer"
+            );
+          }
+        }}
       >
-        Ampliar
+        {resolvedSrc
+          ? "Ampliar"
+          : "No disponible"}
       </button>
     </article>
   );
@@ -1384,7 +1675,7 @@ function buildKpis(kpis = {}) {
     {
       title: "Correcciones",
       value:
-        kpis.changesRequired || 0,
+        kpis.resubmissionRequired || 0,
       detail: "Esperando al usuario",
       icon: "📝"
     },
@@ -1410,6 +1701,141 @@ function buildKpis(kpis = {}) {
       icon: "🏪"
     }
   ];
+}
+
+function mapVerification(item = {}) {
+  const user =
+    item.user || {};
+
+  return {
+    id:
+      item.id ||
+      item._id ||
+      "",
+
+    userId:
+      user.id ||
+      user._id ||
+      item.userId ||
+      "",
+
+    fullName:
+      item.fullName ||
+      `${item.firstName || user.firstName || ""} ${
+        item.lastName || user.lastName || ""
+      }`.trim(),
+
+    email:
+      item.email ||
+      user.email ||
+      "",
+
+    phone:
+      item.phone ||
+      user.phone ||
+      "",
+
+    documentNumber:
+      item.documentNumber ||
+      user.documentId ||
+      "No disponible",
+
+    documentType:
+      item.documentType ||
+      "CEDULA",
+
+    documentExpirationDate:
+      item.documentExpirationDate ||
+      item.expirationDate ||
+      "",
+
+    profilePhoto:
+      item.profilePhoto ||
+      item.profilePhotoUrl ||
+      "",
+
+    documentFront:
+      item.documentFront ||
+      item.documentFrontUrl ||
+      "",
+
+    documentBack:
+      item.documentBack ||
+      item.documentBackUrl ||
+      "",
+
+    selfie:
+      item.selfie ||
+      item.selfieUrl ||
+      "",
+
+    status:
+      item.status ||
+      "PENDING_REVIEW",
+
+    sellerRequest:
+      item.status === "APPROVED"
+        ? Boolean(
+            user.sellerEnabled
+          )
+        : true,
+
+    trustScore:
+      Number(
+        item.trustScore ??
+        user.trustScore ??
+        50
+      ),
+
+    priority:
+      item.priority ||
+      "NORMAL",
+
+    assignedAgent:
+      item.assignedAgent ||
+      (
+        item.reviewedBy
+          ? {
+              ...item.reviewedBy,
+              name:
+                [
+                  item.reviewedBy.firstName,
+                  item.reviewedBy.lastName
+                ]
+                  .filter(Boolean)
+                  .join(" ")
+            }
+          : null
+      ),
+
+    submittedAt:
+      item.submittedAt ||
+      item.createdAt ||
+      "",
+
+    lastUpdate:
+      item.lastUpdate ||
+      item.updatedAt ||
+      "",
+
+    issues:
+      Array.isArray(item.issues)
+        ? item.issues
+        : Object.entries(
+            item.fieldReasons || {}
+          ).map(
+            ([field, message]) => ({
+              field,
+              message
+            })
+          ),
+
+    faceVerification:
+      item.faceVerification || {
+        status: "NOT_STARTED",
+        matchScore: null
+      }
+  };
 }
 
 function normalizeResponse(response) {
@@ -1724,6 +2150,20 @@ const styles = `
 
   .verification-input,
   .verification-select,
+  .verification-template-row {
+    display: grid;
+    grid-template-columns:
+      minmax(0, 1fr)
+      auto;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .verification-template-row
+  .verification-select {
+    width: 100%;
+  }
+
   .verification-correction textarea {
     border: 1px solid #222b4d;
     border-radius: 11px;
@@ -1802,7 +2242,7 @@ const styles = `
     background: rgba(124,97,255,.14);
   }
 
-  .status-CHANGES_REQUIRED {
+  .status-RESUBMISSION_REQUIRED {
     color: #ffc36a;
     background: rgba(255,166,61,.13);
   }
@@ -2025,12 +2465,14 @@ const styles = `
   .verification-documents-grid {
     display: grid;
     grid-template-columns:
-      repeat(3, minmax(0, 1fr));
+      repeat(2, minmax(0, 1fr));
     gap: 14px;
     margin-top: 18px;
   }
 
   .verification-document-card {
+    min-width: 0;
+    overflow: hidden;
     border: 1px solid #1c2545;
     border-radius: 14px;
     padding: 14px;
@@ -2038,13 +2480,26 @@ const styles = `
   }
 
   .verification-document-preview {
+    position: relative;
     display: grid;
+    width: 100%;
+    overflow: hidden;
     height: 150px;
     place-items: center;
     margin-bottom: 12px;
     border-radius: 12px;
     background: #171d38;
     font-size: 42px;
+  }
+
+  .verification-document-preview img {
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    display: block;
+    object-fit: contain;
+    border-radius: 12px;
   }
 
   .verification-document-card strong {
@@ -2066,6 +2521,13 @@ const styles = `
   .verification-assignment h3,
   .verification-correction h3 {
     margin-top: 0;
+  }
+
+  .verification-manual-note {
+    margin: 0 0 12px;
+    color: #7781a4;
+    font-size: 11px;
+    line-height: 1.5;
   }
 
   .verification-comparison-grid {

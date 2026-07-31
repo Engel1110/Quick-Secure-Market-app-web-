@@ -23,16 +23,21 @@ export default function useSocket({
   useEffect(() => {
     const socket = connectSocket();
 
+    if (!socket) {
+      setConnected(false);
+      return undefined;
+    }
+
     const handlers = {
       connect: () => setConnected(true),
       disconnect: () => setConnected(false),
       "message:new": (payload) => onIncomingMessage?.(payload?.message || payload),
       "message:updated": (payload) => onMessageUpdated?.(payload?.message || payload),
-      "message:deleted": (payload) => onMessageDeleted?.(payload?.messageId || payload),
+      "message:deleted": (payload) => onMessageDeleted?.(payload?.message || payload),
       "conversation:updated": (payload) => onConversationUpdated?.(payload?.conversation || payload),
       "presence:changed": (payload) => onPresenceChanged?.(payload),
-      "conversation:typing": (payload) => onTypingChanged?.({ ...payload, typing: true }),
-      "conversation:stop-typing": (payload) => onTypingChanged?.({ ...payload, typing: false })
+      "message:typing": (payload) => onTypingChanged?.({ ...payload, typing: true }),
+      "message:stopTyping": (payload) => onTypingChanged?.({ ...payload, typing: false })
     };
 
     Object.entries(handlers).forEach(([event, handler]) => socket.on(event, handler));

@@ -6,10 +6,135 @@ import {
   getInitials
 } from "../../../utils/message.utils";
 
+function normalizeReference(
+  value
+) {
+  if (
+    value === null ||
+    value === undefined
+  ) {
+    return "";
+  }
+
+  if (
+    typeof value === "object"
+  ) {
+    const nested =
+      value.prismaId ??
+      value.userId ??
+      value.id ??
+      value._id;
+
+    if (
+      nested !== undefined &&
+      nested !== value
+    ) {
+      return normalizeReference(
+        nested
+      );
+    }
+  }
+
+  const normalized =
+    String(value).trim();
+
+  return normalized ===
+    "[object Object]"
+      ? ""
+      : normalized;
+}
+
+function getConversationState(
+  conversation,
+  state,
+  currentUserIds = []
+) {
+  const definition = {
+    favorite: {
+      direct: [
+        "isFavorite",
+        "favorite"
+      ],
+      list: "favoriteBy"
+    },
+
+    mute: {
+      direct: [
+        "isMuted",
+        "muted"
+      ],
+      list: "mutedBy"
+    },
+
+    archive: {
+      direct: [
+        "isArchived",
+        "archived"
+      ],
+      list: "archivedBy"
+    },
+
+    block: {
+      direct: [
+        "isBlocked",
+        "blocked"
+      ],
+      list: "blockedBy"
+    }
+  }[state];
+
+  if (
+    !definition ||
+    !conversation
+  ) {
+    return false;
+  }
+
+  for (
+    const field
+    of definition.direct
+  ) {
+    if (
+      typeof conversation?.[field] ===
+        "boolean"
+    ) {
+      return conversation[field];
+    }
+  }
+
+  const references =
+    Array.isArray(
+      conversation?.[
+        definition.list
+      ]
+    )
+      ? conversation[
+          definition.list
+        ]
+      : [];
+
+  return references.some(
+    (reference) => {
+      const normalized =
+        normalizeReference(
+          reference
+        );
+
+      return (
+        Boolean(normalized) &&
+        currentUserIds.includes(
+          normalized
+        )
+      );
+    }
+  );
+}
+
 export default function ConversationDetails({
   open,
   conversation,
   otherUser,
+  currentUserIds = [],
   actionLoading = false,
   onClose,
   onAction
@@ -29,6 +154,13 @@ export default function ConversationDetails({
 
   const avatar =
     getAvatar(otherUser);
+
+  const publicUserId =
+    otherUser?.prismaId ??
+    otherUser?.userId ??
+    otherUser?.id ??
+    otherUser?._id ??
+    "";
 
   const product =
     conversation?.product &&
@@ -73,11 +205,45 @@ export default function ConversationDetails({
       ? conversation.labels
       : [];
 
+  const isFavorite =
+    getConversationState(
+      conversation,
+      "favorite",
+      currentUserIds
+    );
+
+  const isMuted =
+    getConversationState(
+      conversation,
+      "mute",
+      currentUserIds
+    );
+
+  const isArchived =
+    getConversationState(
+      conversation,
+      "archive",
+      currentUserIds
+    );
+
+  const isBlocked =
+    getConversationState(
+      conversation,
+      "block",
+      currentUserIds
+    );
+
   const runAction = (
     action
   ) => {
     onAction?.(action);
   };
+
+  const isLoading = (
+    action
+  ) =>
+    Boolean(actionLoading) &&
+    actionLoading === action;
 
   return (
     <aside className="qsm-conversation-details">
@@ -115,9 +281,24 @@ export default function ConversationDetails({
         </strong>
 
         <span>
-          {otherUser?.email ||
-            "Usuario QSM"}
+          {otherUser?.isVerified
+            ? "Usuario verificado"
+            : `Confianza ${
+                Number(
+                  otherUser?.trustScore ||
+                    50
+                )
+              }/100`}
         </span>
+
+        {publicUserId && (
+          <Link
+            to={`/users/${publicUserId}`}
+            className="qsm-details-profile-link"
+          >
+            Ver perfil público
+          </Link>
+        )}
       </div>
 
       <section className="qsm-details-section">
@@ -208,6 +389,12 @@ export default function ConversationDetails({
 
         <button
           type="button"
+          className={
+            isFavorite
+              ? "is-active"
+              : ""
+          }
+          aria-pressed={isFavorite}
           onClick={() =>
             runAction(
               "favorite"
@@ -219,11 +406,21 @@ export default function ConversationDetails({
             )
           }
         >
-          ☆ Marcar como favorita
+          {isLoading("favorite")
+            ? "Actualizando..."
+            : isFavorite
+            ? "★ Quitar de favoritas"
+            : "☆ Marcar como favorita"}
         </button>
 
         <button
           type="button"
+          className={
+            isMuted
+              ? "is-active"
+              : ""
+          }
+          aria-pressed={isMuted}
           onClick={() =>
             runAction("mute")
           }
@@ -233,11 +430,21 @@ export default function ConversationDetails({
             )
           }
         >
-          ◇ Silenciar conversación
+          {isLoading("mute")
+            ? "Actualizando..."
+            : isMuted
+            ? "🔔 Activar notificaciones"
+            : "◇ Silenciar conversación"}
         </button>
 
         <button
           type="button"
+          className={
+            isArchived
+              ? "is-active"
+              : ""
+          }
+          aria-pressed={isArchived}
           onClick={() =>
             runAction(
               "archive"
@@ -249,12 +456,21 @@ export default function ConversationDetails({
             )
           }
         >
-          □ Archivar conversación
+          {isLoading("archive")
+            ? "Actualizando..."
+            : isArchived
+            ? "↩ Restaurar conversación"
+            : "□ Archivar conversación"}
         </button>
 
         <button
           type="button"
-          className="is-danger"
+          className={
+            isBlocked
+              ? "is-active"
+              : "is-danger"
+          }
+          aria-pressed={isBlocked}
           onClick={() =>
             runAction("block")
           }
@@ -264,7 +480,11 @@ export default function ConversationDetails({
             )
           }
         >
-          ⊘ Bloquear usuario
+          {isLoading("block")
+            ? "Actualizando..."
+            : isBlocked
+            ? "✓ Desbloquear usuario"
+            : "⊘ Bloquear usuario"}
         </button>
       </section>
 
