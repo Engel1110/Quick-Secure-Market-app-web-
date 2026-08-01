@@ -813,6 +813,7 @@ function Topbar() {
     <>
       <div
         ref={topbarRef}
+        className="qsm-topbar"
         style={topbar}
       >
         <style>{`
