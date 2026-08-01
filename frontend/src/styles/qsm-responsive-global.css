@@ -509,3 +509,437 @@ textarea {
     transition-duration: 0.001ms !important;
   }
 }
+
+/*
+==============================================================================
+QSM — FASE 3A.2
+PANTALLAS OPERATIVAS RESPONSIVE
+==============================================================================
+Cobertura:
+- Marketplace y detalles de producto
+- Compras, ventas y seguimiento
+- Checkout y voucher
+- Perfil, perfil público y completar perfil
+- Notificaciones, configuración y disputas
+- Crear y editar publicaciones
+==============================================================================
+*/
+
+:where(
+  [class*="marketplace-"],
+  [class*="product-"],
+  [class*="orders-"],
+  [class*="order-"],
+  [class*="sales-"],
+  [class*="sale-"],
+  [class*="checkout-"],
+  [class*="voucher-"],
+  [class*="tracking-"],
+  [class*="profile-"],
+  [class*="notification-"],
+  [class*="settings-"],
+  [class*="dispute-"],
+  [class*="complete-profile-"],
+  [class*="new-product-"],
+  [class*="edit-product-"]
+) {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+:where(
+  [class*="marketplace-"],
+  [class*="orders-"],
+  [class*="sales-"],
+  [class*="checkout-"],
+  [class*="voucher-"],
+  [class*="tracking-"],
+  [class*="profile-"],
+  [class*="notification-"],
+  [class*="settings-"],
+  [class*="dispute-"]
+) img {
+  max-width: 100%;
+  height: auto;
+}
+
+:where(
+  [class*="marketplace-"],
+  [class*="orders-"],
+  [class*="sales-"],
+  [class*="checkout-"],
+  [class*="voucher-"],
+  [class*="tracking-"],
+  [class*="profile-"],
+  [class*="notification-"],
+  [class*="settings-"],
+  [class*="dispute-"]
+) :where(
+  [class*="grid"],
+  [class*="layout"],
+  [class*="columns"],
+  [class*="content"],
+  [class*="body"]
+) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+:where(
+  [class*="marketplace-"],
+  [class*="orders-"],
+  [class*="sales-"],
+  [class*="checkout-"],
+  [class*="voucher-"],
+  [class*="tracking-"],
+  [class*="profile-"],
+  [class*="notification-"],
+  [class*="settings-"],
+  [class*="dispute-"]
+) :where(
+  [class*="title"],
+  [class*="subtitle"],
+  [class*="description"],
+  [class*="copy"],
+  [class*="value"],
+  [class*="name"]
+) {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+:where(
+  .sales-tabs,
+  .orders-tabs,
+  [class*="marketplace-tabs"],
+  [class*="tracking-tabs"],
+  [class*="profile-tabs"],
+  [class*="settings-tabs"],
+  [class*="dispute-tabs"],
+  [class*="tab-list"]
+) {
+  display: flex;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+:where(
+  .sales-tabs,
+  .orders-tabs,
+  [class*="marketplace-tabs"],
+  [class*="tracking-tabs"],
+  [class*="profile-tabs"],
+  [class*="settings-tabs"],
+  [class*="dispute-tabs"],
+  [class*="tab-list"]
+) > * {
+  flex: 0 0 auto;
+}
+
+:where(
+  [class*="table-wrap"],
+  [class*="table-container"],
+  [class*="table-scroll"],
+  [class*="orders-table"],
+  [class*="sales-table"],
+  [class*="tracking-table"]
+) {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+:where(
+  [class*="modal"],
+  [class*="dialog"],
+  [class*="drawer"]
+) {
+  max-width: min(94vw, 760px);
+}
+
+:where(
+  [class*="hero-actions"],
+  [class*="header-actions"],
+  [class*="card-actions"],
+  [class*="primary-actions"],
+  [class*="secondary-actions"],
+  [class*="toolbar-actions"]
+) {
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+:where(
+  [class*="filter"],
+  [class*="search"],
+  [class*="toolbar"]
+) input,
+:where(
+  [class*="filter"],
+  [class*="search"],
+  [class*="toolbar"]
+) select {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* ==========================================================================
+   ESCRITORIO MEDIO Y LAPTOP
+   ========================================================================== */
+
+@media (max-width: 1280px) {
+  :where(
+    [class*="marketplace-grid"],
+    [class*="product-grid"],
+    [class*="products-grid"]
+  ) {
+    grid-template-columns:
+      repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  :where(
+    [class*="orders-stats"],
+    [class*="sales-stats"],
+    [class*="tracking-stats"],
+    [class*="profile-stats"],
+    [class*="summary-grid"]
+  ) {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  :where(
+    [class*="checkout-grid"],
+    [class*="voucher-grid"],
+    [class*="tracking-grid"],
+    [class*="product-details-grid"],
+    [class*="profile-layout"]
+  ) {
+    grid-template-columns:
+      minmax(0, 1fr)
+      minmax(280px, 0.72fr) !important;
+  }
+}
+
+/* ==========================================================================
+   TABLET Y LAPTOP PEQUEÑA
+   ========================================================================== */
+
+@media (max-width: 980px) {
+  :where(
+    [class*="marketplace-grid"],
+    [class*="product-grid"],
+    [class*="products-grid"]
+  ) {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  :where(
+    [class*="checkout-grid"],
+    [class*="voucher-grid"],
+    [class*="tracking-grid"],
+    [class*="product-details-grid"],
+    [class*="profile-layout"],
+    [class*="profile-grid"],
+    [class*="orders-layout"],
+    [class*="sales-layout"],
+    [class*="dispute-layout"],
+    [class*="settings-layout"],
+    [class*="notification-layout"],
+    [class*="form-layout"],
+    [class*="editor-layout"]
+  ) {
+    grid-template-columns:
+      minmax(0, 1fr) !important;
+  }
+
+  :where(
+    [class*="hero"],
+    [class*="page-header"],
+    [class*="section-header"],
+    [class*="toolbar"]
+  ) {
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  :where(
+    [class*="hero-actions"],
+    [class*="header-actions"],
+    [class*="toolbar-actions"]
+  ) {
+    width: 100%;
+  }
+
+  :where(
+    [class*="filter-grid"],
+    [class*="filters-grid"],
+    [class*="search-grid"],
+    [class*="form-grid"]
+  ) {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  :where(
+    [class*="checkout-summary"],
+    [class*="voucher-summary"],
+    [class*="tracking-summary"],
+    [class*="product-summary"]
+  ) {
+    position: static !important;
+    top: auto !important;
+    width: 100% !important;
+    max-width: none !important;
+  }
+}
+
+/* ==========================================================================
+   MÓVIL
+   ========================================================================== */
+
+@media (max-width: 700px) {
+  :where(
+    [class*="marketplace-grid"],
+    [class*="product-grid"],
+    [class*="products-grid"],
+    [class*="orders-grid"],
+    [class*="sales-grid"],
+    [class*="tracking-grid"],
+    [class*="profile-grid"],
+    [class*="summary-grid"],
+    [class*="stats-grid"],
+    [class*="filter-grid"],
+    [class*="filters-grid"],
+    [class*="search-grid"],
+    [class*="form-grid"],
+    [class*="details-grid"],
+    [class*="actions-grid"]
+  ) {
+    grid-template-columns:
+      minmax(0, 1fr) !important;
+  }
+
+  :where(
+    [class*="marketplace-"],
+    [class*="orders-"],
+    [class*="sales-"],
+    [class*="checkout-"],
+    [class*="voucher-"],
+    [class*="tracking-"],
+    [class*="profile-"],
+    [class*="notification-"],
+    [class*="settings-"],
+    [class*="dispute-"],
+    [class*="complete-profile-"],
+    [class*="new-product-"],
+    [class*="edit-product-"]
+  ) :where(
+    button,
+    [role="button"],
+    a[class*="button"],
+    a[class*="action"]
+  ) {
+    min-height: 42px;
+  }
+
+  :where(
+    [class*="hero-actions"],
+    [class*="header-actions"],
+    [class*="card-actions"],
+    [class*="primary-actions"],
+    [class*="secondary-actions"],
+    [class*="toolbar-actions"]
+  ) {
+    display: grid !important;
+    grid-template-columns:
+      minmax(0, 1fr) !important;
+    width: 100%;
+  }
+
+  :where(
+    [class*="hero-actions"],
+    [class*="header-actions"],
+    [class*="card-actions"],
+    [class*="primary-actions"],
+    [class*="secondary-actions"],
+    [class*="toolbar-actions"]
+  ) > * {
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  :where(
+    [class*="page-title"],
+    [class*="hero-title"],
+    [class*="checkout-title"],
+    [class*="voucher-title"],
+    [class*="tracking-title"],
+    [class*="profile-title"],
+    [class*="orders-title"],
+    [class*="sales-title"]
+  ) {
+    font-size:
+      clamp(27px, 9vw, 40px) !important;
+    line-height: 1.08 !important;
+  }
+
+  :where(
+    [class*="modal"],
+    [class*="dialog"],
+    [class*="drawer"]
+  ) {
+    width: calc(100vw - 20px) !important;
+    max-width: calc(100vw - 20px) !important;
+    max-height: calc(100dvh - 20px) !important;
+    overflow-y: auto !important;
+  }
+
+  :where(
+    [class*="image-gallery"],
+    [class*="gallery-grid"],
+    [class*="media-grid"],
+    [class*="preview-grid"]
+  ) {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  :where(
+    [class*="progress"],
+    [class*="timeline"]
+  ) {
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+  }
+}
+
+@media (max-width: 430px) {
+  :where(
+    [class*="image-gallery"],
+    [class*="gallery-grid"],
+    [class*="media-grid"],
+    [class*="preview-grid"]
+  ) {
+    grid-template-columns:
+      minmax(0, 1fr) !important;
+  }
+
+  :where(
+    [class*="price"],
+    [class*="amount"],
+    [class*="total"]
+  ) {
+    overflow-wrap: anywhere;
+  }
+}
