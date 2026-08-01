@@ -11,6 +11,60 @@ const onlineUsers = new Map();
 
 const { getAllowedOrigins } = require("./config/runtime.config");
 
+const normalizeReference = (value) => {
+  if (
+    value === null ||
+    value === undefined
+  ) {
+    return "";
+  }
+
+  if (typeof value === "object") {
+    const nested =
+      value.prismaId ??
+      value.userId ??
+      value.id ??
+      value._id ??
+      value.sub;
+
+    if (
+      nested !== undefined &&
+      nested !== null &&
+      nested !== value
+    ) {
+      return normalizeReference(
+        nested
+      );
+    }
+  }
+
+  const normalized =
+    String(value).trim();
+
+  return normalized ===
+    "[object Object]"
+      ? ""
+      : normalized;
+};
+
+function parsePositiveInt(value) {
+  const normalized =
+    normalizeReference(value);
+
+  if (!/^\d+$/.test(normalized)) {
+    return null;
+  }
+
+  const parsed = Number(normalized);
+
+  return (
+    Number.isSafeInteger(parsed) &&
+    parsed > 0
+  )
+    ? parsed
+    : null;
+}
+
 const getSocketToken = (socket) => {
   const authToken =
     socket.handshake.auth?.token;
