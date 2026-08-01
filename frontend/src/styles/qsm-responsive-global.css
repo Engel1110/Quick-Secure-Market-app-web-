@@ -943,3 +943,487 @@ Cobertura:
     overflow-wrap: anywhere;
   }
 }
+
+/*
+==============================================================================
+QSM — FASE 3A.3
+BACKOFFICE RESPONSIVE
+==============================================================================
+Cobertura:
+- Dashboard administrativo
+- Usuarios internos
+- Configuración del sistema
+- Seguridad, auditoría y moderación
+- Finanzas, soporte, operaciones, disputas y verificación
+- Tablas, filtros, cards, modales y sidebar administrativo
+==============================================================================
+*/
+
+:where(
+  .qsm-admin-shell,
+  .admin-shell,
+  .qsm-internal-users-page,
+  [class*="admin-page"],
+  [class*="admin-dashboard"],
+  [class*="internal-users"],
+  [class*="system-settings"],
+  [class*="security-dashboard"],
+  [class*="audit-dashboard"],
+  [class*="finance-dashboard"],
+  [class*="support-dashboard"],
+  [class*="operations-dashboard"],
+  [class*="moderation-dashboard"],
+  [class*="verification-dashboard"],
+  [class*="disputes-dashboard"]
+) {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box;
+}
+
+:where(
+  .qsm-internal-users-main,
+  .qsm-internal-content,
+  .admin-main,
+  .qsm-admin-main,
+  [class*="admin-main"],
+  [class*="admin-content"],
+  [class*="dashboard-main"],
+  [class*="dashboard-content"]
+) {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box;
+}
+
+:where(
+  .qsm-internal-header,
+  .qsm-internal-heading,
+  [class*="admin-header"],
+  [class*="admin-heading"],
+  [class*="dashboard-header"],
+  [class*="page-header"],
+  [class*="section-header"]
+) {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  flex-wrap: wrap !important;
+  gap: 14px !important;
+}
+
+:where(
+  .qsm-internal-header,
+  .qsm-internal-heading,
+  [class*="admin-header"],
+  [class*="admin-heading"],
+  [class*="dashboard-header"]
+) > * {
+  min-width: 0 !important;
+}
+
+:where(
+  .qsm-internal-heading h1,
+  [class*="admin-title"],
+  [class*="dashboard-title"],
+  [class*="page-title"]
+) {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+:where(
+  .qsm-admin-shell,
+  .admin-shell,
+  [class*="admin-page"],
+  [class*="admin-dashboard"]
+) img,
+:where(
+  .qsm-admin-shell,
+  .admin-shell,
+  [class*="admin-page"],
+  [class*="admin-dashboard"]
+) svg,
+:where(
+  .qsm-admin-shell,
+  .admin-shell,
+  [class*="admin-page"],
+  [class*="admin-dashboard"]
+) canvas {
+  max-width: 100%;
+}
+
+:where(
+  .qsm-admin-shell,
+  .admin-shell,
+  [class*="admin-page"],
+  [class*="admin-dashboard"]
+) :where(
+  [class*="grid"],
+  [class*="layout"],
+  [class*="columns"],
+  [class*="cards"],
+  [class*="stats"],
+  [class*="metrics"]
+) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+:where(
+  .qsm-admin-shell,
+  .admin-shell,
+  [class*="admin-page"],
+  [class*="admin-dashboard"]
+) :where(
+  [class*="table-wrap"],
+  [class*="table-container"],
+  [class*="table-scroll"],
+  [class*="data-table"]
+) {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto !important;
+  overscroll-behavior-inline: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+:where(
+  .qsm-admin-shell,
+  .admin-shell,
+  [class*="admin-page"],
+  [class*="admin-dashboard"]
+) table {
+  min-width: 760px;
+}
+
+:where(
+  .qsm-admin-shell,
+  .admin-shell,
+  [class*="admin-page"],
+  [class*="admin-dashboard"]
+) :where(
+  [class*="tabs"],
+  [class*="tab-list"],
+  [class*="filters-row"],
+  [class*="toolbar"]
+) {
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+:where(
+  .qsm-admin-shell,
+  .admin-shell,
+  [class*="admin-page"],
+  [class*="admin-dashboard"]
+) :where(
+  [class*="modal"],
+  [class*="dialog"],
+  [class*="drawer"]
+) {
+  max-width: min(94vw, 860px) !important;
+}
+
+:where(
+  .qsm-admin-button,
+  [class*="admin-button"],
+  [class*="action-button"]
+) {
+  min-height: 42px;
+  min-width: 0;
+}
+
+/* ==========================================================================
+   ESCRITORIO MEDIO
+   ========================================================================== */
+
+@media (max-width: 1280px) {
+  :where(
+    .qsm-admin-shell,
+    .admin-shell,
+    [class*="admin-page"],
+    [class*="admin-dashboard"]
+  ) :where(
+    [class*="stats-grid"],
+    [class*="metrics-grid"],
+    [class*="summary-grid"],
+    [class*="cards-grid"]
+  ) {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  :where(
+    .qsm-admin-shell,
+    .admin-shell,
+    [class*="admin-page"],
+    [class*="admin-dashboard"]
+  ) :where(
+    [class*="content-grid"],
+    [class*="dashboard-grid"],
+    [class*="main-grid"]
+  ) {
+    grid-template-columns:
+      minmax(0, 1fr) !important;
+  }
+}
+
+/* ==========================================================================
+   TABLET Y LAPTOP PEQUEÑA
+   ========================================================================== */
+
+@media (max-width: 980px) {
+  :where(
+    .qsm-admin-shell,
+    .admin-shell
+  ) {
+    display: block !important;
+    grid-template-columns:
+      minmax(0, 1fr) !important;
+    width: 100% !important;
+    min-height: 100dvh !important;
+  }
+
+  :where(
+    .qsm-admin-shell,
+    .admin-shell
+  ) > aside,
+  .qsm-internal-sidebar,
+  .admin-sidebar,
+  .qsm-admin-sidebar {
+    position: static !important;
+    inset: auto !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    transform: none !important;
+  }
+
+  :where(
+    .qsm-internal-users-main,
+    .admin-main,
+    .qsm-admin-main,
+    [class*="admin-main"]
+  ) {
+    width: 100% !important;
+    max-width: none !important;
+    margin-left: 0 !important;
+    padding-left: 0 !important;
+  }
+
+  .qsm-internal-sidebar__brand,
+  .qsm-internal-sidebar__profile,
+  .qsm-internal-sidebar__back {
+    width: 100% !important;
+  }
+
+  .qsm-internal-sidebar__nav,
+  :where(
+    .admin-sidebar,
+    .qsm-admin-sidebar
+  ) nav {
+    display: flex !important;
+    flex-direction: row !important;
+    gap: 8px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    padding-bottom: 6px !important;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .qsm-internal-sidebar__nav > *,
+  :where(
+    .admin-sidebar,
+    .qsm-admin-sidebar
+  ) nav > * {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-width: max-content !important;
+  }
+
+  .qsm-internal-content,
+  :where(
+    .admin-main,
+    .qsm-admin-main,
+    [class*="admin-main"]
+  ) {
+    padding:
+      clamp(14px, 2.4vw, 26px) !important;
+  }
+
+  :where(
+    .qsm-internal-header,
+    .qsm-internal-heading,
+    [class*="admin-header"],
+    [class*="admin-heading"],
+    [class*="dashboard-header"]
+  ) {
+    align-items: stretch !important;
+  }
+
+  :where(
+    .qsm-internal-header,
+    .qsm-internal-heading,
+    [class*="admin-header"],
+    [class*="admin-heading"],
+    [class*="dashboard-header"]
+  ) :where(
+    button,
+    a,
+    [role="button"]
+  ) {
+    max-width: 100%;
+  }
+
+  :where(
+    .qsm-admin-shell,
+    .admin-shell,
+    [class*="admin-page"],
+    [class*="admin-dashboard"]
+  ) :where(
+    [class*="filters-grid"],
+    [class*="filter-grid"],
+    [class*="form-grid"],
+    [class*="search-grid"]
+  ) {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+/* ==========================================================================
+   MÓVIL
+   ========================================================================== */
+
+@media (max-width: 700px) {
+  .qsm-internal-sidebar {
+    padding:
+      14px 12px !important;
+  }
+
+  .qsm-internal-sidebar__profile {
+    grid-template-columns:
+      48px minmax(0, 1fr) !important;
+  }
+
+  .qsm-internal-sidebar__nav,
+  :where(
+    .admin-sidebar,
+    .qsm-admin-sidebar
+  ) nav {
+    gap: 6px !important;
+  }
+
+  .qsm-internal-content,
+  :where(
+    .admin-main,
+    .qsm-admin-main,
+    [class*="admin-main"]
+  ) {
+    padding:
+      12px 10px 32px !important;
+  }
+
+  :where(
+    .qsm-admin-shell,
+    .admin-shell,
+    [class*="admin-page"],
+    [class*="admin-dashboard"]
+  ) :where(
+    [class*="stats-grid"],
+    [class*="metrics-grid"],
+    [class*="summary-grid"],
+    [class*="cards-grid"],
+    [class*="filters-grid"],
+    [class*="filter-grid"],
+    [class*="form-grid"],
+    [class*="search-grid"],
+    [class*="content-grid"],
+    [class*="dashboard-grid"],
+    [class*="main-grid"]
+  ) {
+    grid-template-columns:
+      minmax(0, 1fr) !important;
+  }
+
+  :where(
+    .qsm-internal-header,
+    .qsm-internal-heading,
+    [class*="admin-header"],
+    [class*="admin-heading"],
+    [class*="dashboard-header"]
+  ) {
+    display: grid !important;
+    grid-template-columns:
+      minmax(0, 1fr) !important;
+  }
+
+  :where(
+    .qsm-internal-header,
+    .qsm-internal-heading,
+    [class*="admin-header"],
+    [class*="admin-heading"],
+    [class*="dashboard-header"]
+  ) :where(
+    button,
+    a,
+    [role="button"]
+  ) {
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  :where(
+    .qsm-admin-shell,
+    .admin-shell,
+    [class*="admin-page"],
+    [class*="admin-dashboard"]
+  ) :where(
+    [class*="modal"],
+    [class*="dialog"],
+    [class*="drawer"]
+  ) {
+    width: calc(100vw - 20px) !important;
+    max-width: calc(100vw - 20px) !important;
+    max-height: calc(100dvh - 20px) !important;
+    overflow-y: auto !important;
+  }
+
+  :where(
+    .qsm-admin-shell,
+    .admin-shell,
+    [class*="admin-page"],
+    [class*="admin-dashboard"]
+  ) table {
+    min-width: 680px;
+  }
+}
+
+@media (max-width: 430px) {
+  .qsm-internal-sidebar__brand,
+  .qsm-internal-sidebar__profile,
+  .qsm-internal-sidebar__back {
+    min-width: 0 !important;
+  }
+
+  .qsm-internal-heading h1,
+  :where(
+    [class*="admin-title"],
+    [class*="dashboard-title"],
+    [class*="page-title"]
+  ) {
+    font-size:
+      clamp(26px, 9vw, 38px) !important;
+    line-height: 1.08 !important;
+  }
+}
