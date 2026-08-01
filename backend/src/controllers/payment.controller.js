@@ -608,6 +608,18 @@ const releasePaymentToSeller =
         });
       }
 
+      // QSM_5_3A_RELEASE_GUARD
+      if (
+        payment.order?.status !== "DELIVERED" ||
+        payment.order?.buyerConfirmedReceipt !== true
+      ) {
+        return res.status(409).json({
+          success: false,
+          message:
+            "No se puede liberar el pago antes de confirmar la entrega."
+        });
+      }
+
       const now =
         new Date();
 

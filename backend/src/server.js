@@ -65,6 +65,7 @@ const notificationRoutes = require(
 );
 
 const shippingRoutes = require("./routes/shipping.routes");
+const deliveryRoutes = require("./routes/delivery.routes");
 const paymentRoutes = require("./routes/payment.routes");
 const financeAdminRoutes = require("./routes/finance-admin.routes");
 const operationsAdminRoutes = require("./routes/operations-admin.routes");
@@ -537,6 +538,11 @@ app.use(
 app.use(
   "/api/shipping",
   shippingRoutes
+);
+
+app.use(
+  "/api/delivery",
+  deliveryRoutes
 );
 
 app.use(

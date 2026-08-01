@@ -1,5 +1,10 @@
 const express = require("express");
+
 const router = express.Router();
+
+const authMiddleware = require(
+  "../middleware/auth.middleware"
+);
 
 const {
   auditMutations
@@ -7,24 +12,20 @@ const {
   "../middleware/audit-action.middleware"
 );
 
-const authMiddleware = require("../middleware/auth.middleware");
-
 const {
   listWarehouseItems,
   getWarehouseItem,
   getWarehouseStatistics,
   getWarehouseTimeline,
   getRecentActivity,
-  getWarehouseKpis
-} = require("../controllers/warehouse.controller");
-
-/*
-|--------------------------------------------------------------------------
-| Rutas temporales compatibles con el esquema Warehouse actual
-|--------------------------------------------------------------------------
-| El módulo avanzado se reactivará cuando sus modelos Prisma sean migrados.
-|--------------------------------------------------------------------------
-*/
+  getWarehouseKpis,
+  receiveWarehouseItem,
+  approveInspection,
+  assignLocation,
+  markReadyForDelivery
+} = require(
+  "../controllers/warehouse.controller"
+);
 
 router.use(authMiddleware);
 
@@ -50,6 +51,26 @@ router.get(
 router.get(
   "/kpis",
   getWarehouseKpis
+);
+
+router.patch(
+  "/:warehouseItemId/receive",
+  receiveWarehouseItem
+);
+
+router.patch(
+  "/:warehouseItemId/approve-inspection",
+  approveInspection
+);
+
+router.patch(
+  "/:warehouseItemId/assign-location",
+  assignLocation
+);
+
+router.patch(
+  "/:warehouseItemId/ready-for-delivery",
+  markReadyForDelivery
 );
 
 router.get(

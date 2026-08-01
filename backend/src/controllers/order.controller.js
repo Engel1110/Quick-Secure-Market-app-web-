@@ -1252,6 +1252,59 @@ const createOrder = async (
               }
             });
 
+          // QSM_5_3A_AUTO_PAYMENT
+          await tx.payment.create({
+            data: {
+              orderId: createdOrder.id,
+              buyerId: prismaUser.id,
+              sellerId: product.sellerId,
+              amount: totalAmount,
+              method: normalizedPaymentMethod,
+              status:
+                normalizedPaymentMethod === "CARD"
+                  ? "HELD"
+                  : "PENDING",
+              transactionCode:
+                createdOrder.paymentTransactionId ||
+                generateDemoTransactionId(),
+              notes:
+                normalizedPaymentMethod === "CARD"
+                  ? "Pago demo retenido en custodia QSM."
+                  : "Pago demo pendiente de validación por Finanzas."
+            }
+          });
+
+          // QSM_5_3B_AUTO_WAREHOUSE
+          if (
+            normalizedDeliveryMethod ===
+            "QSM_WAREHOUSE"
+          ) {
+            await tx.warehouse.upsert({
+              where: {
+                productId: numericProductId
+              },
+              update: {
+                notes:
+                  "Orden " +
+                  orderCode +
+                  " esperando recepción en almacén QSM."
+              },
+              create: {
+                productId:
+                  numericProductId,
+                received: false,
+                inspected: false,
+                certified: false,
+                stored: false,
+                shipped: false,
+                notes:
+                  "Orden " +
+                  orderCode +
+                  " esperando recepción en almacén QSM."
+              }
+            });
+          }
+
           await tx.product.update({
             where: {
               id: numericProductId
@@ -2094,56 +2147,19 @@ const confirmReceipt = async (
     const now =
       new Date();
 
-    let paymentStatus =
-      order.paymentStatus;
-
-    let paymentConfirmedAt =
-      order.paymentConfirmedAt;
-
-    let paymentConfirmedById =
-      order.paymentConfirmedById;
-
-    if (
-      [
-        "CASH_ON_DELIVERY",
-        "BANK_TRANSFER"
-      ].includes(
+    const paymentStatus =
+      ["CASH_ON_DELIVERY", "BANK_TRANSFER"].includes(
         order.paymentMethod
       )
-    ) {
-      paymentStatus =
-        "CONFIRMED";
+        ? "CONFIRMED"
+        : order.paymentStatus;
 
-      paymentConfirmedAt =
-        paymentConfirmedAt ||
-        now;
-
-      paymentConfirmedById =
-        prismaUser.id;
-    }
-
-    let escrowStatus =
-      order.escrowStatus;
-
-    let releasedAt =
-      order.releasedAt;
-
-    if (
-      [
-        "HELD",
-        "PENDING",
-        "UNDER_REVIEW",
-        "READY_TO_RELEASE"
-      ].includes(
+    const escrowStatus =
+      ["HELD", "PENDING", "UNDER_REVIEW", "READY_TO_RELEASE"].includes(
         order.escrowStatus
       )
-    ) {
-      escrowStatus =
-        "RELEASED";
-
-      releasedAt =
-        now;
-    }
+        ? "READY_TO_RELEASE"
+        : order.escrowStatus;
 
     const depositStatus =
       order.depositAmount > 0
@@ -2154,16 +2170,10 @@ const confirmReceipt = async (
       addTimelineEvent(
         order.timeline,
         {
-          status:
-            "BUYER_CONFIRMED_RECEIPT",
+          status: "BUYER_CONFIRMED_RECEIPT",
           description:
             "El comprador confirmó que recibió el producto correctamente.",
-          createdBy:
-            prismaUser.id,
-          metadata: {
-            paymentStatus,
-            escrowStatus
-          }
+          createdBy: prismaUser.id
         }
       );
 
@@ -2171,16 +2181,10 @@ const confirmReceipt = async (
       addTimelineEvent(
         timeline,
         {
-          status:
-            "ORDER_COMPLETED",
+          status: "QSM_5_3A_READY_TO_RELEASE",
           description:
-            "La compra protegida fue completada y el pago quedó liberado.",
-          createdBy:
-            prismaUser.id,
-          metadata: {
-            completedAt:
-              now.toISOString()
-          }
+            "Entrega confirmada. Finanzas debe autorizar el desembolso simulado.",
+          createdBy: prismaUser.id
         }
       );
 
@@ -2191,53 +2195,58 @@ const confirmReceipt = async (
             id: order.id
           },
           data: {
-            buyerConfirmedReceipt:
-              true,
-            buyerConfirmedReceiptAt:
-              now,
-            status:
-              "COMPLETED",
-            deliveryStatus:
-              "DELIVERED",
-            deliveredAt:
-              order.deliveredAt ||
-              now,
-            completedAt:
-              now,
+            buyerConfirmedReceipt: true,
+            buyerConfirmedReceiptAt: now,
+            status: "DELIVERED",
+            deliveryStatus: "DELIVERED",
+            deliveredAt: order.deliveredAt || now,
             warehouseStatus:
-              order.deliveryMethod ===
-              "QSM_WAREHOUSE"
+              order.deliveryMethod === "QSM_WAREHOUSE"
                 ? "DELIVERED"
                 : order.warehouseStatus,
             warehouseConfirmedDelivery:
-              order.deliveryMethod ===
-              "QSM_WAREHOUSE"
+              order.deliveryMethod === "QSM_WAREHOUSE"
                 ? true
                 : order.warehouseConfirmedDelivery,
             warehouseConfirmedDeliveryAt:
-              order.deliveryMethod ===
-              "QSM_WAREHOUSE"
-                ? order
-                    .warehouseConfirmedDeliveryAt ||
-                  now
-                : order
-                    .warehouseConfirmedDeliveryAt,
+              order.deliveryMethod === "QSM_WAREHOUSE"
+                ? order.warehouseConfirmedDeliveryAt || now
+                : order.warehouseConfirmedDeliveryAt,
             paymentStatus,
-            paymentConfirmedAt,
-            paymentConfirmedById,
+            paymentConfirmedAt:
+              paymentStatus === "CONFIRMED"
+                ? order.paymentConfirmedAt || now
+                : order.paymentConfirmedAt,
+            paymentConfirmedById:
+              paymentStatus === "CONFIRMED"
+                ? prismaUser.id
+                : order.paymentConfirmedById,
             escrowStatus,
-            releasedAt,
             depositStatus,
             timeline
+          }
+        });
+
+        await tx.payment.updateMany({
+          where: {
+            orderId: order.id,
+            status: {
+              in: ["PENDING", "HELD"]
+            }
+          },
+          data: {
+            status: "HELD",
+            notes:
+              "Entrega confirmada. Desembolso demo pendiente de Finanzas."
           }
         });
 
         await createNotificationSafe(
           tx,
           order.sellerId,
-          "ORDER_COMPLETED",
-          "Venta completada",
-          `La orden ${order.orderCode} fue completada. El comprador confirmó la recepción del producto.`
+          "DELIVERY_CONFIRMED",
+          "Entrega confirmada",
+          `La orden ${order.orderCode} fue entregada. Finanzas debe autorizar el desembolso simulado.`
         );
       },
       {
@@ -2679,6 +2688,31 @@ const sendToWarehouse = async (
 
     await prisma.$transaction(
       async (tx) => {
+        // QSM_5_3B_WAREHOUSE_UPSERT_ON_SEND
+        await tx.warehouse.upsert({
+          where: {
+            productId:
+              order.productId
+          },
+          update: {
+            notes:
+              sellerNotes ||
+              "Producto enviado al almacén QSM."
+          },
+          create: {
+            productId:
+              order.productId,
+            received: false,
+            inspected: false,
+            certified: false,
+            stored: false,
+            shipped: false,
+            notes:
+              sellerNotes ||
+              "Producto enviado al almacén QSM."
+          }
+        });
+
         await tx.order.update({
           where: {
             id: order.id

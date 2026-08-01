@@ -1,1901 +1,1064 @@
-const deliveryService = require("../services/delivery.service");
+const crypto = require("crypto");
+const prisma = require("../utils/prisma");
 
-/*
-|--------------------------------------------------------------------------
-| Dashboard
-|--------------------------------------------------------------------------
-*/
+function parsePositiveInt(value) {
+  const parsed = Number(value);
 
-const listDeliveries = async (req, res) => {
-    try {
+  return Number.isInteger(parsed) &&
+    parsed > 0
+    ? parsed
+    : null;
+}
 
-        const data = await deliveryService.listDeliveries({
-            ...req.query
-        });
+function cleanText(value) {
+  return String(value || "").trim();
+}
 
-        return res.status(200).json({
-            success: true,
-            data
-        });
+function normalizeUpper(value) {
+  return cleanText(value).toUpperCase();
+}
 
-    } catch (error) {
+function generateTrackingCode() {
+  return (
+    "QSM-DLV-" +
+    Date.now().toString().slice(-8) +
+    "-" +
+    crypto.randomInt(10, 100)
+  );
+}
 
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
+function addTimelineEvent(
+  timeline,
+  status,
+  description,
+  createdBy,
+  metadata = {}
+) {
+  const events =
+    Array.isArray(timeline)
+      ? [...timeline]
+      : [];
 
+  events.push({
+    status,
+    description,
+    createdBy: createdBy || null,
+    metadata,
+    createdAt:
+      new Date().toISOString()
+  });
+
+  return events;
+}
+
+async function createNotificationSafe(
+  client,
+  userId,
+  type,
+  title,
+  message
+) {
+  if (!userId) {
+    return;
+  }
+
+  try {
+    await client.notification.create({
+      data: {
+        userId,
+        title,
+        message:
+          "[" + type + "] " + message,
+        read: false
+      }
+    });
+  } catch (error) {
+    console.error(
+      "Delivery notification error:",
+      error.message
+    );
+  }
+}
+
+const shippingInclude = {
+  order: {
+    include: {
+      product: true,
+      buyer: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true
+        }
+      },
+      seller: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true
+        }
+      }
     }
+  },
+  product: true,
+  buyer: {
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true
+    }
+  },
+  seller: {
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      email: true
+    }
+  }
 };
 
-const getDelivery = async (req, res) => {
-    try {
+function serializeShipping(shipping) {
+  if (!shipping) {
+    return null;
+  }
 
-        const data = await deliveryService.getDelivery(
-            req.params.deliveryId
+  return {
+    ...shipping,
+    _id: String(shipping.id),
+    deliveryId: shipping.id,
+    trackingNumber:
+      shipping.trackingCode,
+    status:
+      normalizeUpper(
+        shipping.status
+      )
+  };
+}
+
+async function listDeliveries(
+  req,
+  res
+) {
+  try {
+    const status =
+      normalizeUpper(
+        req.query?.status
+      );
+
+    const search =
+      cleanText(
+        req.query?.search
+      );
+
+    const where = {};
+
+    if (status) {
+      where.status = status;
+    }
+
+    if (search) {
+      where.OR = [
+        {
+          trackingCode: {
+            contains: search,
+            mode: "insensitive"
+          }
+        },
+        {
+          deliveryAddress: {
+            contains: search,
+            mode: "insensitive"
+          }
+        },
+        {
+          product: {
+            is: {
+              title: {
+                contains: search,
+                mode: "insensitive"
+              }
+            }
+          }
+        }
+      ];
+    }
+
+    const deliveries =
+      await prisma.shipping.findMany({
+        where,
+        include:
+          shippingInclude,
+        orderBy: {
+          createdAt: "desc"
+        }
+      });
+
+    return res.status(200).json({
+      success: true,
+      count:
+        deliveries.length,
+      total:
+        deliveries.length,
+      data:
+        deliveries.map(
+          serializeShipping
+        ),
+      deliveries:
+        deliveries.map(
+          serializeShipping
+        )
+    });
+  } catch (error) {
+    console.error(
+      "Error listando Delivery:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "No se pudieron cargar las entregas."
+    });
+  }
+}
+
+async function getDelivery(
+  req,
+  res
+) {
+  try {
+    const deliveryId =
+      parsePositiveInt(
+        req.params.deliveryId
+      );
+
+    if (!deliveryId) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "El identificador de Delivery no es válido."
+      });
+    }
+
+    const delivery =
+      await prisma.shipping.findUnique({
+        where: {
+          id: deliveryId
+        },
+        include:
+          shippingInclude
+      });
+
+    if (!delivery) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Delivery no encontrado."
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data:
+        serializeShipping(
+          delivery
+        )
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message:
+        "No se pudo consultar el Delivery."
+    });
+  }
+}
+
+async function getDeliveryStatistics(
+  req,
+  res
+) {
+  try {
+    const [
+      total,
+      pending,
+      pickedUp,
+      inTransit,
+      delivered,
+      failed,
+      returned
+    ] = await Promise.all([
+      prisma.shipping.count(),
+      prisma.shipping.count({
+        where: {
+          status: "PENDING"
+        }
+      }),
+      prisma.shipping.count({
+        where: {
+          status: "PICKED_UP"
+        }
+      }),
+      prisma.shipping.count({
+        where: {
+          status: "IN_TRANSIT"
+        }
+      }),
+      prisma.shipping.count({
+        where: {
+          status: "DELIVERED"
+        }
+      }),
+      prisma.shipping.count({
+        where: {
+          status: "FAILED"
+        }
+      }),
+      prisma.shipping.count({
+        where: {
+          status: "RETURNED"
+        }
+      })
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        total,
+        pending,
+        readyForAssignment:
+          pending,
+        pickedUp,
+        inTransit,
+        delivered,
+        failed,
+        returned,
+        completionRate:
+          total > 0
+            ? Number(
+                (
+                  delivered /
+                  total *
+                  100
+                ).toFixed(2)
+              )
+            : 0
+      }
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message:
+        "No se pudieron calcular las estadísticas de Delivery."
+    });
+  }
+}
+
+async function createDeliveryFromOrder(
+  req,
+  res
+) {
+  try {
+    const orderId =
+      parsePositiveInt(
+        req.params.orderId ||
+        req.body?.orderId
+      );
+
+    if (!orderId) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "El identificador de la orden no es válido."
+      });
+    }
+
+    const employeeId =
+      parsePositiveInt(
+        req.user?.id
+      );
+
+    const order =
+      await prisma.order.findUnique({
+        where: {
+          id: orderId
+        },
+        include: {
+          product: true,
+          shipping: true
+        }
+      });
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Orden no encontrada."
+      });
+    }
+
+    if (order.shipping) {
+      return res.status(200).json({
+        success: true,
+        recovered: true,
+        message:
+          "La orden ya tenía un Delivery creado.",
+        data:
+          serializeShipping(
+            await prisma.shipping.findUnique({
+              where: {
+                id:
+                  order.shipping.id
+              },
+              include:
+                shippingInclude
+            })
+          )
+      });
+    }
+
+    if (
+      ![
+        "READY_FOR_PICKUP",
+        "WAITING_SELLER",
+        "WAITING_WAREHOUSE"
+      ].includes(order.status)
+    ) {
+      return res.status(409).json({
+        success: false,
+        message:
+          "La orden todavía no está lista para crear el Delivery."
+      });
+    }
+
+    const deliveryAddress =
+      cleanText(
+        req.body?.deliveryAddress ||
+        order.deliveryAddress
+      );
+
+    if (!deliveryAddress) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "La orden necesita una dirección de entrega."
+      });
+    }
+
+    const result =
+      await prisma.$transaction(
+        async (tx) => {
+          const trackingCode =
+            generateTrackingCode();
+
+          const shipping =
+            await tx.shipping.create({
+              data: {
+                orderId:
+                  order.id,
+                buyerId:
+                  order.buyerId,
+                sellerId:
+                  order.sellerId,
+                productId:
+                  order.productId,
+                trackingCode,
+                carrier:
+                  cleanText(
+                    req.body?.carrier
+                  ) ||
+                  "QSM Delivery",
+                originAddress:
+                  cleanText(
+                    req.body?.originAddress ||
+                    order.pickupAddress
+                  ),
+                deliveryAddress,
+                deliveryNotes:
+                  cleanText(
+                    req.body?.notes
+                  ),
+                status:
+                  "PENDING"
+              }
+            });
+
+          const timeline =
+            addTimelineEvent(
+              order.timeline,
+              "DELIVERY_CREATED",
+              "QSM creó el Delivery para la orden.",
+              employeeId,
+              {
+                trackingCode
+              }
+            );
+
+          await tx.order.update({
+            where: {
+              id: order.id
+            },
+            data: {
+              status:
+                "READY_FOR_PICKUP",
+              deliveryStatus:
+                "READY_FOR_PICKUP",
+              trackingNumber:
+                trackingCode,
+              trackingCompany:
+                "QSM Delivery",
+              deliveryAddress,
+              deliveryAgentId:
+                employeeId ||
+                order.deliveryAgentId,
+              timeline
+            }
+          });
+
+          await createNotificationSafe(
+            tx,
+            order.buyerId,
+            "DELIVERY_CREATED",
+            "Delivery creado",
+            "QSM creó el Delivery de tu orden."
+          );
+
+          await createNotificationSafe(
+            tx,
+            order.sellerId,
+            "DELIVERY_CREATED",
+            "Producto listo para Delivery",
+            "QSM creó el Delivery de la orden."
+          );
+
+          return shipping.id;
+        },
+        {
+          maxWait: 20000,
+          timeout: 60000
+        }
+      );
+
+    const finalDelivery =
+      await prisma.shipping.findUnique({
+        where: {
+          id: result
+        },
+        include:
+          shippingInclude
+      });
+
+    return res.status(201).json({
+      success: true,
+      message:
+        "Delivery creado correctamente.",
+      data:
+        serializeShipping(
+          finalDelivery
+        )
+    });
+  } catch (error) {
+    console.error(
+      "Error creando Delivery:",
+      error
+    );
+
+    if (error?.code === "P2002") {
+      return res.status(409).json({
+        success: false,
+        message:
+          "Esta orden ya tiene un Delivery."
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "No se pudo crear el Delivery.",
+      error:
+        process.env.NODE_ENV ===
+        "production"
+          ? undefined
+          : error.message
+    });
+  }
+}
+
+async function startDelivery(
+  req,
+  res
+) {
+  try {
+    const deliveryId =
+      parsePositiveInt(
+        req.params.deliveryId
+      );
+
+    if (!deliveryId) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "El identificador de Delivery no es válido."
+      });
+    }
+
+    const employeeId =
+      parsePositiveInt(
+        req.user?.id
+      );
+
+    const current =
+      await prisma.shipping.findUnique({
+        where: {
+          id: deliveryId
+        },
+        include: {
+          order: true
+        }
+      });
+
+    if (!current) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Delivery no encontrado."
+      });
+    }
+
+    if (
+      current.status ===
+      "DELIVERED"
+    ) {
+      return res.status(409).json({
+        success: false,
+        message:
+          "El Delivery ya fue completado."
+      });
+    }
+
+    const result =
+      await prisma.$transaction(
+        async (tx) => {
+          await tx.shipping.update({
+            where: {
+              id: current.id
+            },
+            data: {
+              status:
+                "IN_TRANSIT"
+            }
+          });
+
+          const timeline =
+            addTimelineEvent(
+              current.order.timeline,
+              "DELIVERY_IN_TRANSIT",
+              "El producto salió para entrega.",
+              employeeId
+            );
+
+          await tx.order.update({
+            where: {
+              id:
+                current.orderId
+            },
+            data: {
+              status:
+                "OUT_FOR_DELIVERY",
+              deliveryStatus:
+                "IN_TRANSIT",
+              outForDeliveryAt:
+                current.order.outForDeliveryAt ||
+                new Date(),
+              deliveryAgentId:
+                employeeId ||
+                current.order.deliveryAgentId,
+              timeline
+            }
+          });
+        }
+      );
+
+    void result;
+
+    const updated =
+      await prisma.shipping.findUnique({
+        where: {
+          id: current.id
+        },
+        include:
+          shippingInclude
+      });
+
+    return res.status(200).json({
+      success: true,
+      message:
+        "Delivery iniciado correctamente.",
+      data:
+        serializeShipping(
+          updated
+        )
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message:
+        "No se pudo iniciar el Delivery."
+    });
+  }
+}
+
+async function confirmDeliveryWithPin(
+  req,
+  res
+) {
+  try {
+    const deliveryId =
+      parsePositiveInt(
+        req.params.deliveryId
+      );
+
+    const pin =
+      cleanText(
+        req.body?.pin ||
+        req.body?.deliveryPin ||
+        req.body?.otpCode
+      );
+
+    if (!deliveryId) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "El identificador de Delivery no es válido."
+      });
+    }
+
+    if (!/^\d{6}$/.test(pin)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "El PIN debe contener 6 números."
+      });
+    }
+
+    const employeeId =
+      parsePositiveInt(
+        req.user?.id
+      );
+
+    const current =
+      await prisma.shipping.findUnique({
+        where: {
+          id: deliveryId
+        },
+        include: {
+          order: true
+        }
+      });
+
+    if (!current) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Delivery no encontrado."
+      });
+    }
+
+    if (
+      current.status ===
+      "DELIVERED" &&
+      current.order
+        ?.deliveryPinVerified
+    ) {
+      return res.status(200).json({
+        success: true,
+        recovered: true,
+        message:
+          "La entrega ya había sido confirmada.",
+        data:
+          serializeShipping(
+            await prisma.shipping.findUnique({
+              where: {
+                id: current.id
+              },
+              include:
+                shippingInclude
+            })
+          )
+      });
+    }
+
+    if (
+      current.status !==
+      "IN_TRANSIT"
+    ) {
+      return res.status(409).json({
+        success: false,
+        message:
+          "El Delivery debe estar en tránsito antes de confirmar la entrega."
+      });
+    }
+
+    if (
+      current.order.deliveryPin !==
+      pin
+    ) {
+      return res.status(422).json({
+        success: false,
+        message:
+          "El PIN de entrega no es correcto."
+      });
+    }
+
+    const now =
+      new Date();
+
+    await prisma.$transaction(
+      async (tx) => {
+        await tx.shipping.update({
+          where: {
+            id:
+              current.id
+          },
+          data: {
+            status:
+              "DELIVERED",
+            deliveredAt:
+              now,
+            deliveryNotes:
+              cleanText(
+                req.body?.notes
+              ) ||
+              current.deliveryNotes
+          }
+        });
+
+        let timeline =
+          addTimelineEvent(
+            current.order.timeline,
+            "DELIVERY_PIN_VERIFIED",
+            "El agente verificó correctamente el PIN de entrega.",
+            employeeId
+          );
+
+        timeline =
+          addTimelineEvent(
+            timeline,
+            "DELIVERY_CONFIRMED_BY_AGENT",
+            "El agente confirmó la entrega. El comprador debe confirmar la recepción.",
+            employeeId
+          );
+
+        await tx.order.update({
+          where: {
+            id:
+              current.orderId
+          },
+          data: {
+            status:
+              "DELIVERED",
+            deliveryStatus:
+              "DELIVERED",
+            deliveredAt:
+              current.order.deliveredAt ||
+              now,
+            deliveryPinVerified:
+              true,
+            deliveryPinVerifiedAt:
+              now,
+            deliveryPinVerifiedById:
+              employeeId,
+            deliveryConfirmedByAgent:
+              true,
+            deliveryConfirmedByAgentAt:
+              now,
+            deliveryAgentId:
+              employeeId ||
+              current.order.deliveryAgentId,
+            deliveryNotes:
+              cleanText(
+                req.body?.notes
+              ) ||
+              current.order.deliveryNotes,
+            timeline
+          }
+        });
+
+        await createNotificationSafe(
+          tx,
+          current.order.buyerId,
+          "ORDER_DELIVERED",
+          "Producto entregado",
+          "El agente verificó el PIN. Confirma la recepción desde Mis compras."
         );
 
-        return res.status(200).json({
-            success: true,
-            data
-        });
+        await createNotificationSafe(
+          tx,
+          current.order.sellerId,
+          "ORDER_DELIVERED",
+          "Producto entregado",
+          "El producto fue entregado. El desembolso demo continúa pendiente de Finanzas."
+        );
+      },
+      {
+        maxWait: 20000,
+        timeout: 60000
+      }
+    );
 
-    } catch (error) {
+    const updated =
+      await prisma.shipping.findUnique({
+        where: {
+          id:
+            current.id
+        },
+        include:
+          shippingInclude
+      });
 
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
+    return res.status(200).json({
+      success: true,
+      message:
+        "Entrega confirmada con PIN correctamente.",
+      data:
+        serializeShipping(
+          updated
+        )
+    });
+  } catch (error) {
+    console.error(
+      "Error confirmando Delivery:",
+      error
+    );
 
+    return res.status(500).json({
+      success: false,
+      message:
+        "No se pudo confirmar la entrega.",
+      error:
+        process.env.NODE_ENV ===
+        "production"
+          ? undefined
+          : error.message
+    });
+  }
+}
+
+async function markDeliveryFailed(
+  req,
+  res
+) {
+  try {
+    const deliveryId =
+      parsePositiveInt(
+        req.params.deliveryId
+      );
+
+    const reason =
+      cleanText(
+        req.body?.reason
+      );
+
+    if (!deliveryId) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "El identificador de Delivery no es válido."
+      });
     }
-};
 
-const getDeliveryStatistics = async (req, res) => {
-    try {
-
-        const data =
-            await deliveryService.getDeliveryStatistics();
-
-        return res.status(200).json({
-            success: true,
-            data
-        });
-
-    } catch (error) {
-
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
-
+    if (reason.length < 5) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Debe indicar el motivo del fallo."
+      });
     }
-};
 
-const getDeliveryTimeline = async (req, res) => {
-    try {
+    const employeeId =
+      parsePositiveInt(
+        req.user?.id
+      );
 
-        const data =
-            await deliveryService.getDeliveryTimeline(
-                req.params.deliveryId
-            );
+    const current =
+      await prisma.shipping.findUnique({
+        where: {
+          id: deliveryId
+        },
+        include: {
+          order: true
+        }
+      });
 
-        return res.status(200).json({
-            success: true,
-            data
-        });
-
-    } catch (error) {
-
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
-
+    if (!current) {
+      return res.status(404).json({
+        success: false,
+        message:
+          "Delivery no encontrado."
+      });
     }
-};
 
-/*
-|--------------------------------------------------------------------------
-| Delivery
-|--------------------------------------------------------------------------
-*/
-
-const createDelivery = async (req, res) => {
-    try {
-
-        const data =
-            await deliveryService.createDelivery({
-
-                ...req.body,
-
-                employeeId: req.user.id
-
-            });
-
-        return res.status(201).json({
-
-            success: true,
-
-            message:
-                "Delivery created successfully.",
-
-            data
-
+    await prisma.$transaction(
+      async (tx) => {
+        await tx.shipping.update({
+          where: {
+            id: current.id
+          },
+          data: {
+            status:
+              "FAILED",
+            deliveryNotes:
+              reason
+          }
         });
 
-    } catch (error) {
+        const timeline =
+          addTimelineEvent(
+            current.order.timeline,
+            "DELIVERY_FAILED",
+            reason,
+            employeeId
+          );
 
-        return res.status(500).json({
-
-            success: false,
-
-            message: error.message
-
+        await tx.order.update({
+          where: {
+            id:
+              current.orderId
+          },
+          data: {
+            deliveryStatus:
+              "FAILED",
+            deliveryNotes:
+              reason,
+            timeline
+          }
         });
+      }
+    );
 
-    }
-};
-
-const updateDelivery = async (req, res) => {
-    try {
-
-        const data =
-            await deliveryService.updateDelivery({
-
-                deliveryId:
-                    req.params.deliveryId,
-
-                employeeId:
-                    req.user.id,
-
-                ...req.body
-
-            });
-
-        return res.status(200).json({
-
-            success: true,
-
-            message:
-                "Delivery updated successfully.",
-
-            data
-
-        });
-
-    } catch (error) {
-
-        return res.status(500).json({
-
-            success: false,
-
-            message: error.message
-
-        });
-
-    }
-};
-
-const cancelDelivery = async (req, res) => {
-    try {
-
-        const data =
-            await deliveryService.cancelDelivery({
-
-                deliveryId:
-                    req.params.deliveryId,
-
-                employeeId:
-                    req.user.id,
-
-                ...req.body
-
-            });
-
-        return res.status(200).json({
-
-            success: true,
-
-            message:
-                "Delivery cancelled successfully.",
-
-            data
-
-        });
-
-    } catch (error) {
-
-        return res.status(500).json({
-
-            success: false,
-
-            message: error.message
-
-        });
-
-    }
-};
-
-const deleteDelivery = async (req, res) => {
-    try {
-
-        await deliveryService.deleteDelivery({
-
-            deliveryId:
-                req.params.deliveryId,
-
-            employeeId:
-                req.user.id
-
-        });
-
-        return res.status(200).json({
-
-            success: true,
-
-            message:
-                "Delivery deleted successfully."
-
-        });
-
-    } catch (error) {
-
-        return res.status(500).json({
-
-            success: false,
-
-            message: error.message
-
-        });
-
-    }
-};
-
-/*
-|--------------------------------------------------------------------------
-| Exports
-|--------------------------------------------------------------------------
-*/
+    return res.status(200).json({
+      success: true,
+      message:
+        "Fallo de entrega registrado."
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message:
+        "No se pudo registrar el fallo de entrega."
+    });
+  }
+}
 
 module.exports = {
-
-    // Dashboard
-    listDeliveries,
-    getDelivery,
-    getDeliveryStatistics,
-    getDeliveryTimeline,
-
-    // Delivery
-    createDelivery,
-    updateDelivery,
-    cancelDelivery,
-    deleteDelivery
-
-};
-/*
-|--------------------------------------------------------------------------
-| Conductores
-|--------------------------------------------------------------------------
-*/
-
-const assignDriver = async (req, res) => {
-    try {
-        const data = await deliveryService.assignDriver({
-            deliveryId: req.params.deliveryId,
-            employeeId: req.user.id,
-            ...req.body
-        });
-
-        return res.status(200).json({
-            success: true,
-            message: "Driver assigned successfully.",
-            data
-        });
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
-
-const changeDriver = async (req, res) => {
-    try {
-        const data = await deliveryService.changeDriver({
-            deliveryId: req.params.deliveryId,
-            employeeId: req.user.id,
-            ...req.body
-        });
-
-        return res.status(200).json({
-            success: true,
-            message: "Driver changed successfully.",
-            data
-        });
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
-
-const removeDriver = async (req, res) => {
-    try {
-        const data = await deliveryService.removeDriver({
-            deliveryId: req.params.deliveryId,
-            employeeId: req.user.id,
-            ...req.body
-        });
-
-        return res.status(200).json({
-            success: true,
-            message: "Driver removed successfully.",
-            data
-        });
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
-
-/*
-|--------------------------------------------------------------------------
-| Vehículos
-|--------------------------------------------------------------------------
-*/
-
-const assignVehicle = async (req, res) => {
-    try {
-        const data = await deliveryService.assignVehicle({
-            deliveryId: req.params.deliveryId,
-            employeeId: req.user.id,
-            ...req.body
-        });
-
-        return res.status(200).json({
-            success: true,
-            message: "Vehicle assigned successfully.",
-            data
-        });
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
-
-const changeVehicle = async (req, res) => {
-    try {
-        const data = await deliveryService.changeVehicle({
-            deliveryId: req.params.deliveryId,
-            employeeId: req.user.id,
-            ...req.body
-        });
-
-        return res.status(200).json({
-            success: true,
-            message: "Vehicle changed successfully.",
-            data
-        });
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
-
-const removeVehicle = async (req, res) => {
-    try {
-        const data = await deliveryService.removeVehicle({
-            deliveryId: req.params.deliveryId,
-            employeeId: req.user.id,
-            ...req.body
-        });
-
-        return res.status(200).json({
-            success: true,
-            message: "Vehicle removed successfully.",
-            data
-        });
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
-/*
-|--------------------------------------------------------------------------
-| Rutas
-|--------------------------------------------------------------------------
-*/
-
-const assignRoute = async (req, res) => {
-    try {
-
-        const data = await deliveryService.assignRoute({
-
-            deliveryId: req.params.deliveryId,
-
-            employeeId: req.user.id,
-
-            ...req.body
-
-        });
-
-        return res.status(200).json({
-
-            success: true,
-
-            message: "Route assigned successfully.",
-
-            data
-
-        });
-
-    } catch (error) {
-
-        return res.status(500).json({
-
-            success: false,
-
-            message: error.message
-
-        });
-
-    }
-};
-
-const changeRoute = async (req, res) => {
-    try {
-
-        const data = await deliveryService.changeRoute({
-
-            deliveryId: req.params.deliveryId,
-
-            employeeId: req.user.id,
-
-            ...req.body
-
-        });
-
-        return res.status(200).json({
-
-            success: true,
-
-            message: "Route updated successfully.",
-
-            data
-
-        });
-
-    } catch (error) {
-
-        return res.status(500).json({
-
-            success: false,
-
-            message: error.message
-
-        });
-
-    }
-};
-
-const removeRoute = async (req, res) => {
-    try {
-
-        const data = await deliveryService.removeRoute({
-
-            deliveryId: req.params.deliveryId,
-
-            employeeId: req.user.id
-
-        });
-
-        return res.status(200).json({
-
-            success: true,
-
-            message: "Route removed successfully.",
-
-            data
-
-        });
-
-    } catch (error) {
-
-        return res.status(500).json({
-
-            success: false,
-
-            message: error.message
-
-        });
-
-    }
-};
-
-/*
-|--------------------------------------------------------------------------
-| Tracking
-|--------------------------------------------------------------------------
-*/
-
-const startDelivery = async (req, res) => {
-    try {
-
-        const data = await deliveryService.startDelivery({
-
-            deliveryId: req.params.deliveryId,
-
-            employeeId: req.user.id
-
-        });
-
-        return res.status(200).json({
-
-            success: true,
-
-            message: "Delivery started successfully.",
-
-            data
-
-        });
-
-    } catch (error) {
-
-        return res.status(500).json({
-
-            success: false,
-
-            message: error.message
-
-        });
-
-    }
-};
-
-const updateLocation = async (req, res) => {
-    try {
-
-        const data = await deliveryService.updateLocation({
-
-            deliveryId: req.params.deliveryId,
-
-            employeeId: req.user.id,
-
-            ...req.body
-
-        });
-
-        return res.status(200).json({
-
-            success: true,
-
-            message: "Location updated successfully.",
-
-            data
-
-        });
-
-    } catch (error) {
-
-        return res.status(500).json({
-
-            success: false,
-
-            message: error.message
-
-        });
-
-    }
-};
-
-const finishDelivery = async (req, res) => {
-    try {
-
-        const data = await deliveryService.finishDelivery({
-
-            deliveryId: req.params.deliveryId,
-
-            employeeId: req.user.id,
-
-            ...req.body
-
-        });
-
-        return res.status(200).json({
-
-            success: true,
-
-            message: "Delivery completed successfully.",
-
-            data
-
-        });
-
-    } catch (error) {
-
-        return res.status(500).json({
-
-            success: false,
-
-            message: error.message
-
-        });
-
-    }
-};
-
-const getTrackingHistory = async (req, res) => {
-    try {
-
-        const data =
-            await deliveryService.getTrackingHistory(
-
-                req.params.deliveryId
-
-            );
-
-        return res.status(200).json({
-
-            success: true,
-
-            data
-
-        });
-
-    } catch (error) {
-
-        return res.status(500).json({
-
-            success: false,
-
-            message: error.message
-
-        });
-
-    }
-};
-/*
-|--------------------------------------------------------------------------
-| OTP
-|--------------------------------------------------------------------------
-*/
-
-const generateOtp = async (req, res) => {
-    try {
-        const data = await deliveryService.generateOtp({
-            deliveryId: req.params.deliveryId,
-            employeeId: req.user.id
-        });
-
-        return res.status(200).json({
-            success: true,
-            message: "OTP generated successfully.",
-            data
-        });
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
-
-const verifyOtp = async (req, res) => {
-    try {
-        const data = await deliveryService.verifyOtp({
-            deliveryId: req.params.deliveryId,
-            employeeId: req.user.id,
-            ...req.body
-        });
-
-        return res.status(200).json({
-            success: true,
-            message: "OTP verified successfully.",
-            data
-        });
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
-
-const resendOtp = async (req, res) => {
-    try {
-        const data = await deliveryService.resendOtp({
-            deliveryId: req.params.deliveryId,
-            employeeId: req.user.id
-        });
-
-        return res.status(200).json({
-            success: true,
-            message: "OTP resent successfully.",
-            data
-        });
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
-
-/*
-|--------------------------------------------------------------------------
-| Intentos de entrega
-|--------------------------------------------------------------------------
-*/
-
-const createDeliveryAttempt = async (req, res) => {
-    try {
-        const data =
-            await deliveryService.createDeliveryAttempt({
-                deliveryId: req.params.deliveryId,
-                employeeId: req.user.id,
-                ...req.body
-            });
-
-        return res.status(201).json({
-            success: true,
-            message:
-                "Delivery attempt registered successfully.",
-            data
-        });
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
-
-const listDeliveryAttempts = async (req, res) => {
-    try {
-        const data =
-            await deliveryService.listDeliveryAttempts(
-                req.params.deliveryId
-            );
-
-        return res.status(200).json({
-            success: true,
-            data
-        });
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
-
-const rescheduleDelivery = async (req, res) => {
-    try {
-        const data =
-            await deliveryService.rescheduleDelivery({
-                deliveryId: req.params.deliveryId,
-                employeeId: req.user.id,
-                ...req.body
-            });
-
-        return res.status(200).json({
-            success: true,
-            message:
-                "Delivery rescheduled successfully.",
-            data
-        });
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
-/*
-|--------------------------------------------------------------------------
-| Confirmación de entrega
-|--------------------------------------------------------------------------
-*/
-
-const confirmDelivery = async (req, res) => {
-    try {
-
-        const data =
-            await deliveryService.confirmDelivery({
-
-                deliveryId: req.params.deliveryId,
-
-                employeeId: req.user.id,
-
-                ...req.body
-
-            });
-
-        return res.status(200).json({
-
-            success: true,
-
-            message:
-                "Delivery confirmed successfully.",
-
-            data
-
-        });
-
-    } catch (error) {
-
-        return res.status(500).json({
-
-            success: false,
-
-            message: error.message
-
-        });
-
-    }
-};
-
-const failDelivery = async (req, res) => {
-    try {
-
-        const data =
-            await deliveryService.failDelivery({
-
-                deliveryId: req.params.deliveryId,
-
-                employeeId: req.user.id,
-
-                ...req.body
-
-            });
-
-        return res.status(200).json({
-
-            success: true,
-
-            message:
-                "Delivery marked as failed.",
-
-            data
-
-        });
-
-    } catch (error) {
-
-        return res.status(500).json({
-
-            success: false,
-
-            message: error.message
-
-        });
-
-    }
-};
-
-/*
-|--------------------------------------------------------------------------
-| Retorno al almacén
-|--------------------------------------------------------------------------
-*/
-
-const startReturn = async (req, res) => {
-    try {
-
-        const data =
-            await deliveryService.startReturn({
-
-                deliveryId: req.params.deliveryId,
-
-                employeeId: req.user.id,
-
-                ...req.body
-
-            });
-
-        return res.status(200).json({
-
-            success: true,
-
-            message:
-                "Return process started successfully.",
-
-            data
-
-        });
-
-    } catch (error) {
-
-        return res.status(500).json({
-
-            success: false,
-
-            message: error.message
-
-        });
-
-    }
-};
-
-const confirmWarehouseReturn = async (req, res) => {
-    try {
-
-        const data =
-            await deliveryService.confirmWarehouseReturn({
-
-                deliveryId: req.params.deliveryId,
-
-                employeeId: req.user.id,
-
-                ...req.body
-
-            });
-
-        return res.status(200).json({
-
-            success: true,
-
-            message:
-                "Package returned to warehouse successfully.",
-
-            data
-
-        });
-
-    } catch (error) {
-
-        return res.status(500).json({
-
-            success: false,
-
-            message: error.message
-
-        });
-
-    }
-};
-
-/*
-|--------------------------------------------------------------------------
-| Tracking público
-|--------------------------------------------------------------------------
-*/
-
-const publicTracking = async (req, res) => {
-    try {
-
-        const data =
-            await deliveryService.publicTracking(
-
-                req.params.trackingNumber
-
-            );
-
-        return res.status(200).json({
-
-            success: true,
-
-            data
-
-        });
-
-    } catch (error) {
-
-        return res.status(500).json({
-
-            success: false,
-
-            message: error.message
-
-        });
-
-    }
-};
-/*
-|--------------------------------------------------------------------------
-| Confirmación de entrega
-|--------------------------------------------------------------------------
-*/
-
-const confirmDelivery = async (req, res) => {
-    try {
-
-        const data =
-            await deliveryService.confirmDelivery({
-
-                deliveryId: req.params.deliveryId,
-
-                employeeId: req.user.id,
-
-                ...req.body
-
-            });
-
-        return res.status(200).json({
-
-            success: true,
-
-            message:
-                "Delivery confirmed successfully.",
-
-            data
-
-        });
-
-    } catch (error) {
-
-        return res.status(500).json({
-
-            success: false,
-
-            message: error.message
-
-        });
-
-    }
-};
-
-const failDelivery = async (req, res) => {
-    try {
-
-        const data =
-            await deliveryService.failDelivery({
-
-                deliveryId: req.params.deliveryId,
-
-                employeeId: req.user.id,
-
-                ...req.body
-
-            });
-
-        return res.status(200).json({
-
-            success: true,
-
-            message:
-                "Delivery marked as failed.",
-
-            data
-
-        });
-
-    } catch (error) {
-
-        return res.status(500).json({
-
-            success: false,
-
-            message: error.message
-
-        });
-
-    }
-};
-
-/*
-|--------------------------------------------------------------------------
-| Retorno al almacén
-|--------------------------------------------------------------------------
-*/
-
-const startReturn = async (req, res) => {
-    try {
-
-        const data =
-            await deliveryService.startReturn({
-
-                deliveryId: req.params.deliveryId,
-
-                employeeId: req.user.id,
-
-                ...req.body
-
-            });
-
-        return res.status(200).json({
-
-            success: true,
-
-            message:
-                "Return process started successfully.",
-
-            data
-
-        });
-
-    } catch (error) {
-
-        return res.status(500).json({
-
-            success: false,
-
-            message: error.message
-
-        });
-
-    }
-};
-
-const confirmWarehouseReturn = async (req, res) => {
-    try {
-
-        const data =
-            await deliveryService.confirmWarehouseReturn({
-
-                deliveryId: req.params.deliveryId,
-
-                employeeId: req.user.id,
-
-                ...req.body
-
-            });
-
-        return res.status(200).json({
-
-            success: true,
-
-            message:
-                "Package returned to warehouse successfully.",
-
-            data
-
-        });
-
-    } catch (error) {
-
-        return res.status(500).json({
-
-            success: false,
-
-            message: error.message
-
-        });
-
-    }
-};
-
-/*
-|--------------------------------------------------------------------------
-| Tracking público
-|--------------------------------------------------------------------------
-*/
-
-const publicTracking = async (req, res) => {
-    try {
-
-        const data =
-            await deliveryService.publicTracking(
-
-                req.params.trackingNumber
-
-            );
-
-        return res.status(200).json({
-
-            success: true,
-
-            data
-
-        });
-
-    } catch (error) {
-
-        return res.status(500).json({
-
-            success: false,
-
-            message: error.message
-
-        });
-
-    }
-};
-/*
-|--------------------------------------------------------------------------
-| Evidencias
-|--------------------------------------------------------------------------
-*/
-
-const uploadEvidence = async (req, res) => {
-    try {
-        const files = Array.isArray(req.files)
-            ? req.files
-            : [];
-
-        const data =
-            await deliveryService.uploadEvidence({
-                deliveryId: req.params.deliveryId,
-                employeeId: req.user.id,
-                files,
-                ...req.body
-            });
-
-        return res.status(201).json({
-            success: true,
-            message:
-                "Delivery evidence uploaded successfully.",
-            data
-        });
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
-
-const listEvidence = async (req, res) => {
-    try {
-        const data =
-            await deliveryService.listEvidence(
-                req.params.deliveryId
-            );
-
-        return res.status(200).json({
-            success: true,
-            data
-        });
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
-
-const getEvidence = async (req, res) => {
-    try {
-        const data =
-            await deliveryService.getEvidence(
-                req.params.evidenceId
-            );
-
-        return res.status(200).json({
-            success: true,
-            data
-        });
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
-
-const updateEvidence = async (req, res) => {
-    try {
-        const data =
-            await deliveryService.updateEvidence({
-                evidenceId: req.params.evidenceId,
-                employeeId: req.user.id,
-                ...req.body
-            });
-
-        return res.status(200).json({
-            success: true,
-            message:
-                "Delivery evidence updated successfully.",
-            data
-        });
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
-
-const deleteEvidence = async (req, res) => {
-    try {
-        const data =
-            await deliveryService.deleteEvidence({
-                evidenceId: req.params.evidenceId,
-                employeeId: req.user.id
-            });
-
-        return res.status(200).json({
-            success: true,
-            message:
-                "Delivery evidence deleted successfully.",
-            data
-        });
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
-
-const setPrimaryEvidence = async (req, res) => {
-    try {
-        const data =
-            await deliveryService.setPrimaryEvidence({
-                evidenceId: req.params.evidenceId,
-                employeeId: req.user.id
-            });
-
-        return res.status(200).json({
-            success: true,
-            message:
-                "Primary delivery evidence updated successfully.",
-            data
-        });
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
-/*
-|--------------------------------------------------------------------------
-| Incidentes
-|--------------------------------------------------------------------------
-*/
-
-const createIncident = async (req, res) => {
-    try {
-
-        const data =
-            await deliveryService.createIncident({
-
-                deliveryId: req.params.deliveryId,
-
-                employeeId: req.user.id,
-
-                ...req.body
-
-            });
-
-        return res.status(201).json({
-
-            success: true,
-
-            message:
-                "Delivery incident created successfully.",
-
-            data
-
-        });
-
-    } catch (error) {
-
-        return res.status(500).json({
-
-            success: false,
-
-            message: error.message
-
-        });
-
-    }
-};
-
-const listIncidents = async (req, res) => {
-    try {
-
-        const data =
-            await deliveryService.listIncidents(
-
-                req.params.deliveryId
-
-            );
-
-        return res.status(200).json({
-
-            success: true,
-
-            data
-
-        });
-
-    } catch (error) {
-
-        return res.status(500).json({
-
-            success: false,
-
-            message: error.message
-
-        });
-
-    }
-};
-
-const resolveIncident = async (req, res) => {
-    try {
-
-        const data =
-            await deliveryService.resolveIncident({
-
-                incidentId: req.params.incidentId,
-
-                employeeId: req.user.id,
-
-                ...req.body
-
-            });
-
-        return res.status(200).json({
-
-            success: true,
-
-            message:
-                "Delivery incident resolved successfully.",
-
-            data
-
-        });
-
-    } catch (error) {
-
-        return res.status(500).json({
-
-            success: false,
-
-            message: error.message
-
-        });
-
-    }
-};
-
-/*
-|--------------------------------------------------------------------------
-| Notas internas
-|--------------------------------------------------------------------------
-*/
-
-const addInternalNote = async (req, res) => {
-    try {
-
-        const data =
-            await deliveryService.addInternalNote({
-
-                deliveryId: req.params.deliveryId,
-
-                employeeId: req.user.id,
-
-                ...req.body
-
-            });
-
-        return res.status(201).json({
-
-            success: true,
-
-            message:
-                "Internal note added successfully.",
-
-            data
-
-        });
-
-    } catch (error) {
-
-        return res.status(500).json({
-
-            success: false,
-
-            message: error.message
-
-        });
-
-    }
-};
-
-const getInternalNotes = async (req, res) => {
-    try {
-
-        const data =
-            await deliveryService.getInternalNotes(
-
-                req.params.deliveryId
-
-            );
-
-        return res.status(200).json({
-
-            success: true,
-
-            data
-
-        });
-
-    } catch (error) {
-
-        return res.status(500).json({
-
-            success: false,
-
-            message: error.message
-
-        });
-
-    }
-};
-
-const updateInternalNote = async (req, res) => {
-    try {
-
-        const data =
-            await deliveryService.updateInternalNote({
-
-                noteId: req.params.noteId,
-
-                employeeId: req.user.id,
-
-                ...req.body
-
-            });
-
-        return res.status(200).json({
-
-            success: true,
-
-            message:
-                "Internal note updated successfully.",
-
-            data
-
-        });
-
-    } catch (error) {
-
-        return res.status(500).json({
-
-            success: false,
-
-            message: error.message
-
-        });
-
-    }
-};
-
-const deleteInternalNote = async (req, res) => {
-    try {
-
-        const data =
-            await deliveryService.deleteInternalNote({
-
-                noteId: req.params.noteId,
-
-                employeeId: req.user.id
-
-            });
-
-        return res.status(200).json({
-
-            success: true,
-
-            message:
-                "Internal note deleted successfully.",
-
-            data
-
-        });
-
-    } catch (error) {
-
-        return res.status(500).json({
-
-            success: false,
-
-            message: error.message
-
-        });
-
-    }
-};
-/*
-|--------------------------------------------------------------------------
-| Auditoría
-|--------------------------------------------------------------------------
-*/
-
-const getAuditHistory = async (req, res) => {
-    try {
-        const data =
-            await deliveryService.getAuditHistory(
-                req.params.deliveryId
-            );
-
-        return res.status(200).json({
-            success: true,
-            data
-        });
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
-
-const getDriverActivity = async (req, res) => {
-    try {
-        const data =
-            await deliveryService.getDriverActivity({
-                driverId: req.params.driverId,
-                ...req.query
-            });
-
-        return res.status(200).json({
-            success: true,
-            data
-        });
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
-
-const getVehicleActivity = async (req, res) => {
-    try {
-        const data =
-            await deliveryService.getVehicleActivity({
-                vehicleId: req.params.vehicleId,
-                ...req.query
-            });
-
-        return res.status(200).json({
-            success: true,
-            data
-        });
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
-
-const getRecentActivity = async (req, res) => {
-    try {
-        const data =
-            await deliveryService.getRecentActivity(
-                req.query.limit
-            );
-
-        return res.status(200).json({
-            success: true,
-            data
-        });
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
-
-/*
-|--------------------------------------------------------------------------
-| KPIs y reportes
-|--------------------------------------------------------------------------
-*/
-
-const getDeliveryKpis = async (req, res) => {
-    try {
-        const data =
-            await deliveryService.getDeliveryKpis({
-                ...req.query
-            });
-
-        return res.status(200).json({
-            success: true,
-            data
-        });
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
-
-const generateDeliveryReport = async (req, res) => {
-    try {
-        const data =
-            await deliveryService.generateDeliveryReport({
-                employeeId: req.user.id,
-                ...req.body
-            });
-
-        return res.status(200).json({
-            success: true,
-            message:
-                "Delivery report generated successfully.",
-            data
-        });
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
-
-const exportDeliveryReport = async (req, res) => {
-    try {
-        const data =
-            await deliveryService.exportDeliveryReport({
-                employeeId: req.user.id,
-                ...req.body
-            });
-
-        return res.status(200).json({
-            success: true,
-            message:
-                "Delivery report exported successfully.",
-            data
-        });
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
-
-/*
-|--------------------------------------------------------------------------
-| Herramientas operativas
-|--------------------------------------------------------------------------
-*/
-
-const scanDeliveryQr = async (req, res) => {
-    try {
-        const data =
-            await deliveryService.scanDeliveryQr({
-                employeeId: req.user.id,
-                ...req.body
-            });
-
-        return res.status(200).json({
-            success: true,
-            message:
-                "Delivery QR scanned successfully.",
-            data
-        });
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
-
-const generateDeliveryLabel = async (req, res) => {
-    try {
-        const data =
-            await deliveryService.generateDeliveryLabel({
-                deliveryId: req.params.deliveryId,
-                employeeId: req.user.id,
-                ...req.body
-            });
-
-        return res.status(200).json({
-            success: true,
-            message:
-                "Delivery label generated successfully.",
-            data
-        });
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: error.message
-        });
-    }
-};
-/*
-|--------------------------------------------------------------------------
-| Exports
-|--------------------------------------------------------------------------
-*/
-
-module.exports = {
-
-    // Dashboard
-    listDeliveries,
-    getDelivery,
-    getDeliveryStatistics,
-    getDeliveryTimeline,
-
-    // Delivery
-    createDelivery,
-    updateDelivery,
-    cancelDelivery,
-    deleteDelivery,
-
-    // Conductores
-    assignDriver,
-    changeDriver,
-    removeDriver,
-
-    // Vehículos
-    assignVehicle,
-    changeVehicle,
-    removeVehicle,
-
-    // Rutas
-    assignRoute,
-    changeRoute,
-    removeRoute,
-
-    // Tracking
-    startDelivery,
-    updateLocation,
-    finishDelivery,
-    getTrackingHistory,
-
-    // OTP
-    generateOtp,
-    verifyOtp,
-    resendOtp,
-
-    // Intentos
-    createDeliveryAttempt,
-    listDeliveryAttempts,
-    rescheduleDelivery,
-
-    // Confirmación
-    confirmDelivery,
-    failDelivery,
-
-    // Retorno
-    startReturn,
-    confirmWarehouseReturn,
-
-    // Tracking público
-    publicTracking,
-
-    // Evidencias
-    uploadEvidence,
-    listEvidence,
-    getEvidence,
-    updateEvidence,
-    deleteEvidence,
-    setPrimaryEvidence,
-
-    // Incidentes
-    createIncident,
-    listIncidents,
-    resolveIncident,
-
-    // Notas internas
-    addInternalNote,
-    getInternalNotes,
-    updateInternalNote,
-    deleteInternalNote,
-
-    // Auditoría
-    getAuditHistory,
-    getDriverActivity,
-    getVehicleActivity,
-    getRecentActivity,
-
-    // KPIs y reportes
-    getDeliveryKpis,
-    generateDeliveryReport,
-    exportDeliveryReport,
-
-    // Herramientas
-    scanDeliveryQr,
-    generateDeliveryLabel
-
+  listDeliveries,
+  getDelivery,
+  getDeliveryStatistics,
+  createDeliveryFromOrder,
+  startDelivery,
+  confirmDeliveryWithPin,
+  markDeliveryFailed
 };

@@ -34,16 +34,28 @@ const CONFIG = {
 
 const STATUS_LABELS = {
   PENDING: "Pendiente de recepción",
-  RECEIVED: "Recibido",
+  WAITING_FOR_SELLER: "Esperando entrega del vendedor",
+  WAITING_SELLER: "Esperando entrega del vendedor",
+  WAITING_WAREHOUSE: "Esperando recepción en almacén",
+  IN_TRANSIT_TO_WAREHOUSE: "En camino al almacén",
+  RECEIVED_AT_WAREHOUSE: "Recibido en almacén",
+  RECEIVED: "Recibido en almacén",
+  IN_WAREHOUSE: "En almacén",
   INSPECTION: "En inspección",
-  APPROVED: "Aprobado",
-  READY_FOR_PICKUP: "Listo para despacho",
-  HELD: "Detenido",
-  REJECTED: "Rechazado",
+  UNDER_INSPECTION: "En inspección",
+  UNDER_REVIEW: "En revisión",
+  APPROVED: "Producto aprobado",
+  CERTIFIED: "Producto certificado",
+  STORED: "Producto almacenado",
+  READY_FOR_PICKUP: "Listo para Delivery",
+  READY_FOR_DELIVERY: "Listo para Delivery",
+  HELD: "Producto detenido",
+  REJECTED: "Producto rechazado",
 
   PENDING_ASSIGNMENT: "Sin asignar",
-  ASSIGNED: "Asignado",
+  ASSIGNED: "Agente asignado",
   PICKED_UP: "Producto recogido",
+  OUT_FOR_DELIVERY: "En camino al comprador",
   IN_TRANSIT: "En ruta",
   WAITING_PIN: "Esperando PIN",
   DELIVERED: "Entregado",
@@ -73,28 +85,51 @@ function getToken() {
   );
 }
 
+function normalizeStatus(value) {
+  return String(value || "")
+    .trim()
+    .toUpperCase();
+}
+
 function getActions(area, status) {
+  const normalizedStatus =
+    normalizeStatus(status);
+
   if (area === "warehouse") {
     const actions = {
       PENDING: ["RECEIVE"],
+      WAITING_FOR_SELLER: ["RECEIVE"],
+      WAITING_SELLER: ["RECEIVE"],
+      WAITING_WAREHOUSE: ["RECEIVE"],
+      IN_TRANSIT_TO_WAREHOUSE: ["RECEIVE"],
+      RECEIVED_AT_WAREHOUSE: ["START_INSPECTION"],
       RECEIVED: ["START_INSPECTION"],
+      IN_WAREHOUSE: ["START_INSPECTION"],
       INSPECTION: ["APPROVE", "HOLD"],
-      APPROVED: ["READY_FOR_DELIVERY", "HOLD"]
+      UNDER_INSPECTION: ["APPROVE", "HOLD"],
+      UNDER_REVIEW: ["APPROVE", "HOLD"],
+      APPROVED: ["READY_FOR_DELIVERY", "HOLD"],
+      CERTIFIED: ["READY_FOR_DELIVERY", "HOLD"],
+      STORED: ["READY_FOR_DELIVERY", "HOLD"]
     };
 
-    return actions[status] || [];
+    return actions[normalizedStatus] || [];
   }
 
   const actions = {
+    PENDING: ["ASSIGN_SELF"],
     PENDING_ASSIGNMENT: ["ASSIGN_SELF"],
+    READY_FOR_PICKUP: ["ASSIGN_SELF"],
+    READY_FOR_DELIVERY: ["ASSIGN_SELF"],
     ASSIGNED: ["PICKUP", "FAIL"],
     PICKED_UP: ["OUT_FOR_DELIVERY", "FAIL"],
+    OUT_FOR_DELIVERY: ["VERIFY_PIN", "FAIL"],
     IN_TRANSIT: ["VERIFY_PIN", "FAIL"],
     WAITING_PIN: ["VERIFY_PIN", "FAIL"],
     FAILED: ["ASSIGN_SELF"]
   };
 
-  return actions[status] || [];
+  return actions[normalizedStatus] || [];
 }
 
 function OperationsDashboard({ area }) {
@@ -198,7 +233,8 @@ function OperationsDashboard({ area }) {
       return (
         (!term || text.includes(term)) &&
         (statusFilter === "ALL" ||
-          row.status === statusFilter)
+          normalizeStatus(row.status) ===
+            normalizeStatus(statusFilter))
       );
     });
   }, [rows, search, statusFilter]);
@@ -207,7 +243,7 @@ function OperationsDashboard({ area }) {
     () => [
       ...new Set(
         rows
-          .map((row) => row.status)
+          .map((row) => normalizeStatus(row.status))
           .filter(Boolean)
       )
     ],
@@ -215,8 +251,15 @@ function OperationsDashboard({ area }) {
   );
 
   function openOperation(row) {
+    const availableActions =
+      getActions(area, row.status);
+
     setSelected(row);
-    setSelectedAction("");
+    setSelectedAction(
+      availableActions.length === 1
+        ? availableActions[0]
+        : ""
+    );
     setNotes(row.warehouseNotes || row.deliveryNotes || "");
     setPickupAddress(row.pickupAddress || "");
     setDeliveryAddress(row.deliveryAddress || "");
@@ -445,7 +488,7 @@ function OperationsDashboard({ area }) {
 
                 {statuses.map((status) => (
                   <option key={status} value={status}>
-                    {STATUS_LABELS[status] || status}
+                    {STATUS_LABELS[normalizeStatus(status)] || status}
                   </option>
                 ))}
               </select>
@@ -501,7 +544,7 @@ function OperationsDashboard({ area }) {
                             row.status
                           ).toLowerCase()}`}
                         >
-                          {STATUS_LABELS[row.status] ||
+                          {STATUS_LABELS[normalizeStatus(row.status)] ||
                             row.status}
                         </span>
                       </td>
@@ -609,7 +652,7 @@ function OperationsDashboard({ area }) {
                 <div>
                   <small>Estado actual</small>
                   <strong>
-                    {STATUS_LABELS[selected.status] ||
+                    {STATUS_LABELS[normalizeStatus(selected.status)] ||
                       selected.status}
                   </strong>
                 </div>
