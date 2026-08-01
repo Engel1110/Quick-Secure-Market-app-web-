@@ -3,7 +3,7 @@
 
 /*
 |--------------------------------------------------------------------------
-| FASE 3 ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â EXPERIENCIA PROFESIONAL
+| FASE 3 — EXPERIENCIA PROFESIONAL
 |--------------------------------------------------------------------------
 */
 
@@ -580,8 +580,8 @@
 
 /*
 |--------------------------------------------------------------------------
-| QSM MESSAGES ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â REDISEÃƒÆ’Ã¢â‚¬ËœO VISUAL FASE 1 COMPLETA
-| Hero, tipografÃƒÆ’Ã‚Â­a, protecciÃƒÆ’Ã‚Â³n, contenedores y layout principal
+| QSM MESSAGES — REDISEÑO VISUAL FASE 1 COMPLETA
+| Hero, tipografía, protección, contenedores y layout principal
 |--------------------------------------------------------------------------
 */
 
@@ -1454,7 +1454,7 @@
 }
 
 /* =========================================================
-   QSM COMPOSER ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â CORRECCIÃƒÆ’Ã¢â‚¬Å“N DEFINITIVA
+   QSM COMPOSER — CORRECCIÓN DEFINITIVA
 ========================================================= */
 
 .qsm-composer{
@@ -1715,7 +1715,7 @@
     }
 
     .qsm-send-button::after{
-        content:"ÃƒÂ¢Ã…Â¾Ã‚Â¤";
+        content:"➤";
         font-size:16px;
     }
 }

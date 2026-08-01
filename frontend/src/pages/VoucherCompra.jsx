@@ -91,7 +91,7 @@ function VoucherCompra() {
 
       if (!localVoucher) {
         throw new Error(
-          "No se encontrÃ³ la informaciÃ³n de esta compra."
+          "No se encontró la información de esta compra."
         );
       }
 
@@ -264,7 +264,7 @@ function VoucherCompra() {
   const goToTracking = () => {
     if (!normalizedOrder?.orderId) {
       setError(
-        "La orden no tiene un identificador vÃ¡lido para abrir el seguimiento."
+        "La orden no tiene un identificador válido para abrir el seguimiento."
       );
       return;
     }
@@ -284,7 +284,7 @@ function VoucherCompra() {
       <div style={page}>
         <div style={centerCard}>
           <div style={loadingIcon}>
-            ðŸ›¡
+            🛡
           </div>
 
           <h1>
@@ -292,7 +292,7 @@ function VoucherCompra() {
           </h1>
 
           <p style={muted}>
-            QSM estÃ¡ preparando el
+            QSM está preparando el
             comprobante y el PIN de
             entrega.
           </p>
@@ -444,7 +444,7 @@ function VoucherCompra() {
             to="/marketplace"
             style={backButton}
           >
-            â† Marketplace
+            ← Marketplace
           </Link>
 
           <Link
@@ -457,7 +457,7 @@ function VoucherCompra() {
 
         <section style={header}>
           <div style={successIcon}>
-            âœ“
+            ✓
           </div>
 
           <p style={label}>
@@ -465,12 +465,12 @@ function VoucherCompra() {
           </p>
 
           <h1 style={title}>
-            Â¡Compra creada correctamente!
+            ¡Compra creada correctamente!
           </h1>
 
           <p style={subtitle}>
             Tu orden fue registrada y
-            QSM generÃ³ un PIN Ãºnico para
+            QSM generó un PIN único para
             validar la entrega.
           </p>
         </section>
@@ -498,13 +498,13 @@ function VoucherCompra() {
               </div>
 
               <div style={shieldLogo}>
-                ðŸ›¡
+                🛡
               </div>
             </div>
 
             <div style={codeBox}>
               <span>
-                CÃ³digo de orden
+                Código de orden
               </span>
 
               <div style={codeRow}>
@@ -558,18 +558,18 @@ function VoucherCompra() {
                 style={pinButton}
               >
                 {copiedPin
-                  ? "âœ“ PIN copiado"
+                  ? "✓ PIN copiado"
                   : "Copiar PIN"}
               </button>
             </div>
 
             <div style={pinWarning}>
               <strong>
-                ðŸ” MantÃ©n este PIN privado
+                🔒 Mantén este PIN privado
               </strong>
 
               <p>
-                EntrÃ©galo Ãºnicamente al
+                Entrégalo únicamente al
                 agente autorizado de QSM
                 cuando recibas el producto.
               </p>
@@ -591,7 +591,7 @@ function VoucherCompra() {
                   />
                 ) : (
                   <div style={productPlaceholder}>
-                    ðŸ“¦
+                    📦
                   </div>
                 )}
               </div>
@@ -611,21 +611,21 @@ function VoucherCompra() {
                 <p style={productDescription}>
                   Esta compra se encuentra
                   protegida por el flujo de
-                  verificaciÃ³n, entrega y
+                  verificación, entrega y
                   seguimiento de QSM.
                 </p>
 
                 <div style={productPills}>
                   <span style={productPill}>
-                    ðŸ›¡ Compra protegida
+                    🛡 Compra protegida
                   </span>
 
                   <span style={productPill}>
-                    ðŸ” Entrega con PIN
+                    🔐 Entrega con PIN
                   </span>
 
                   <span style={productPill}>
-                    ðŸ“ Seguimiento activo
+                    📍 Seguimiento activo
                   </span>
                 </div>
               </div>
@@ -636,23 +636,23 @@ function VoucherCompra() {
               style={informationGrid}
             >
               <VoucherInfo
-                icon="ðŸ’³"
-                title="MÃ©todo de pago"
+                icon="💳"
+                title="Método de pago"
                 value={formatPaymentMethod(
                   normalizedOrder.paymentMethod
                 )}
               />
 
               <VoucherInfo
-                icon="ðŸšš"
-                title="MÃ©todo de entrega"
+                icon="🚚"
+                title="Método de entrega"
                 value={formatDeliveryMethod(
                   normalizedOrder.deliveryMethod
                 )}
               />
 
               <VoucherInfo
-                icon="ðŸ“…"
+                icon="📅"
                 title="Fecha de compra"
                 value={formatDate(
                   normalizedOrder.createdAt
@@ -660,7 +660,7 @@ function VoucherCompra() {
               />
 
               <VoucherInfo
-                icon="ðŸ“¦"
+                icon="📦"
                 title="Estado actual"
                 value={formatOrderStatus(
                   normalizedOrder.status
@@ -668,7 +668,7 @@ function VoucherCompra() {
               />
 
               <VoucherInfo
-                icon="ðŸ’°"
+                icon="💰"
                 title="Estado del pago"
                 value={formatPaymentStatus(
                   normalizedOrder.paymentStatus
@@ -676,7 +676,7 @@ function VoucherCompra() {
               />
 
               <VoucherInfo
-                icon="ðŸ“"
+                icon="📍"
                 title="Estado de entrega"
                 value={formatDeliveryStatus(
                   normalizedOrder.deliveryStatus
@@ -697,7 +697,7 @@ function VoucherCompra() {
 
               <div style={amountLine}>
                 <span>
-                  ProtecciÃ³n QSM
+                  Protección QSM
                 </span>
 
                 <strong>
@@ -729,7 +729,7 @@ function VoucherCompra() {
 
               <div style={totalAmountLine}>
                 <span>
-                  Total de la operaciÃ³n
+                  Total de la operación
                 </span>
 
                 <strong>
@@ -742,20 +742,20 @@ function VoucherCompra() {
 
             <div style={demoNotice}>
               <div style={demoIcon}>
-                ðŸ§ª
+                🧪
               </div>
 
               <div>
                 <strong>
-                  OperaciÃ³n en modo demostraciÃ³n
+                  Operación en modo demostración
                 </strong>
 
                 <p>
-                  Esta versiÃ³n simula el
+                  Esta versión simula el
                   procesamiento del pago,
-                  la logÃ­stica y la entrega.
-                  En la versiÃ³n final se
-                  integrarÃ¡n servicios reales.
+                  la logística y la entrega.
+                  En la versión final se
+                  integrarán servicios reales.
                 </p>
               </div>
             </div>
@@ -768,7 +768,7 @@ function VoucherCompra() {
                 to="/orders?type=buy"
                 style={secondaryAction}
               >
-                ðŸ›’ Ir a Mis compras
+                🛒 Ir a Mis compras
               </Link>
 
               <button
@@ -776,7 +776,7 @@ function VoucherCompra() {
                 onClick={goToTracking}
                 style={primaryAction}
               >
-                ðŸ“ Ver seguimiento
+                📍 Ver seguimiento
               </button>
             </div>
 
@@ -791,7 +791,7 @@ function VoucherCompra() {
           <aside style={sidePanel}>
             <div style={sidePanelHeader}>
               <div style={sidePanelIcon}>
-                ðŸ“
+                📍
               </div>
 
               <div>
@@ -806,10 +806,10 @@ function VoucherCompra() {
             </div>
 
             <p style={sidePanelText}>
-              El vendedor ya recibiÃ³ una
-              notificaciÃ³n y deberÃ¡ preparar
+              El vendedor ya recibió una
+              notificación y deberá preparar
               el producto para entregarlo al
-              almacÃ©n QSM o al agente de
+              almacén QSM o al agente de
               delivery verificado.
             </p>
 
@@ -817,49 +817,49 @@ function VoucherCompra() {
               <TrackingStep
                 active
                 current
-                icon="âœ“"
+                icon="✓"
                 title="Compra creada"
                 text="La orden fue registrada correctamente."
               />
 
               <TrackingStep
                 active
-                icon="âœ“"
+                icon="✓"
                 title="PIN generado"
-                text="El cÃ³digo de entrega ya estÃ¡ disponible."
+                text="El código de entrega ya está disponible."
               />
 
               <TrackingStep
                 active
-                icon="âœ“"
+                icon="✓"
                 title="Vendedor notificado"
-                text="El vendedor recibiÃ³ los pasos de entrega."
+                text="El vendedor recibió los pasos de entrega."
               />
 
               <TrackingStep
-                icon="ðŸ“¦"
+                icon="📦"
                 title={
                   normalizedOrder.deliveryMethod ===
                   "QSM_WAREHOUSE"
-                    ? "Esperando entrega al almacÃ©n"
+                    ? "Esperando entrega al almacén"
                     : "Esperando recogida del delivery"
                 }
                 text={
                   normalizedOrder.deliveryMethod ===
                   "QSM_WAREHOUSE"
-                    ? "El vendedor debe llevar el producto al almacÃ©n QSM."
-                    : "Un agente QSM deberÃ¡ recoger el producto."
+                    ? "El vendedor debe llevar el producto al almacén QSM."
+                    : "Un agente QSM deberá recoger el producto."
                 }
               />
 
               <TrackingStep
-                icon="ðŸ”"
-                title="VerificaciÃ³n del producto"
-                text="QSM revisarÃ¡ el estado y registrarÃ¡ evidencias."
+                icon="🔍"
+                title="Verificación del producto"
+                text="QSM revisará el estado y registrará evidencias."
               />
 
               <TrackingStep
-                icon="ðŸ”"
+                icon="🛡️"
                 title="Entrega mediante PIN"
                 text="Presenta tu PIN para recibir el producto."
               />
@@ -867,7 +867,7 @@ function VoucherCompra() {
 
             <div style={sideSecurityBox}>
               <strong>
-                ðŸ›¡ ProtecciÃ³n activa
+                🛡 Protección activa
               </strong>
 
               <p>
@@ -883,7 +883,7 @@ function VoucherCompra() {
               onClick={goToTracking}
               style={trackingButton}
             >
-              Abrir seguimiento completo â†’
+              Abrir seguimiento completo →
             </button>
           </aside>
         </section>
@@ -1084,7 +1084,7 @@ function formatPaymentMethod(value) {
       "Efectivo contra entrega",
 
     CARD:
-      "Tarjeta â€” pago inmediato"
+      "Tarjeta — pago inmediato"
   };
 
   return (
@@ -1096,7 +1096,7 @@ function formatPaymentMethod(value) {
 function formatDeliveryMethod(value) {
   const map = {
     QSM_WAREHOUSE:
-      "AlmacÃ©n QSM",
+      "Almacén QSM",
 
     QSM_VERIFIED_DELIVERY:
       "Delivery QSM verificado"
@@ -1123,13 +1123,13 @@ function formatOrderStatus(value) {
       "Esperando vendedor",
 
     WAITING_WAREHOUSE:
-      "Esperando almacÃ©n",
+      "Esperando almacén",
 
     IN_WAREHOUSE:
-      "En almacÃ©n",
+      "En almacén",
 
     UNDER_INSPECTION:
-      "En revisiÃ³n",
+      "En revisión",
 
     READY_FOR_PICKUP:
       "Listo para entregar",
@@ -1160,13 +1160,13 @@ function formatPaymentStatus(value) {
       "Pendiente",
 
     PENDING_PROOF:
-      "Esperando confirmaciÃ³n",
+      "Esperando confirmación",
 
     PENDING_DELIVERY:
       "Pago contra entrega",
 
     DEMO_AUTHORIZED:
-      "Autorizado â€” Demo",
+      "Autorizado — Demo",
 
     CONFIRMED:
       "Pago confirmado",
@@ -1212,10 +1212,10 @@ function formatDeliveryStatus(value) {
       "Producto recogido",
 
     RECEIVED_AT_WAREHOUSE:
-      "Recibido en almacÃ©n",
+      "Recibido en almacén",
 
     UNDER_REVIEW:
-      "En revisiÃ³n",
+      "En revisión",
 
     APPROVED:
       "Producto aprobado",

@@ -52,7 +52,7 @@ function Checkout() {
 
       if (!loadedProduct?._id && !loadedProduct?.id) {
         throw new Error(
-          "El producto recibido no tiene un identificador vÃ¡lido."
+          "El producto recibido no tiene un identificador válido."
         );
       }
 
@@ -66,7 +66,7 @@ function Checkout() {
       setError(
         err?.response?.data?.message ||
           err?.message ||
-          "No se pudo cargar la informaciÃ³n del producto."
+          "No se pudo cargar la información del producto."
       );
     } finally {
       setLoading(false);
@@ -106,7 +106,7 @@ function Checkout() {
   const continueToDelivery = () => {
     if (!paymentMethod) {
       setError(
-        "Selecciona un mÃ©todo de pago para continuar."
+        "Selecciona un método de pago para continuar."
       );
       return;
     }
@@ -116,7 +116,7 @@ function Checkout() {
       !bankName.trim()
     ) {
       setError(
-        "Indica el banco que utilizarÃ¡s para realizar la transferencia."
+        "Indica el banco que utilizarás para realizar la transferencia."
       );
       return;
     }
@@ -141,22 +141,22 @@ function Checkout() {
 
   const validatePurchase = () => {
     if (!paymentMethod) {
-      return "Selecciona cÃ³mo deseas realizar el pago.";
+      return "Selecciona cómo deseas realizar el pago.";
     }
 
     if (currentStep < 2) {
-      return "Confirma primero el mÃ©todo de pago.";
+      return "Confirma primero el método de pago.";
     }
 
     if (!deliveryMethod) {
-      return "Selecciona cÃ³mo deseas recibir el producto.";
+      return "Selecciona cómo deseas recibir el producto.";
     }
 
     if (
       paymentMethod === "BANK_TRANSFER" &&
       !bankName.trim()
     ) {
-      return "Indica el banco desde el cual realizarÃ¡s la transferencia.";
+      return "Indica el banco desde el cual realizarás la transferencia.";
     }
 
     if (!acceptedTerms) {
@@ -208,7 +208,7 @@ function Checkout() {
 
       if (!orderId) {
         throw new Error(
-          "La compra fue creada, pero el servidor no devolviÃ³ el identificador de la orden."
+          "La compra fue creada, pero el servidor no devolvió el identificador de la orden."
         );
       }
 
@@ -260,12 +260,12 @@ function Checkout() {
     return (
       <div style={page}>
         <div style={centerCard}>
-          <div style={loadingIcon}>ðŸ›¡</div>
+          <div style={loadingIcon}>🛡</div>
 
           <h1>Cargando compra protegida...</h1>
 
           <p style={muted}>
-            QSM estÃ¡ preparando la informaciÃ³n del producto.
+            QSM está preparando la información del producto.
           </p>
         </div>
       </div>
@@ -406,7 +406,7 @@ function Checkout() {
             to={`/product/${id}`}
             style={backButton}
           >
-            â† Volver al producto
+            ← Volver al producto
           </Link>
 
           <Link
@@ -427,8 +427,8 @@ function Checkout() {
           </h1>
 
           <p style={subtitle}>
-            Selecciona cÃ³mo pagarÃ¡s y despuÃ©s elige
-            cÃ³mo deseas recibir el producto.
+            Selecciona cómo pagarás y después elige
+            cómo deseas recibir el producto.
           </p>
         </section>
 
@@ -461,7 +461,7 @@ function Checkout() {
                   </h2>
 
                   <p style={sectionSubtitle}>
-                    Revisa la informaciÃ³n antes de continuar.
+                    Revisa la información antes de continuar.
                   </p>
                 </div>
               </div>
@@ -485,12 +485,12 @@ function Checkout() {
                     />
                   ) : (
                     <div style={imagePlaceholder}>
-                      ðŸ“¦
+                      📦
                     </div>
                   )}
 
                   <span style={zoomHint}>
-                    ðŸ” Ver imagen grande
+                    🔍 Ver imagen grande
                   </span>
                 </div>
 
@@ -501,7 +501,7 @@ function Checkout() {
 
                   <p style={muted}>
                     {product.description ||
-                      "Este producto no tiene una descripciÃ³n detallada."}
+                      "Este producto no tiene una descripción detallada."}
                   </p>
 
                   <div style={pillRow}>
@@ -517,7 +517,7 @@ function Checkout() {
                     </span>
 
                     <span style={pill}>
-                      ðŸ›¡ Compra protegida
+                      🛡 Compra protegida
                     </span>
                   </div>
 
@@ -559,11 +559,11 @@ function Checkout() {
 
                 <div>
                   <h2 style={sectionTitle}>
-                    MÃ©todo de pago
+                    Método de pago
                   </h2>
 
                   <p style={sectionSubtitle}>
-                    Selecciona una opciÃ³n para continuar.
+                    Selecciona una opción para continuar.
                   </p>
                 </div>
               </div>
@@ -577,10 +577,10 @@ function Checkout() {
                     paymentMethod ===
                     "BANK_TRANSFER"
                   }
-                  icon="ðŸ¦"
+                  icon="🏦"
                   title="Transferencia bancaria contra entrega"
-                  text="Realiza la transferencia al momento de recibir el producto. La entrega se completa despuÃ©s de validar el pago."
-                  demoText="Actualmente funciona como simulaciÃ³n. En la versiÃ³n final se procesarÃ¡n transferencias reales."
+                  text="Realiza la transferencia al momento de recibir el producto. La entrega se completa después de validar el pago."
+                  demoText="Actualmente funciona como simulación. En la versión final se procesarán transferencias reales."
                   onClick={() =>
                     selectPaymentMethod(
                       "BANK_TRANSFER"
@@ -593,10 +593,10 @@ function Checkout() {
                     paymentMethod ===
                     "CASH_ON_DELIVERY"
                   }
-                  icon="ðŸ’µ"
+                  icon="💵"
                   title="Efectivo contra entrega"
-                  text="Entrega el dinero cuando recibas el producto. El pago se confirma antes de finalizar la operaciÃ³n."
-                  demoText="Actualmente funciona como simulaciÃ³n. En la versiÃ³n final QSM validarÃ¡ el pago."
+                  text="Entrega el dinero cuando recibas el producto. El pago se confirma antes de finalizar la operación."
+                  demoText="Actualmente funciona como simulación. En la versión final QSM validará el pago."
                   onClick={() =>
                     selectPaymentMethod(
                       "CASH_ON_DELIVERY"
@@ -608,10 +608,10 @@ function Checkout() {
                   active={
                     paymentMethod === "CARD"
                   }
-                  icon="ðŸ’³"
-                  title="Tarjeta de crÃ©dito o dÃ©bito"
+                  icon="💳"
+                  title="Tarjeta de crédito o débito"
                   text="Pago inmediato mediante tarjeta bancaria antes de comenzar el proceso de entrega."
-                  demoText="Actualmente funciona como simulaciÃ³n. En la versiÃ³n final se utilizarÃ¡ una pasarela de pago certificada."
+                  demoText="Actualmente funciona como simulación. En la versión final se utilizará una pasarela de pago certificada."
                   onClick={() =>
                     selectPaymentMethod("CARD")
                   }
@@ -622,7 +622,7 @@ function Checkout() {
                 "BANK_TRANSFER" && (
                 <div style={conditionalBox}>
                   <label style={fieldLabel}>
-                    Banco desde el cual transferirÃ¡s
+                    Banco desde el cual transferirás
                   </label>
 
                   <input
@@ -647,7 +647,7 @@ function Checkout() {
                         event.target.value
                       )
                     }
-                    placeholder="Opcional en esta simulaciÃ³n"
+                    placeholder="Opcional en esta simulación"
                     style={input}
                   />
 
@@ -675,7 +675,7 @@ function Checkout() {
 
                     <p>
                       El efectivo se entrega durante
-                      la recepciÃ³n del producto.
+                      la recepción del producto.
                     </p>
                   </div>
                 </div>
@@ -689,7 +689,7 @@ function Checkout() {
                     </strong>
 
                     <p>
-                      Esta versiÃ³n simula la autorizaciÃ³n.
+                      Esta versión simula la autorización.
                       QSM no solicita ni almacena datos
                       reales de tarjeta.
                     </p>
@@ -702,7 +702,7 @@ function Checkout() {
                 onClick={continueToDelivery}
                 style={continueButton}
               >
-                Confirmar mÃ©todo de pago y continuar
+                Confirmar método de pago y continuar
               </button>
             </div>
 
@@ -718,11 +718,11 @@ function Checkout() {
 
                   <div>
                     <h2 style={sectionTitle}>
-                      MÃ©todo de entrega
+                      Método de entrega
                     </h2>
 
                     <p style={sectionSubtitle}>
-                      Selecciona cÃ³mo deseas recibir el producto.
+                      Selecciona cómo deseas recibir el producto.
                     </p>
                   </div>
                 </div>
@@ -736,10 +736,10 @@ function Checkout() {
                       deliveryMethod ===
                       "QSM_WAREHOUSE"
                     }
-                    icon="ðŸ¬"
-                    title="AlmacÃ©n QSM"
-                    text="El vendedor lleva el producto al almacÃ©n. QSM lo recibe, revisa y entrega mediante PIN."
-                    demoText="Actualmente funciona como simulaciÃ³n del proceso de almacÃ©n."
+                    icon="🏬"
+                    title="Almacén QSM"
+                    text="El vendedor lleva el producto al almacén. QSM lo recibe, revisa y entrega mediante PIN."
+                    demoText="Actualmente funciona como simulación del proceso de almacén."
                     recommended
                     onClick={() =>
                       selectDeliveryMethod(
@@ -753,10 +753,10 @@ function Checkout() {
                       deliveryMethod ===
                       "QSM_VERIFIED_DELIVERY"
                     }
-                    icon="ðŸšš"
+                    icon="🚚"
                     title="Delivery QSM verificado"
                     text="Un agente recoge el producto, registra evidencias, lo verifica y lo entrega mediante PIN."
-                    demoText="Actualmente funciona como simulaciÃ³n e incluye un cargo demo de RD$500."
+                    demoText="Actualmente funciona como simulación e incluye un cargo demo de RD$500."
                     onClick={() =>
                       selectDeliveryMethod(
                         "QSM_VERIFIED_DELIVERY"
@@ -780,7 +780,7 @@ function Checkout() {
                       </h2>
 
                       <p style={sectionSubtitle}>
-                        Revisa quiÃ©n estÃ¡ vendiendo el producto.
+                        Revisa quién está vendiendo el producto.
                       </p>
                     </div>
                   </div>
@@ -819,11 +819,11 @@ function Checkout() {
 
                     <div>
                       <h2 style={sectionTitle}>
-                        Â¿CÃ³mo funciona la Compra Protegida?
+                        ¿Cómo funciona la Compra Protegida?
                       </h2>
 
                       <p style={sectionSubtitle}>
-                        QSM registra cada paso de la operaciÃ³n.
+                        QSM registra cada paso de la operación.
                       </p>
                     </div>
                   </div>
@@ -831,14 +831,14 @@ function Checkout() {
                   <div style={steps}>
                     <Step
                       number="1"
-                      title="Confirmas el mÃ©todo de pago"
-                      text="La transferencia, el efectivo o la tarjeta funcionan como una simulaciÃ³n en esta versiÃ³n."
+                      title="Confirmas el método de pago"
+                      text="La transferencia, el efectivo o la tarjeta funcionan como una simulación en esta versión."
                     />
 
                     <Step
                       number="2"
                       title="Seleccionas la entrega"
-                      text="Puedes elegir entre AlmacÃ©n QSM o Delivery QSM verificado."
+                      text="Puedes elegir entre Almacén QSM o Delivery QSM verificado."
                     />
 
                     <Step
@@ -850,13 +850,13 @@ function Checkout() {
                     <Step
                       number="4"
                       title="Se verifica el producto"
-                      text="El almacÃ©n o el agente de delivery revisa y registra evidencias."
+                      text="El almacén o el agente de delivery revisa y registra evidencias."
                     />
 
                     <Step
                       number="5"
                       title="Se entrega mediante PIN"
-                      text="El comprador presenta el PIN y QSM completa la operaciÃ³n."
+                      text="El comprador presenta el PIN y QSM completa la operación."
                     />
                   </div>
                 </div>
@@ -876,12 +876,12 @@ function Checkout() {
                   </p>
 
                   <h2 style={summaryTitle}>
-                    Resumen de la operaciÃ³n
+                    Resumen de la operación
                   </h2>
                 </div>
 
                 <div style={summaryShield}>
-                  ðŸ›¡
+                  🛡
                 </div>
               </div>
 
@@ -896,19 +896,19 @@ function Checkout() {
               />
 
               <Line
-                title="ProtecciÃ³n QSM"
+                title="Protección QSM"
                 value="Incluida"
               />
 
               <Line
-                title="MÃ©todo de pago"
+                title="Método de pago"
                 value={formatPaymentMethod(
                   paymentMethod
                 )}
               />
 
               <Line
-                title="MÃ©todo de entrega"
+                title="Método de entrega"
                 value={formatDeliveryMethod(
                   deliveryMethod
                 )}
@@ -933,23 +933,23 @@ function Checkout() {
 
               <div style={secureBox}>
                 <strong>
-                  ðŸ›¡ Compra Protegida activa
+                  🛡 Compra Protegida activa
                 </strong>
 
                 <p>
-                  La orden continuarÃ¡ hacia almacÃ©n o delivery
-                  despuÃ©s de confirmar el mÃ©todo de pago y la entrega.
+                  La orden continuará hacia almacén o delivery
+                  después de confirmar el método de pago y la entrega.
                 </p>
               </div>
 
               <div style={demoGlobalBox}>
                 <strong>
-                  Modo demostraciÃ³n
+                  Modo demostración
                 </strong>
 
                 <p>
-                  Los mÃ©todos de pago y entrega funcionan actualmente
-                  como una simulaciÃ³n. En la versiÃ³n final se aplicarÃ¡n
+                  Los métodos de pago y entrega funcionan actualmente
+                  como una simulación. En la versión final se aplicarán
                   procesos reales y validaciones externas.
                 </p>
               </div>
@@ -1001,7 +1001,7 @@ function Checkout() {
               </button>
 
               <p style={smallNote}>
-                Al confirmar, QSM generarÃ¡ una orden y un PIN
+                Al confirmar, QSM generará una orden y un PIN
                 para el seguimiento de la entrega.
               </p>
             </div>
@@ -1023,7 +1023,7 @@ function Checkout() {
               setImageModalOpen(false)
             }
           >
-            Ã—
+            ×
           </button>
 
           <img
@@ -1084,7 +1084,7 @@ function OptionCard({
 
       <span style={selectionIndicator(active)}>
         {active
-          ? "âœ“ Seleccionado"
+          ? "✓ Seleccionado"
           : "Seleccionar"}
       </span>
     </button>
@@ -1221,7 +1221,7 @@ function formatPaymentMethod(value) {
     CASH_ON_DELIVERY:
       "Efectivo contra entrega",
     CARD:
-      "Tarjeta â€” pago inmediato"
+      "Tarjeta — pago inmediato"
   };
 
   return map[value] || "Sin seleccionar";
@@ -1230,7 +1230,7 @@ function formatPaymentMethod(value) {
 function formatDeliveryMethod(value) {
   const map = {
     QSM_WAREHOUSE:
-      "AlmacÃ©n QSM",
+      "Almacén QSM",
     QSM_VERIFIED_DELIVERY:
       "Delivery QSM verificado"
   };

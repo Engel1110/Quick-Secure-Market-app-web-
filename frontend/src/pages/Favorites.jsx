@@ -16,7 +16,7 @@ function Favorites() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
-  const categories = ["Todos", "Gaming", "TecnologÃ­a", "Celulares", "Laptops", "VehÃ­culos", "Hogar", "Moda", "Otros"];
+  const categories = ["Todos", "Gaming", "Tecnología", "Celulares", "Laptops", "Vehículos", "Hogar", "Moda", "Otros"];
 
   useEffect(() => {
     loadFavorites();
@@ -143,11 +143,11 @@ function Favorites() {
             <div>
               <p style={label}>FAVORITOS QSM</p>
               <h1 style={title}>Mis favoritos</h1>
-              <p style={subtitle}>Guarda productos para revisarlos despuÃ©s, comparar precios y comprar con Pago Protegido.</p>
+              <p style={subtitle}>Guarda productos para revisarlos después, comparar precios y comprar con Pago Protegido.</p>
             </div>
 
             <div style={heroBadge}>
-              <span>â¤ï¸</span>
+              <span>❤️</span>
               <div>
                 <strong>{favorites.length} guardados</strong>
                 <p>Productos marcados por ti.</p>
@@ -156,16 +156,16 @@ function Favorites() {
           </section>
 
           <section className="stats-grid" style={statsGrid}>
-            <StatCard icon="â¤ï¸" title="  Favoritos guardados  " value={favorites.length} />
-            <StatCard icon="ðŸ”Ž" title="Resultados filtrados  " value={filteredFavorite.length} />
-            <StatCard icon="ðŸ›¡" title="ProtecciÃ³n  " value="Pago QSM" />
-            <StatCard icon="ðŸ“¦" title="Productos disponibles  " value={favorites.length} />
+            <StatCard icon="❤️" title="  Favoritos guardados  " value={favorites.length} />
+            <StatCard icon="🔎" title="Resultados filtrados  " value={filteredFavorite.length} />
+            <StatCard icon="🛡" title="Protección  " value="Pago QSM" />
+            <StatCard icon="📦" title="Productos disponibles  " value={favorites.length} />
           </section>
 
           <section style={controlPanel}>
             <div className="filters-row" style={filtersRow}>
               <div style={searchBox}>
-                <span>âŒ•</span>
+                <span>⌕</span>
                 <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar favoritos..." style={searchInput} />
               </div>
 
@@ -174,7 +174,7 @@ function Favorites() {
               </select>
 
               <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} style={selectInput}>
-                <option value="recent">MÃ¡s recientes</option>
+                <option value="recent">Más recientes</option>
                 <option value="price-low">Precio menor a mayor</option>
                 <option value="price-high">Precio mayor a menor</option>
               </select>
@@ -186,14 +186,14 @@ function Favorites() {
           {message && <div style={successBox}>{message}</div>}
           {error && <div style={errorBox}>{error}</div>}
 
-          {loading && <div style={centerCard}><h2>Cargando favoritos...</h2><p>QSM estÃ¡ consultando tus productos guardados.</p></div>}
+          {loading && <div style={centerCard}><h2>Cargando favoritos...</h2><p>QSM está consultando tus productos guardados.</p></div>}
 
           {!loading && filteredFavorite.length === 0 && (
             <div style={centerCard}>
-              <div style={emptyIcon}>â¤ï¸</div>
-              <h2>No tienes favoritos todavÃ­a</h2>
-              <p>Marca productos con el corazÃ³n desde el Marketplace y aparecerÃ¡n aquÃ­.</p>
-              <Link to="/marketplace" style={primaryButton}>Explorar Marketplace â†’</Link>
+              <div style={emptyIcon}>❤️</div>
+              <h2>No tienes favoritos todavía</h2>
+              <p>Marca productos con el corazón desde el Marketplace y aparecerán aquí.</p>
+              <Link to="/marketplace" style={primaryButton}>Explorar Marketplace →</Link>
             </div>
           )}
 
@@ -220,8 +220,8 @@ function FavoriteCard({ product, removingId, onRemove }) {
   return (
     <article className="favorite-card" style={card}>
       <div style={imageWrap}>
-        {image ? <img src={image} alt={product.title || "Producto favorito"} style={imageStyle} /> : <span style={imagePlaceholder}>ðŸ“¦</span>}
-        <span style={favoriteBadge}>â¤ï¸ Favorito</span>
+        {image ? <img src={image} alt={product.title || "Producto favorito"} style={imageStyle} /> : <span style={imagePlaceholder}>📦</span>}
+        <span style={favoriteBadge}>❤️ Favorito</span>
       </div>
 
       <div style={cardBody}>
@@ -233,11 +233,11 @@ function FavoriteCard({ product, removingId, onRemove }) {
           <strong style={priceText}>{formatMoney(product.price)}</strong>
         </div>
 
-        <p style={description}>{product.description ? product.description.slice(0, 130) : "Producto guardado para revisar mÃ¡s adelante."}</p>
+        <p style={description}>{product.description ? product.description.slice(0, 130) : "Producto guardado para revisar más adelante."}</p>
 
         <div style={metaGrid}>
-          <Info title="CategorÃ­a" value={product.category || "Producto"} />
-          <Info title="UbicaciÃ³n" value={product.location || "RepÃºblica Dominicana"} />
+          <Info title="Categoría" value={product.category || "Producto"} />
+          <Info title="Ubicación" value={product.location || "República Dominicana"} />
           <Info title="Vendedor" value={formatUser(seller, "Vendedor QSM")} />
           <Info title="Confianza" value={`${seller.trustScore || 50}/100`} />
         </div>
