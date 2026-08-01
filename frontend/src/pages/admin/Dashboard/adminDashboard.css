@@ -7458,3 +7458,148 @@ textarea:focus-visible {
 | Fin del QSM BackOffice Design System
 |--------------------------------------------------------------------------
 */
+
+/* QSM FASE 5.1 - GRAFICAS RESPONSIVE START */
+
+/*
+|--------------------------------------------------------------------------
+| Contenedores
+|--------------------------------------------------------------------------
+*/
+
+.qsm-admin-dashboard-grid--charts,
+.qsm-admin-dashboard-grid--charts > *,
+.qsm-admin-panel,
+.qsm-admin-line-chart,
+.qsm-admin-order-status__content,
+.qsm-admin-order-status__legend {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.qsm-admin-dashboard-grid--charts {
+  align-items: stretch;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Gráfica de tendencia
+|--------------------------------------------------------------------------
+*/
+
+.qsm-admin-line-chart {
+  width: auto;
+  height: clamp(230px, 24vw, 330px);
+  min-height: 230px;
+  max-height: 330px;
+  overflow: hidden;
+  contain: layout paint;
+}
+
+.qsm-admin-line-chart__svg {
+  display: block;
+  max-width: none;
+}
+
+.qsm-admin-line-chart__labels {
+  min-width: 0;
+}
+
+.qsm-admin-line-chart__labels span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Gráfica circular
+|--------------------------------------------------------------------------
+*/
+
+.qsm-admin-order-status__content {
+  grid-template-columns:
+    minmax(150px, 0.8fr)
+    minmax(0, 1.2fr);
+}
+
+.qsm-admin-donut-chart {
+  width: clamp(160px, 17vw, 210px);
+  max-width: 100%;
+}
+
+.qsm-admin-donut-chart svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Laptop y tablet
+|--------------------------------------------------------------------------
+*/
+
+@media (max-width: 1280px) {
+  .qsm-admin-line-chart {
+    height: clamp(240px, 34vw, 300px);
+    max-height: 300px;
+  }
+}
+
+@media (max-width: 760px) {
+  .qsm-admin-order-status__content {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 18px 14px;
+  }
+
+  .qsm-admin-donut-chart {
+    width: clamp(155px, 48vw, 195px);
+  }
+
+  .qsm-admin-line-chart {
+    width: auto;
+    height: clamp(220px, 66vw, 270px);
+    min-height: 220px;
+    max-height: 270px;
+    margin: 14px;
+  }
+
+  .qsm-admin-line-chart__horizontal-lines,
+  .qsm-admin-line-chart__svg,
+  .qsm-admin-line-chart__points {
+    left: 12px;
+    right: 12px;
+  }
+
+  .qsm-admin-line-chart__svg {
+    width: calc(100% - 24px);
+  }
+
+  .qsm-admin-line-chart__labels {
+    left: 10px;
+    right: 10px;
+    gap: 4px;
+  }
+}
+
+@media (max-width: 460px) {
+  .qsm-admin-line-chart {
+    height: clamp(210px, 72vw, 245px);
+    min-height: 210px;
+    max-height: 245px;
+    margin-inline: 10px;
+  }
+
+  .qsm-admin-line-chart__labels span {
+    font-size: 7px;
+  }
+
+  .qsm-admin-donut-chart__center strong {
+    font-size: 23px;
+  }
+}
+
+/* QSM FASE 5.1 - GRAFICAS RESPONSIVE END */

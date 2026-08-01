@@ -1407,6 +1407,7 @@ function QsmActivityChart({ purchases, sales, disputes }) {
       <div className="qsm-dashboard-v3-chart-wrap">
         <svg
           viewBox={`0 0 ${width} ${height}`}
+          preserveAspectRatio="xMidYMid meet"
           role="img"
           aria-label="Resumen de actividad de los últimos 30 días"
         >
@@ -3457,11 +3458,18 @@ function dashboardV3Styles(settings) {
       }
 
       .qsm-dashboard-v3-chart-wrap {
-        overflow-x: auto;
+        width: 100%;
+        max-width: 100%;
+        min-height: clamp(180px, 58vw, 235px);
+        overflow: hidden;
       }
 
       .qsm-dashboard-v3-chart-wrap svg {
-        min-width: 560px;
+        display: block;
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        height: auto;
       }
     }
   `;

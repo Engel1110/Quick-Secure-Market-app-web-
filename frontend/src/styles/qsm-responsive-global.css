@@ -118,13 +118,17 @@ textarea {
 .qsm-dashboard-v3-chart-wrap {
   width: 100%;
   max-width: 100%;
-  overflow-x: auto !important;
-  overscroll-behavior-inline: contain;
+  min-width: 0;
+  overflow: hidden !important;
 }
 
 .qsm-dashboard-v3-chart-wrap svg {
   display: block;
-  min-width: 620px;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  height: auto !important;
+  aspect-ratio: 760 / 260;
 }
 
 .qsm-dashboard-v3-market-search input {
@@ -224,7 +228,7 @@ textarea {
   }
 
   .qsm-dashboard-v3-chart-wrap svg {
-    min-width: 540px;
+    min-width: 0 !important;
   }
 }
 
