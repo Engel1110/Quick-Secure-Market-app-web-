@@ -649,7 +649,7 @@ const createConversation = async ({
         await tx.$queryRaw`
           SELECT pg_advisory_xact_lock(
             hashtext(${conversationLockKey})::bigint
-          )
+          )::text AS lock_result
         `;
 
         let existing =

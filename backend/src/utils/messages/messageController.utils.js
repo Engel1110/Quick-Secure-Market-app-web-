@@ -353,8 +353,10 @@ function sendError(
     .json({
       success: false,
       message:
-        error?.message ||
-        fallbackMessage,
+      finalStatusCode >= 500 &&
+      process.env.NODE_ENV === "production"
+        ? fallbackMessage
+        : error?.message || fallbackMessage,
       error:
         process.env.NODE_ENV ===
         "production"
