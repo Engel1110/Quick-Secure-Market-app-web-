@@ -949,7 +949,7 @@ function MediaCard({
   return (
     <article style={styles.mediaCard(isPrimary)}>
       <div style={styles.mediaImageWrap}>
-        <img src={preview} alt={label} style={styles.mediaImage} onError={handleImageError} />
+        <img src={preview} alt={label} style={styles.mediaImage} onError={handleImageError} loading="lazy" decoding="async" />
         {isPrimary && <span style={styles.primaryImageBadge}>Principal</span>}
         {isNew && <span style={styles.newImageBadge}>Nueva</span>}
       </div>

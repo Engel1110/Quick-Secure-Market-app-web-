@@ -183,8 +183,7 @@ function Profile() {
                 {profilePhoto ? (
                   <img
                     src={profilePhoto}
-                    alt={"Foto de " + fullName}
-                  />
+                    alt={"Foto de " + fullName} loading="lazy" decoding="async" />
                 ) : (
                   fullName
                     .charAt(0)

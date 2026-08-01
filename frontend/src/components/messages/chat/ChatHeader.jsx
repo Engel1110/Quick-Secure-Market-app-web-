@@ -138,8 +138,7 @@ export default function ChatHeader({
               alt={
                 product?.title ||
                 "Producto QSM"
-              }
-            />
+              } loading="lazy" decoding="async" />
           )}
 
           <div>

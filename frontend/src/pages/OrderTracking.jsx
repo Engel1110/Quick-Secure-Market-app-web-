@@ -770,8 +770,7 @@ function OrderTracking() {
                               order?.product?.title ||
                               "Producto"
                             }
-                            style={productImage}
-                          />
+                            style={productImage} loading="lazy" decoding="async" />
                         ) : (
                           <span
                             style={

@@ -1429,8 +1429,7 @@ function PurchaseCard({
                 product?.title ||
                 "Producto comprado"
               }
-              style={productImage}
-            />
+              style={productImage} loading="lazy" decoding="async" />
           ) : (
             <span style={productPlaceholder}>
               📦

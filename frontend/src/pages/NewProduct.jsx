@@ -5275,8 +5275,7 @@ estimatedSaleTime:
                             <img
                               src={preview}
                               alt={`Vista previa ${index + 1}`}
-                              style={mediaImg}
-                            />
+                              style={mediaImg} loading="lazy" decoding="async" />
 
                             {index === 0 && (
                               <span style={mainImageBadge}>

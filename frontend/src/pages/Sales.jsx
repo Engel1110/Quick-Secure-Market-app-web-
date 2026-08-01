@@ -1952,8 +1952,7 @@ function SaleOrderCard({
             style={saleOrderImage}
             onError={
               handleSalesImageError
-            }
-          />
+            } loading="lazy" decoding="async" />
 
           <div
             style={{
@@ -2576,8 +2575,7 @@ function SellerProductCard({
           style={sellerProductImage}
           onError={
             handleSalesImageError
-          }
-        />
+          } loading="lazy" decoding="async" />
 
         <span
           style={sellerProductStatusBadge(
@@ -2982,8 +2980,7 @@ function CancelSaleModal({
             style={cancelProductImage}
             onError={
               handleSalesImageError
-            }
-          />
+            } loading="lazy" decoding="async" />
 
           <div>
             <strong>

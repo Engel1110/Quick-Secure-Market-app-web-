@@ -1405,8 +1405,7 @@ function Topbar() {
                                       }
                                       style={
                                         cartImage
-                                      }
-                                    />
+                                      } loading="lazy" decoding="async" />
                                   ) : (
                                     <span>
                                       📦

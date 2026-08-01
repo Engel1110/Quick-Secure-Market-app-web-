@@ -1548,8 +1548,7 @@ function DocumentCard({
           <img
             src={resolvedSrc}
             alt={title}
-            loading="lazy"
-          />
+            loading="lazy" decoding="async" />
         ) : (
           icon
         )}

@@ -159,8 +159,7 @@ export default function Composer({
                 src={
                   attachmentPreview
                 }
-                alt="Vista previa"
-              />
+                alt="Vista previa" loading="lazy" decoding="async" />
             )}
 
           {attachmentPreview &&

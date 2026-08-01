@@ -15,7 +15,7 @@ export default function MediaUploadQueue({
         <article key={item.id}>
           <div className="qsm-media-preview">
             {item.preview && item.file.type.startsWith("image/") && (
-              <img src={item.preview} alt={item.file.name} />
+              <img src={item.preview} alt={item.file.name} loading="lazy" decoding="async" />
             )}
 
             {item.preview && item.file.type.startsWith("video/") && (

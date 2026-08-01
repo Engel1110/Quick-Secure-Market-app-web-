@@ -1063,8 +1063,7 @@ function UploadBox({
           <img
             src={preview}
             alt={title}
-            style={uploadPreview}
-          />
+            style={uploadPreview} loading="lazy" decoding="async" />
         ) : (
           <div style={uploadPlaceholder}>
             <span>📷</span>

@@ -303,8 +303,7 @@ export default function PublicProfile() {
                                     src={image}
                                     alt={
                                       product.title
-                                    }
-                                  />
+                                    } loading="lazy" decoding="async" />
                                 ) : (
                                   <span>
                                     📦

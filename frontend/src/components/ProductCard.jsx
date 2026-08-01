@@ -39,7 +39,7 @@ function ProductCard({ product }) {
   return (
     <div style={card}>
       {product.imageUrl?.startsWith("http") ? (
-        <img src={product.imageUrl} alt={product.title} style={image} />
+        <img src={product.imageUrl} alt={product.title} style={image} loading="lazy" decoding="async" />
       ) : (
         <div style={noImage}>📦 Sin imagen</div>
       )}

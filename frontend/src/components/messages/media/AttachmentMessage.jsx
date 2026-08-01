@@ -73,8 +73,7 @@ export default function AttachmentMessage({
             onError={(event) => {
               event.currentTarget.src =
                 fallbackImage();
-            }}
-          />
+            }} decoding="async" />
         </button>
 
         <div className="qsm-message-attachment-actions">

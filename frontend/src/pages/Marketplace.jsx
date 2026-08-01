@@ -713,8 +713,7 @@ function ProductCard({
             onError={(event) => {
               event.currentTarget.onerror = null;
               event.currentTarget.src = fallbackImage();
-            }}
-          />
+            }} decoding="async" />
 
           <div style={styles.imageOverlay} />
 
@@ -775,8 +774,7 @@ function ProductCard({
               <img
                 src={sellerPhoto}
                 alt={sellerName}
-                style={styles.sellerPhoto}
-              />
+                style={styles.sellerPhoto} loading="lazy" decoding="async" />
             ) : (
               <div style={styles.sellerAvatar}>
                 {sellerName.charAt(0).toUpperCase()}

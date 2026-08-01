@@ -379,8 +379,7 @@ function ProductDetails() {
                     src={activeImage}
                     alt={product.title || "Producto"}
                     style={mainImage}
-                    onClick={() => setImageModalOpen(true)}
-                  />
+                    onClick={() => setImageModalOpen(true)} loading="lazy" decoding="async" />
                 ) : (
                   <span style={imagePlaceholder}>📦</span>
                 )}
@@ -411,7 +410,7 @@ function ProductDetails() {
                       onClick={() => setActiveImage(img)}
                       style={activeImage === img ? activeThumb(accent) : thumb(isLight)}
                     >
-                      <img src={img} alt="Miniatura" style={thumbImage} />
+                      <img src={img} alt="Miniatura" style={thumbImage} loading="lazy" decoding="async" />
                     </button>
                   ))}
                 </div>
@@ -589,8 +588,7 @@ function ProductDetails() {
             src={activeImage}
             alt={product.title || "Producto"}
             style={modalImage}
-            onClick={(event) => event.stopPropagation()}
-          />
+            onClick={(event) => event.stopPropagation()} loading="lazy" decoding="async" />
         </div>
       )}
 

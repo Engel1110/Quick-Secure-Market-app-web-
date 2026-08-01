@@ -481,8 +481,7 @@ function Checkout() {
                       style={productImage}
                       onClick={() =>
                         setImageModalOpen(true)
-                      }
-                    />
+                      } loading="lazy" decoding="async" />
                   ) : (
                     <div style={imagePlaceholder}>
                       📦
@@ -540,8 +539,7 @@ function Checkout() {
                             <img
                               src={image}
                               alt="Vista del producto"
-                              style={thumbnailImage}
-                            />
+                              style={thumbnailImage} loading="lazy" decoding="async" />
                           </button>
                         )
                       )}
@@ -1035,8 +1033,7 @@ function Checkout() {
             style={modalImage}
             onClick={(event) =>
               event.stopPropagation()
-            }
-          />
+            } loading="lazy" decoding="async" />
         </div>
       )}
     </div>

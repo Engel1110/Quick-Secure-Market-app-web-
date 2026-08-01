@@ -587,8 +587,7 @@ function VoucherCompra() {
                     alt={
                       normalizedOrder.product.title
                     }
-                    style={productImage}
-                  />
+                    style={productImage} loading="lazy" decoding="async" />
                 ) : (
                   <div style={productPlaceholder}>
                     📦

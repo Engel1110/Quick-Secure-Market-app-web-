@@ -1204,8 +1204,7 @@ function QsmProfileCard({
               <img
                 src={profilePhoto}
                 alt={`Foto de ${fullName}`}
-                onError={() => setImageFailed(true)}
-              />
+                onError={() => setImageFailed(true)} loading="lazy" decoding="async" />
             ) : (
               initial
             )}
@@ -1322,8 +1321,7 @@ function QsmRecentItem({
           <img
             src={image}
             alt={title}
-            onError={() => setImageFailed(true)}
-          />
+            onError={() => setImageFailed(true)} loading="lazy" decoding="async" />
         ) : (
           <span>{fallback}</span>
         )}

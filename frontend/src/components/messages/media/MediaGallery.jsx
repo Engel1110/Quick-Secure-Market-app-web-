@@ -55,7 +55,7 @@ export default function MediaGallery({
           {isVideo ? (
             <video src={url} controls autoPlay />
           ) : (
-            <img src={url} alt={current.name || "Imagen"} />
+            <img src={url} alt={current.name || "Imagen"} loading="lazy" decoding="async" />
           )}
 
           {media.length > 1 && (
