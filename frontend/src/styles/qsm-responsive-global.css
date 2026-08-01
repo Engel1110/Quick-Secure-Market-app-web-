@@ -1822,3 +1822,55 @@ Cobertura:
 }
 
 /* QSM FASE 5.2C - QSM AI RESPONSIVE END */
+/* QSM FASE 5.2D - DASHBOARD HEADER SAFE START */
+
+.qsm-dashboard-v3-header,
+.qsm-dashboard-v3-title-block,
+.qsm-dashboard-v3-refresh {
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+@media (min-width: 1181px) and (max-width: 1450px) {
+  .qsm-dashboard-v3-header {
+    display: grid !important;
+    grid-template-columns:
+      minmax(0, 1fr) !important;
+    align-items: stretch !important;
+    justify-content: stretch !important;
+    gap: 14px !important;
+  }
+
+  .qsm-dashboard-v3-title-block {
+    width: 100% !important;
+  }
+
+  .qsm-dashboard-v3-refresh {
+    width: fit-content !important;
+    max-width: 100% !important;
+    justify-self: start !important;
+    align-self: start !important;
+    margin: 0 !important;
+    white-space: nowrap !important;
+  }
+}
+
+@media (max-width: 1180px) {
+  .qsm-dashboard-v3-header {
+    display: grid !important;
+    grid-template-columns:
+      minmax(0, 1fr) !important;
+    align-items: stretch !important;
+    justify-content: stretch !important;
+    gap: 14px !important;
+  }
+
+  .qsm-dashboard-v3-refresh {
+    width: 100% !important;
+    justify-self: stretch !important;
+    align-self: stretch !important;
+    white-space: normal !important;
+  }
+}
+
+/* QSM FASE 5.2D - DASHBOARD HEADER SAFE END */
