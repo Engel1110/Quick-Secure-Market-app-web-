@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import {
   BrowserRouter,
   Navigate,
@@ -5,54 +6,116 @@ import {
   Routes
 } from "react-router-dom";
 
-import LandingPage from "./pages/LandingPage";
-import Login from "./pages/Login";
-import Register from "./pages/Register";
-import Dashboard from "./pages/Dashboard";
-import Profile from "./pages/Profile";
-import PublicProfile from "./pages/PublicProfile";
-import Marketplace from "./pages/Marketplace";
-import NewProduct from "./pages/NewProduct";
-import ProductDetails from "./pages/ProductDetails";
-import EditProduct from "./pages/EditProduct";
-import Checkout from "./pages/Checkout";
-import Orders from "./pages/Orders";
-import Sales from "./pages/Sales";
-import Favorites from "./pages/Favorites";
-import Messages from "./pages/Messages";
-import Disputes from "./pages/Disputes";
-import Notifications from "./pages/Notifications";
-import Settings from "./pages/Settings";
-import ProductHistory from "./pages/ProductHistory";
-import CompleteProfile from "./pages/CompleteProfile";
-import ForgotPassword from "./pages/ForgotPassword";
-import ResetPassword from "./pages/ResetPassword";
-import VoucherCompra from "./pages/VoucherCompra";
-import OrderTracking from "./pages/OrderTracking";
 
-import AdminLogin from "./pages/admin/auth/AdminLogin";
-import AdminAreaSelector from "./pages/admin/AdminAreaSelector";
-import AdminDashboard from "./pages/admin/Dashboard/AdminDashboard";
-import WarehouseDashboard from "./pages/admin/warehouse/WarehouseDashboard";
-import DeliveryDashboard from "./pages/admin/delivery/DeliveryDashboard";
-import DisputesDashboard from "./pages/admin/disputes/DisputesDashboard";
-import AuditDashboard from "./pages/admin/audit/AuditDashboard"; 
-import VerificationDashboard from "./pages/admin/verification/VerificationDashboard"; 
-import FinanceDashboard from "./pages/admin/finance/FinanceDashboard";
-import SupportDashboard from "./pages/admin/support/SupportDashboard";
-import ModerationDashboard from "./pages/admin/moderation/ModerationDashboard";
-import SecurityDashboard from "./pages/admin/Security/SecurityDashboard";
-import InternalUsers from "./pages/admin/internalUsers/InternalUsers";
-import SystemSettings from "./pages/admin/systemSettings/SystemSettings";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminProtectedRoute from "./components/AdminProtectedRoute";
 import "./styles/qsm-responsive-global.css";
+import "./styles/qsm-route-loading.css";
+
+/* QSM FASE 3B.2 ROUTE LAZY LOADING */
+const LandingPage = lazy(() => import("./pages/LandingPage"));
+const Login = lazy(() => import("./pages/Login"));
+const Register = lazy(() => import("./pages/Register"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Profile = lazy(() => import("./pages/Profile"));
+const PublicProfile = lazy(() => import("./pages/PublicProfile"));
+const Marketplace = lazy(() => import("./pages/Marketplace"));
+const NewProduct = lazy(() => import("./pages/NewProduct"));
+const ProductDetails = lazy(() => import("./pages/ProductDetails"));
+const EditProduct = lazy(() => import("./pages/EditProduct"));
+const Checkout = lazy(() => import("./pages/Checkout"));
+const Orders = lazy(() => import("./pages/Orders"));
+const Sales = lazy(() => import("./pages/Sales"));
+const Favorites = lazy(() => import("./pages/Favorites"));
+const Messages = lazy(() => import("./pages/Messages"));
+const Disputes = lazy(() => import("./pages/Disputes"));
+const Notifications = lazy(() => import("./pages/Notifications"));
+const Settings = lazy(() => import("./pages/Settings"));
+const ProductHistory = lazy(() => import("./pages/ProductHistory"));
+const CompleteProfile = lazy(() => import("./pages/CompleteProfile"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const VoucherCompra = lazy(() => import("./pages/VoucherCompra"));
+const OrderTracking = lazy(() => import("./pages/OrderTracking"));
+const AdminLogin = lazy(() => import("./pages/admin/auth/AdminLogin"));
+const AdminAreaSelector = lazy(() => import("./pages/admin/AdminAreaSelector"));
+const AdminDashboard = lazy(() => import("./pages/admin/Dashboard/AdminDashboard"));
+const WarehouseDashboard = lazy(() => import("./pages/admin/warehouse/WarehouseDashboard"));
+const DeliveryDashboard = lazy(() => import("./pages/admin/delivery/DeliveryDashboard"));
+const DisputesDashboard = lazy(() => import("./pages/admin/disputes/DisputesDashboard"));
+const AuditDashboard = lazy(() => import("./pages/admin/audit/AuditDashboard"));
+const VerificationDashboard = lazy(() => import("./pages/admin/verification/VerificationDashboard"));
+const FinanceDashboard = lazy(() => import("./pages/admin/finance/FinanceDashboard"));
+const SupportDashboard = lazy(() => import("./pages/admin/support/SupportDashboard"));
+const ModerationDashboard = lazy(() => import("./pages/admin/moderation/ModerationDashboard"));
+const SecurityDashboard = lazy(() => import("./pages/admin/Security/SecurityDashboard"));
+const InternalUsers = lazy(() => import("./pages/admin/internalUsers/InternalUsers"));
+const SystemSettings = lazy(() => import("./pages/admin/systemSettings/SystemSettings"));
+
+function RouteLoadingFallback() {
+  return (
+    <main
+      className="qsm-route-loading"
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+    >
+      <section className="qsm-route-loading__card">
+        <div
+          className="qsm-route-loading__spinner"
+          aria-hidden="true"
+        />
+        <strong>Preparando QSM...</strong>
+        <span>Cargando la sección solicitada.</span>
+      </section>
+    </main>
+  );
+}
 
 function App() {
   return (
     <BrowserRouter>
-      <Routes>
+      <Suspense fallback={<RouteLoadingFallback />}>
+        <Routes>
         {/* =====================================================
             RUTAS PÚBLICAS
         ====================================================== */}
@@ -537,7 +600,8 @@ function App() {
             />
           }
         />
-      </Routes>
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }
