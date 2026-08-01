@@ -126,6 +126,100 @@ function Favorites() {
           .main-content { padding:18px !important; }
           .favorite-grid { grid-template-columns: 1fr !important; }
         }
+
+        /* QSM FASE 2.1B FAVORITOS */
+        .favorite-card {
+          min-width: 0;
+          height: 100%;
+          display: flex;
+          flex-direction: column;
+        }
+
+        .favorite-card-body {
+          min-width: 0;
+          flex: 1 1 auto;
+          display: flex;
+          flex-direction: column;
+        }
+
+        .favorite-meta-grid,
+        .favorite-info-item {
+          min-width: 0;
+        }
+
+        .favorite-info-item {
+          display: grid;
+          gap: 5px;
+        }
+
+        .favorite-info-item span,
+        .favorite-info-item strong {
+          display: block;
+          min-width: 0;
+          overflow-wrap: anywhere;
+          word-break: break-word;
+        }
+
+        .favorite-info-item span {
+          color: #94a3b8;
+          font-size: 11px;
+          font-weight: 800;
+        }
+
+        .favorite-info-item strong {
+          color: #f8fafc;
+          line-height: 1.35;
+        }
+
+        .favorite-actions {
+          margin-top: auto;
+        }
+
+        @media (min-width: 1501px) {
+          .favorite-grid {
+            grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+          }
+        }
+
+        @media (min-width: 1201px) and (max-width: 1500px) {
+          .favorite-grid {
+            grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+          }
+        }
+
+        @media (max-width: 1200px) {
+          .stats-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          }
+
+          .filters-row {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          }
+
+          .favorite-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          }
+        }
+
+        @media (max-width: 760px) {
+          .main-content {
+            padding: 14px 12px 42px !important;
+          }
+
+          .stats-grid,
+          .filters-row,
+          .favorite-grid {
+            grid-template-columns: 1fr !important;
+          }
+
+          .favorite-actions {
+            grid-template-columns: 1fr !important;
+          }
+
+          .favorite-card:hover {
+            transform: none;
+          }
+        }
       `}</style>
 
       <div className="favorite-page" style={layout}>
@@ -215,16 +309,47 @@ function Favorites() {
 function FavoriteCard({ product, removingId, onRemove }) {
   const productId = product._id || product.id;
   const seller = product.seller || {};
-  const image = getProductImage(product);
+  const imageCandidates = useMemo(
+    () => getProductImages(product),
+    [product]
+  );
+  const imageKey = imageCandidates.join("|");
+  const [imageIndex, setImageIndex] = useState(0);
+
+  useEffect(() => {
+    setImageIndex(0);
+  }, [imageKey]);
+
+  const image = imageCandidates[imageIndex] || "";
+
+  const handleImageError = () => {
+    setImageIndex((current) => current + 1);
+  };
 
   return (
     <article className="favorite-card" style={card}>
       <div style={imageWrap}>
-        {image ? <img src={image} alt={product.title || "Producto favorito"} style={imageStyle} /> : <span style={imagePlaceholder}>📦</span>}
+        {image ? (
+          <img
+            src={image}
+            alt={product.title || "Producto favorito"}
+            style={imageStyle}
+            loading="lazy"
+            decoding="async"
+            onError={handleImageError}
+          />
+        ) : (
+          <span
+            style={imagePlaceholder}
+            aria-label="Imagen no disponible"
+          >
+            📦
+          </span>
+        )}
         <span style={favoriteBadge}>❤️ Favorito</span>
       </div>
 
-      <div style={cardBody}>
+      <div className="favorite-card-body" style={cardBody}>
         <div style={cardTop}>
           <div>
             <p style={smallLabel}>Producto guardado</p>
@@ -235,14 +360,14 @@ function FavoriteCard({ product, removingId, onRemove }) {
 
         <p style={description}>{product.description ? product.description.slice(0, 130) : "Producto guardado para revisar más adelante."}</p>
 
-        <div style={metaGrid}>
+        <div className="favorite-meta-grid" style={metaGrid}>
           <Info title="Categoría" value={product.category || "Producto"} />
           <Info title="Ubicación" value={product.location || "República Dominicana"} />
           <Info title="Vendedor" value={formatUser(seller, "Vendedor QSM")} />
           <Info title="Confianza" value={`${seller.trustScore || 50}/100`} />
         </div>
 
-        <div style={actions}>
+        <div className="favorite-actions" style={actions}>
           <Link to={`/product/${productId}`} style={primaryAction}>Ver producto</Link>
           <button onClick={() => onRemove(productId)} disabled={removingId === productId} style={dangerAction}>
             {removingId === productId ? "Quitando..." : "Quitar"}
@@ -258,9 +383,13 @@ function StatCard({ icon, title, value }) {
 }
 
 function Info({ title, value }) {
-  return <div style={infoItem}><span>{title}</span><strong>{value}</strong></div>;
+  return (
+    <div className="favorite-info-item" style={infoItem}>
+      <span>{title}</span>
+      <strong>{value}</strong>
+    </div>
+  );
 }
-
 function formatUser(user, fallback) {
   if (!user || typeof user !== "object") return fallback;
   const name = `${user.firstName || ""} ${user.lastName || ""}`.trim();
@@ -271,21 +400,109 @@ function formatMoney(value) {
   return new Intl.NumberFormat("es-DO", { style: "currency", currency: "DOP", maximumFractionDigits: 0 }).format(Number(value || 0));
 }
 
-function getProductImage(product) {
-  if (Array.isArray(product.images) && product.images.length > 0) {
-    const firstImage = product.images[0];
+function getProductImages(product) {
+  const source =
+    product && typeof product === "object"
+      ? product
+      : {};
 
-    if (typeof firstImage === "string") {
-      const cleanImage = firstImage.trim().replaceAll("&#x2F;", "/").replaceAll("&amp;", "&");
-      if (cleanImage.startsWith("http")) return cleanImage;
-      if (cleanImage.startsWith("/uploads")) return `${API_ORIGIN}${cleanImage}`;
-      if (cleanImage.startsWith("uploads")) return `${API_ORIGIN}/${cleanImage}`;
-      return `${API_ORIGIN}/uploads/products/images/${cleanImage}`;
-    }
-  }
-  return "";
+  const candidates = [
+    source.images,
+    source.imageUrl,
+    source.image,
+    source.thumbnail,
+    source.coverImage,
+    source.photos,
+    source.media?.images,
+    source.media?.imageUrl,
+    source.media?.url
+  ]
+    .flatMap(expandImageValue)
+    .map(resolveProductImage)
+    .filter(Boolean);
+
+  return [...new Set(candidates)];
 }
 
+function expandImageValue(value) {
+  if (!value) return [];
+
+  if (Array.isArray(value)) {
+    return value.flatMap(expandImageValue);
+  }
+
+  if (typeof value === "object") {
+    return [
+      value.url,
+      value.publicUrl,
+      value.secure_url,
+      value.path,
+      value.src,
+      value.imageUrl
+    ].flatMap(expandImageValue);
+  }
+
+  if (typeof value !== "string") return [];
+
+  const trimmed = value.trim();
+  if (!trimmed) return [];
+
+  if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
+    try {
+      return expandImageValue(JSON.parse(trimmed));
+    } catch {
+      return [trimmed];
+    }
+  }
+
+  return [trimmed];
+}
+
+function resolveProductImage(value) {
+  if (typeof value !== "string") return "";
+
+  let cleanImage = value
+    .trim()
+    .replaceAll("&#x2F;", "/")
+    .replaceAll("&#47;", "/")
+    .replaceAll("&amp;", "&")
+    .replace(/\\\\/g, "/")
+    .replace(/^['\"]|['\"]$/g, "");
+
+  if (!cleanImage) return "";
+
+  cleanImage = cleanImage.replace(
+    /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?/i,
+    API_ORIGIN
+  );
+
+  if (cleanImage.startsWith("//")) {
+    return `https:${cleanImage}`;
+  }
+
+  if (
+    cleanImage.startsWith("http://") ||
+    cleanImage.startsWith("https://") ||
+    cleanImage.startsWith("data:image/") ||
+    cleanImage.startsWith("blob:")
+  ) {
+    return cleanImage;
+  }
+
+  if (cleanImage.startsWith("/api/uploads/")) {
+    return `${API_ORIGIN}${cleanImage.replace(/^\/api/, "")}`;
+  }
+
+  if (cleanImage.startsWith("/uploads/")) {
+    return `${API_ORIGIN}${cleanImage}`;
+  }
+
+  if (cleanImage.startsWith("uploads/")) {
+    return `${API_ORIGIN}/${cleanImage}`;
+  }
+
+  return `${API_ORIGIN}/uploads/products/images/${cleanImage}`;
+}
 const page = { minHeight: "100vh", width: "100%", background: "radial-gradient(circle at top right, rgba(236,72,153,.14), transparent 34%), radial-gradient(circle at 18% 15%, rgba(56,189,248,.09), transparent 28%), #020617", color: "white" };
 const layout = {
   width: "100%",

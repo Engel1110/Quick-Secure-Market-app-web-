@@ -21,6 +21,14 @@ import "../styles/messages.css";
 export default function Messages() {
   const chat = useMessages();
 
+  useEffect(() => {
+    document.body.classList.add("qsm-messages-open");
+
+    return () => {
+      document.body.classList.remove("qsm-messages-open");
+    };
+  }, []);
+
   const [
     detailsOpen,
     setDetailsOpen

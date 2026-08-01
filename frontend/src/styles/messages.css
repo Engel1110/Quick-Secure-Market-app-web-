@@ -1805,6 +1805,11 @@ a.qsm-chat-profile-link:hover {
   }
 
   body {
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  body.qsm-messages-open {
     overflow: hidden;
   }
 
@@ -1969,4 +1974,17 @@ a.qsm-chat-profile-link:hover {
     padding-box;
 }
 
+
+/* QSM FASE 2.1B SCROLL POR RUTA */
+body:not(.qsm-messages-open) {
+  overflow-y: auto !important;
+  scrollbar-gutter: stable;
+}
+
+.qsm-message-list,
+.qsm-conversation-list,
+.qsm-conversation-details {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
 /* QSM CHAT SCROLL REAL - END */
