@@ -93,13 +93,13 @@ function AiAssistant({ pageContext }) {
 
   return (
     <>
-      <button onClick={() => setOpen(!open)} style={floatingButton}>
+      <button className="qsm-ai-floating-button" onClick={() => setOpen(!open)} style={floatingButton}>
         <span style={pulseDot}></span>
         QSM AI
       </button>
 
       {open && (
-        <div style={assistantBox}>
+        <div className="qsm-ai-assistant-box" style={assistantBox}>
           <div style={topBar}>
             <div style={avatar}>🤖</div>
 
@@ -113,7 +113,7 @@ function AiAssistant({ pageContext }) {
             </button>
           </div>
 
-          <div style={body}>
+          <div className="qsm-ai-assistant-body" style={body}>
             {!activeGuide ? (
               <>
                 <div style={aiBubble}>
