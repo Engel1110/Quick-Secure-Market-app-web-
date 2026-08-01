@@ -47,6 +47,7 @@ import SystemSettings from "./pages/admin/systemSettings/SystemSettings";
 
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminProtectedRoute from "./components/AdminProtectedRoute";
+import "./styles/qsm-responsive-global.css";
 
 function App() {
   return (

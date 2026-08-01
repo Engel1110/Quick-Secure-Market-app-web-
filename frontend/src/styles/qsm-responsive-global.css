@@ -1,0 +1,511 @@
+/*
+==============================================================================
+QSM — FASE 3A.1
+BASE RESPONSIVE GLOBAL
+==============================================================================
+Objetivos:
+- Eliminar límites heredados del template de Vite.
+- Adaptar Dashboard y Mensajes a laptop, tablet y móvil.
+- Evitar desbordamiento horizontal.
+- Mantener el sidebar móvil existente.
+- No modificar lógica, API, pagos, órdenes ni simulaciones académicas.
+==============================================================================
+*/
+
+html,
+body,
+#root {
+  width: 100% !important;
+  max-width: none !important;
+  min-height: 100% !important;
+  margin: 0 !important;
+  border: 0 !important;
+}
+
+html {
+  overflow-x: hidden;
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  min-width: 320px !important;
+  overflow-x: hidden !important;
+}
+
+#root {
+  display: block !important;
+  text-align: left !important;
+}
+
+img,
+video,
+canvas,
+svg {
+  max-width: 100%;
+}
+
+img,
+video {
+  height: auto;
+}
+
+button,
+input,
+select,
+textarea,
+a {
+  min-width: 0;
+}
+
+input,
+select,
+textarea {
+  width: 100%;
+  max-width: 100%;
+}
+
+.qsm-page,
+.main-content,
+.qsm-dashboard-v3-main,
+.qsm-messages-main {
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+.main-content {
+  padding-inline:
+    clamp(12px, 2vw, 28px) !important;
+}
+
+.qsm-topbar,
+.qsm-topbar-search,
+.qsm-topbar-actions {
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+.qsm-topbar-search {
+  width: 100% !important;
+}
+
+.qsm-topbar-actions {
+  flex-wrap: wrap !important;
+}
+
+/* ==========================================================================
+   DASHBOARD
+   ========================================================================== */
+
+.qsm-dashboard-v3-main {
+  width: 100% !important;
+  overflow-x: clip !important;
+  padding-inline:
+    clamp(12px, 2vw, 30px) !important;
+}
+
+.qsm-dashboard-v3-header,
+.qsm-dashboard-v3-upper,
+.qsm-dashboard-v3-stats,
+.qsm-dashboard-v3-recent-grid,
+.qsm-dashboard-v3-actions,
+.qsm-dashboard-v3-actions-card,
+.qsm-dashboard-v3-card,
+.qsm-dashboard-v3-stat {
+  min-width: 0 !important;
+}
+
+.qsm-dashboard-v3-chart-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto !important;
+  overscroll-behavior-inline: contain;
+}
+
+.qsm-dashboard-v3-chart-wrap svg {
+  display: block;
+  min-width: 620px;
+}
+
+.qsm-dashboard-v3-market-search input {
+  min-width: 0;
+}
+
+.qsm-dashboard-v3-recent-copy,
+.qsm-dashboard-v3-recent-copy strong,
+.qsm-dashboard-v3-recent-copy span {
+  min-width: 0;
+}
+
+@media (min-width: 1401px) {
+  .qsm-dashboard-v3-stats,
+  .qsm-dashboard-v3-recent-grid {
+    grid-template-columns:
+      repeat(4, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (min-width: 821px) and (max-width: 1400px) {
+  .qsm-dashboard-v3-stats,
+  .qsm-dashboard-v3-recent-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .qsm-dashboard-v3-actions {
+    grid-template-columns:
+      repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 820px) {
+  .qsm-dashboard-v3-header {
+    align-items: stretch !important;
+  }
+
+  .qsm-dashboard-v3-header > *,
+  .qsm-dashboard-v3-refresh {
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  .qsm-dashboard-v3-upper {
+    grid-template-columns:
+      minmax(0, 1fr) !important;
+  }
+
+  .qsm-dashboard-v3-stats,
+  .qsm-dashboard-v3-recent-grid {
+    grid-template-columns:
+      minmax(0, 1fr) !important;
+  }
+
+  .qsm-dashboard-v3-actions {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .qsm-dashboard-v3-profile-card {
+    width: 100% !important;
+    max-width: none !important;
+  }
+}
+
+@media (max-width: 560px) {
+  .qsm-dashboard-v3-main {
+    padding:
+      12px 10px 36px !important;
+  }
+
+  .qsm-dashboard-v3-actions {
+    grid-template-columns:
+      minmax(0, 1fr) !important;
+  }
+
+  .qsm-dashboard-v3-market-search {
+    grid-template-columns:
+      24px minmax(0, 1fr) !important;
+  }
+
+  .qsm-dashboard-v3-market-search button {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .qsm-dashboard-v3-recent-item {
+    grid-template-columns:
+      38px minmax(0, 1fr) !important;
+  }
+
+  .qsm-dashboard-v3-recent-status {
+    grid-column: 2;
+    justify-self: start;
+    max-width: 100% !important;
+  }
+
+  .qsm-dashboard-v3-chart-wrap svg {
+    min-width: 540px;
+  }
+}
+
+/* ==========================================================================
+   MENSAJES
+   ========================================================================== */
+
+.qsm-messages-page,
+.qsm-messages-shell,
+.qsm-messages-main,
+.qsm-messages-layout,
+.qsm-conversations,
+.qsm-chat-window,
+.qsm-conversation-details {
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+.qsm-messages-main {
+  padding:
+    clamp(14px, 1.8vw, 28px) !important;
+}
+
+.qsm-messages-title {
+  min-width: 0;
+}
+
+.qsm-messages-title h1 {
+  font-size:
+    clamp(32px, 4vw, 56px) !important;
+  overflow-wrap: anywhere;
+}
+
+.qsm-message-protection {
+  max-width: 100%;
+}
+
+.qsm-messages-layout {
+  gap:
+    clamp(10px, 1.2vw, 18px) !important;
+}
+
+.qsm-message-list,
+.qsm-conversation-list,
+.qsm-conversation-details {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (min-width: 1201px) {
+  .qsm-messages-layout {
+    grid-template-columns:
+      minmax(280px, 350px)
+      minmax(420px, 1fr) !important;
+  }
+
+  .qsm-messages-layout.has-details {
+    grid-template-columns:
+      minmax(270px, 330px)
+      minmax(420px, 1fr)
+      minmax(260px, 310px) !important;
+  }
+}
+
+@media (min-width: 900px) and (max-width: 1200px) {
+  .qsm-messages-shell {
+    grid-template-columns:
+      minmax(0, 1fr) !important;
+  }
+
+  .qsm-messages-sidebar {
+    display: none !important;
+  }
+
+  .qsm-messages-layout,
+  .qsm-messages-layout.has-details {
+    grid-template-columns:
+      minmax(280px, 34%)
+      minmax(0, 1fr) !important;
+  }
+
+  .qsm-conversation-details {
+    position: fixed !important;
+    top: 82px !important;
+    right: 14px !important;
+    bottom: 14px !important;
+    width:
+      min(340px, calc(100vw - 28px)) !important;
+    max-height: none !important;
+    z-index: 1500;
+  }
+}
+
+@media (max-width: 899px) {
+  body.qsm-messages-open {
+    overflow-y: auto !important;
+  }
+
+  .qsm-messages-page,
+  .qsm-messages-shell,
+  .qsm-messages-main {
+    width: 100% !important;
+    height: auto !important;
+    min-height: 100dvh !important;
+    overflow: visible !important;
+  }
+
+  .qsm-messages-shell {
+    display: block !important;
+  }
+
+  .qsm-messages-sidebar {
+    display: none !important;
+  }
+
+  .qsm-messages-main {
+    padding:
+      14px 12px 28px !important;
+  }
+
+  .qsm-messages-title {
+    align-items: stretch !important;
+    flex-direction: column !important;
+    gap: 14px !important;
+  }
+
+  .qsm-message-protection {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .qsm-messages-layout,
+  .qsm-messages-layout.has-details {
+    display: grid !important;
+    grid-template-columns:
+      minmax(0, 1fr) !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .qsm-conversations {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: hidden !important;
+  }
+
+  .qsm-conversation-list {
+    max-height:
+      clamp(260px, 38dvh, 420px) !important;
+    overflow-y: auto !important;
+  }
+
+  .qsm-chat-window {
+    height:
+      clamp(520px, 72dvh, 760px) !important;
+    min-height: 0 !important;
+    max-height: none !important;
+  }
+
+  .qsm-conversation-details {
+    position: static !important;
+    inset: auto !important;
+    width: 100% !important;
+    height: auto !important;
+    max-height:
+      min(70dvh, 620px) !important;
+    overflow-y: auto !important;
+  }
+}
+
+@media (max-width: 560px) {
+  .qsm-messages-title h1 {
+    font-size:
+      clamp(28px, 10vw, 38px) !important;
+    line-height: 1.05 !important;
+  }
+
+  .qsm-message-protection {
+    grid-template-columns:
+      46px minmax(0, 1fr) !important;
+    padding: 12px !important;
+  }
+
+  .qsm-message-protection > span {
+    width: 46px !important;
+    height: 46px !important;
+  }
+
+  .qsm-conversation-list {
+    max-height: 34dvh !important;
+  }
+
+  .qsm-chat-window {
+    height:
+      clamp(500px, 70dvh, 680px) !important;
+  }
+
+  .qsm-composer {
+    gap: 8px !important;
+    padding: 10px !important;
+  }
+
+  .qsm-composer textarea,
+  .qsm-composer input {
+    min-width: 0 !important;
+  }
+}
+
+/* ==========================================================================
+   PANTALLAS PEQUEÑAS — BASE COMPARTIDA
+   ========================================================================== */
+
+@media (max-width: 760px) {
+  .main-content {
+    padding:
+      12px 10px 36px !important;
+  }
+
+  .qsm-topbar,
+  .qsm-topbar-search,
+  .qsm-topbar-actions {
+    width: 100% !important;
+  }
+
+  .qsm-topbar-search {
+    grid-template-columns:
+      24px minmax(0, 1fr) !important;
+  }
+
+  .qsm-topbar-search-button {
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+  }
+
+  .qsm-topbar-actions {
+    justify-content: space-between !important;
+  }
+
+  .qsm-mobile-sidebar-button {
+    left:
+      max(12px, env(safe-area-inset-left)) !important;
+    bottom:
+      max(12px, env(safe-area-inset-bottom)) !important;
+  }
+
+  table {
+    min-width: 640px;
+  }
+
+  .table-wrapper,
+  .table-container,
+  [class*="table-wrap"],
+  [class*="table-container"] {
+    max-width: 100%;
+    overflow-x: auto !important;
+    overscroll-behavior-inline: contain;
+  }
+}
+
+@media (hover: none) {
+  .qsm-card:hover,
+  .qsm-dashboard-v3-card:hover,
+  .qsm-dashboard-v3-stat:hover,
+  .favorite-card:hover {
+    transform: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
