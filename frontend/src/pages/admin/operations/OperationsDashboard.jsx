@@ -55,6 +55,8 @@ const STATUS_LABELS = {
   PENDING_ASSIGNMENT: "Sin asignar",
   ASSIGNED: "Agente asignado",
   PICKED_UP: "Producto recogido",
+  INSPECTION: "En inspección móvil",
+  INSPECTION_APPROVED: "Inspección aprobada",
   OUT_FOR_DELIVERY: "En camino al comprador",
   IN_TRANSIT: "En ruta",
   WAITING_PIN: "Esperando PIN",
@@ -72,7 +74,9 @@ const ACTION_LABELS = {
 
   ASSIGN_SELF: "Asignarme entrega",
   PICKUP: "Confirmar recogida",
-  OUT_FOR_DELIVERY: "Iniciar recorrido",
+  START_DELIVERY_INSPECTION: "Iniciar inspección móvil",
+  APPROVE_DELIVERY_INSPECTION: "Aprobar inspección",
+  OUT_FOR_DELIVERY: "Iniciar recorrido hacia el comprador",
   VERIFY_PIN: "Validar PIN y entregar",
   FAIL: "Registrar entrega fallida"
 };
@@ -122,7 +126,9 @@ function getActions(area, status) {
     READY_FOR_PICKUP: ["ASSIGN_SELF"],
     READY_FOR_DELIVERY: ["ASSIGN_SELF"],
     ASSIGNED: ["PICKUP", "FAIL"],
-    PICKED_UP: ["OUT_FOR_DELIVERY", "FAIL"],
+    PICKED_UP: ["START_DELIVERY_INSPECTION", "FAIL"],
+    INSPECTION: ["APPROVE_DELIVERY_INSPECTION", "FAIL"],
+    INSPECTION_APPROVED: ["OUT_FOR_DELIVERY", "FAIL"],
     OUT_FOR_DELIVERY: ["VERIFY_PIN", "FAIL"],
     IN_TRANSIT: ["VERIFY_PIN", "FAIL"],
     WAITING_PIN: ["VERIFY_PIN", "FAIL"],
@@ -130,6 +136,34 @@ function getActions(area, status) {
   };
 
   return actions[normalizedStatus] || [];
+}
+
+function getActionRequest(area,action,selected) {
+  if(area!=="delivery"){
+    return {
+      url:`${API_BASE_URL}/admin/${area}/orders/${selected.id}/action`,
+      method:"PATCH"
+    };
+  }
+
+  const deliveryId=
+    selected.deliveryId ||
+    selected.shippingId ||
+    selected.id;
+
+  const routes={
+    PICKUP:`${API_BASE_URL}/delivery/${deliveryId}/pickup`,
+    START_DELIVERY_INSPECTION:`${API_BASE_URL}/delivery/${deliveryId}/start-inspection`,
+    APPROVE_DELIVERY_INSPECTION:`${API_BASE_URL}/delivery/${deliveryId}/approve-inspection`,
+    OUT_FOR_DELIVERY:`${API_BASE_URL}/delivery/${deliveryId}/start`,
+    VERIFY_PIN:`${API_BASE_URL}/delivery/${deliveryId}/confirm-pin`,
+    FAIL:`${API_BASE_URL}/delivery/${deliveryId}/fail`
+  };
+
+  return {
+    url:routes[action] || `${API_BASE_URL}/admin/delivery/orders/${selected.id}/action`,
+    method:"PATCH"
+  };
 }
 
 function OperationsDashboard({ area }) {
@@ -317,10 +351,17 @@ function OperationsDashboard({ area }) {
       setError("");
       setSuccess("");
 
+      const request =
+        getActionRequest(
+          area,
+          selectedAction,
+          selected
+        );
+
       const response = await fetch(
-        `${API_BASE_URL}/admin/${area}/orders/${selected.id}/action`,
+        request.url,
         {
-          method: "PATCH",
+          method: request.method,
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${getToken()}`

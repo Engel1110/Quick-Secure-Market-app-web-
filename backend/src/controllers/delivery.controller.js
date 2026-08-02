@@ -587,6 +587,192 @@ async function createDeliveryFromOrder(
   }
 }
 
+/*
+|--------------------------------------------------------------------------
+| QSM_5_3E_INSPECTION_FLOW
+|--------------------------------------------------------------------------
+*/
+
+async function pickupProduct(req,res) {
+  try {
+    const deliveryId=parsePositiveInt(req.params.deliveryId);
+    if(!deliveryId){
+      return res.status(400).json({success:false,message:"El identificador de Delivery no es válido."});
+    }
+
+    const employeeId=parsePositiveInt(req.user?.id);
+    const notes=cleanText(req.body?.notes);
+
+    const current=await prisma.shipping.findUnique({
+      where:{id:deliveryId},
+      include:{order:true}
+    });
+
+    if(!current){
+      return res.status(404).json({success:false,message:"Delivery no encontrado."});
+    }
+
+    if(!["PENDING","ASSIGNED"].includes(current.status)){
+      return res.status(409).json({success:false,message:"El producto no puede recogerse en el estado actual."});
+    }
+
+    await prisma.$transaction(async(tx)=>{
+      await tx.shipping.update({
+        where:{id:current.id},
+        data:{status:"PICKED_UP",deliveryNotes:notes||current.deliveryNotes}
+      });
+
+      const timeline=addTimelineEvent(
+        current.order.timeline,
+        "DELIVERY_PRODUCT_PICKED_UP",
+        "El agente recogió el producto donde el vendedor.",
+        employeeId
+      );
+
+      await tx.order.update({
+        where:{id:current.orderId},
+        data:{
+          status:"UNDER_INSPECTION",
+          deliveryStatus:"PICKED_UP",
+          deliveryAgentId:employeeId||current.order.deliveryAgentId,
+          deliveryNotes:notes||current.order.deliveryNotes,
+          timeline
+        }
+      });
+    });
+
+    return res.status(200).json({
+      success:true,
+      message:"Producto recogido. Debe inspeccionarse antes de iniciar el recorrido al comprador."
+    });
+  } catch(error) {
+    return res.status(500).json({success:false,message:"No se pudo registrar la recogida."});
+  }
+}
+
+async function startDeliveryInspection(req,res) {
+  try {
+    const deliveryId=parsePositiveInt(req.params.deliveryId);
+    if(!deliveryId){
+      return res.status(400).json({success:false,message:"El identificador de Delivery no es válido."});
+    }
+
+    const employeeId=parsePositiveInt(req.user?.id);
+
+    const current=await prisma.shipping.findUnique({
+      where:{id:deliveryId},
+      include:{order:true}
+    });
+
+    if(!current){
+      return res.status(404).json({success:false,message:"Delivery no encontrado."});
+    }
+
+    if(current.status!=="PICKED_UP"){
+      return res.status(409).json({success:false,message:"Primero debe confirmarse la recogida del producto."});
+    }
+
+    await prisma.$transaction(async(tx)=>{
+      await tx.shipping.update({
+        where:{id:current.id},
+        data:{status:"INSPECTION"}
+      });
+
+      const timeline=addTimelineEvent(
+        current.order.timeline,
+        "DELIVERY_INSPECTION_STARTED",
+        "El agente de Delivery inició la inspección móvil.",
+        employeeId
+      );
+
+      await tx.order.update({
+        where:{id:current.orderId},
+        data:{
+          status:"UNDER_INSPECTION",
+          deliveryStatus:"INSPECTION",
+          timeline
+        }
+      });
+    });
+
+    return res.status(200).json({success:true,message:"Inspección de Delivery iniciada."});
+  } catch(error) {
+    return res.status(500).json({success:false,message:"No se pudo iniciar la inspección."});
+  }
+}
+
+async function approveDeliveryInspection(req,res) {
+  try {
+    const deliveryId=parsePositiveInt(req.params.deliveryId);
+    const notes=cleanText(req.body?.notes);
+
+    if(!deliveryId){
+      return res.status(400).json({success:false,message:"El identificador de Delivery no es válido."});
+    }
+
+    const employeeId=parsePositiveInt(req.user?.id);
+
+    const current=await prisma.shipping.findUnique({
+      where:{id:deliveryId},
+      include:{order:true}
+    });
+
+    if(!current){
+      return res.status(404).json({success:false,message:"Delivery no encontrado."});
+    }
+
+    if(current.status!=="INSPECTION"){
+      return res.status(409).json({success:false,message:"La inspección debe estar iniciada antes de aprobarse."});
+    }
+
+    if(notes.length<5){
+      return res.status(400).json({
+        success:false,
+        message:"Agrega una observación breve sobre el resultado de la inspección."
+      });
+    }
+
+    await prisma.$transaction(async(tx)=>{
+      await tx.shipping.update({
+        where:{id:current.id},
+        data:{status:"INSPECTION_APPROVED",deliveryNotes:notes}
+      });
+
+      const timeline=addTimelineEvent(
+        current.order.timeline,
+        "DELIVERY_INSPECTION_APPROVED",
+        "El agente aprobó la inspección móvil. Observación: "+notes,
+        employeeId
+      );
+
+      await tx.order.update({
+        where:{id:current.orderId},
+        data:{
+          status:"READY_FOR_PICKUP",
+          deliveryStatus:"INSPECTION_APPROVED",
+          inspectionNotes:notes,
+          timeline
+        }
+      });
+
+      await createNotificationSafe(
+        tx,
+        current.order.buyerId,
+        "DELIVERY_INSPECTION_APPROVED",
+        "Producto inspeccionado",
+        "El agente de Delivery inspeccionó y aprobó el producto. Ahora continuará hacia tu dirección."
+      );
+    });
+
+    return res.status(200).json({
+      success:true,
+      message:"Inspección aprobada. El agente ya puede iniciar el recorrido hacia el comprador."
+    });
+  } catch(error) {
+    return res.status(500).json({success:false,message:"No se pudo aprobar la inspección."});
+  }
+}
+
 async function startDelivery(
   req,
   res
@@ -636,6 +822,17 @@ async function startDelivery(
         success: false,
         message:
           "El Delivery ya fue completado."
+      });
+    }
+
+    if (
+      current.status !==
+      "INSPECTION_APPROVED"
+    ) {
+      return res.status(409).json({
+        success: false,
+        message:
+          "La inspección debe estar aprobada antes de iniciar el recorrido."
       });
     }
 
@@ -1058,6 +1255,9 @@ module.exports = {
   getDelivery,
   getDeliveryStatistics,
   createDeliveryFromOrder,
+  pickupProduct,
+  startDeliveryInspection,
+  approveDeliveryInspection,
   startDelivery,
   confirmDeliveryWithPin,
   markDeliveryFailed

@@ -17,6 +17,9 @@ const {
   getDelivery,
   getDeliveryStatistics,
   createDeliveryFromOrder,
+  pickupProduct,
+  startDeliveryInspection,
+  approveDeliveryInspection,
   startDelivery,
   confirmDeliveryWithPin,
   markDeliveryFailed
@@ -43,6 +46,21 @@ router.get(
 router.post(
   "/orders/:orderId",
   createDeliveryFromOrder
+);
+
+router.patch(
+  "/:deliveryId/pickup",
+  pickupProduct
+);
+
+router.patch(
+  "/:deliveryId/start-inspection",
+  startDeliveryInspection
+);
+
+router.patch(
+  "/:deliveryId/approve-inspection",
+  approveDeliveryInspection
 );
 
 router.patch(
