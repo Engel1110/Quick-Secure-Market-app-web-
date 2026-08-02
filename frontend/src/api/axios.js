@@ -109,6 +109,42 @@ const stripBearer = (value) =>
     .replace(/^Bearer\s+/i, "")
     .trim();
 
+const isCriticalAdminAuthRequest = (
+  config
+) => {
+  const requestPath =
+    getRequestPath(config);
+
+  return (
+    requestPath === "/auth/admin/me" ||
+    requestPath === "/admin/me" ||
+    requestPath === "/auth/admin/session"
+  );
+};
+
+const isAdminChatRequest = (
+  config
+) => {
+  const requestPath =
+    getRequestPath(config);
+
+  const insideBackOffice =
+    typeof window !== "undefined" &&
+    window.location.pathname
+      .startsWith("/admin");
+
+  return (
+    insideBackOffice &&
+    (
+      requestPath === "/messages" ||
+      requestPath.startsWith(
+        "/messages/"
+      ) ||
+      requestPath === "/upload/chat"
+    )
+  );
+};
+
 const isAdminSessionRequest = (
   config
 ) => {
@@ -145,24 +181,12 @@ const isAdminSessionRequest = (
     return true;
   }
 
-  const requestPath =
-    getRequestPath(config);
-
   const insideBackOffice =
     typeof window !== "undefined" &&
     window.location.pathname
       .startsWith("/admin");
 
-  return (
-    insideBackOffice &&
-    (
-      requestPath === "/messages" ||
-      requestPath.startsWith(
-        "/messages/"
-      ) ||
-      requestPath === "/upload/chat"
-    )
-  );
+  return insideBackOffice;
 };
 
 /*
@@ -484,6 +508,28 @@ api.interceptors.response.use(
     */
 
     if (status === 401) {
+      const insideBackOffice =
+        typeof window !== "undefined" &&
+        window.location.pathname
+          .startsWith("/admin");
+
+      if (
+        insideBackOffice &&
+        !isCriticalAdminAuthRequest(
+          error.config
+        )
+      ) {
+        console.warn(
+          error.response?.data
+            ?.message ||
+          "Una solicitud del BackOffice no pudo completarse."
+        );
+
+        return Promise.reject(
+          error
+        );
+      }
+
       if (adminRequest) {
         clearAdminSession();
 
