@@ -16,6 +16,8 @@ import {
 
 import useMessages from "../hooks/useMessages";
 
+import NewConversationModal from "../components/messages/conversation/NewConversationModal";
+
 import "../styles/messages.css";
 
 export default function Messages({
@@ -35,6 +37,11 @@ export default function Messages({
     detailsOpen,
     setDetailsOpen
   ] = useState(true);
+
+  const [
+    newConversationOpen,
+    setNewConversationOpen
+  ] = useState(false);
 
   const [
     sidebarCollapsed,
@@ -302,6 +309,14 @@ export default function Messages({
               onRefresh={
                 chat.loadConversations
               }
+              adminMode={
+                adminMode
+              }
+              onNewConversation={() =>
+                setNewConversationOpen(
+                  true
+                )
+              }
             />
 
             <ChatWindow
@@ -434,6 +449,21 @@ export default function Messages({
           </section>
         </main>
       </div>
+
+      <NewConversationModal
+        open={
+          adminMode &&
+          newConversationOpen
+        }
+        onClose={() =>
+          setNewConversationOpen(
+            false
+          )
+        }
+        onCreate={
+          chat.createConversationWithUser
+        }
+      />
 
       <ImageViewer
         source={viewerSource}

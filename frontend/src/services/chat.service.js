@@ -16,6 +16,36 @@ const unwrap = (response, keys = []) => {
 
 const chatService = {
   getConversations: async (options = {}) => unwrap(await api.get("/messages/conversations", requestConfig(options)), ["conversations", "data"]) || [],
+  searchDirectory: async (
+    {
+      type = "CUSTOMER",
+      q = "",
+      department = "",
+      limit = 25
+    } = {},
+    options = {}
+  ) => {
+    const response =
+      await api.get(
+        "/admin/chat-directory",
+        {
+          ...requestConfig(options),
+          params: {
+            type,
+            q,
+            department:
+              department ||
+              undefined,
+            limit
+          }
+        }
+      );
+
+    return unwrap(
+      response,
+      ["users", "data"]
+    ) || [];
+  },
   createConversation: async (payload, options = {}) => unwrap(await api.post("/messages/conversations", payload, requestConfig(options)), ["conversation", "data"]),
   getMessages: async (id, options = {}) => unwrap(await api.get(`/messages/conversations/${id}`, requestConfig(options)), ["messages", "data"]) || [],
   markRead: (id, options = {}) => api.patch(`/messages/conversations/${id}/read`, {}, requestConfig(options)),
@@ -27,7 +57,7 @@ const chatService = {
   archive: async (id, options = {}) => unwrap(await api.patch(`/messages/conversations/${id}/archive`, {}, requestConfig(options)), ["conversation", "data"]),
   mute: async (id, options = {}) => unwrap(await api.patch(`/messages/conversations/${id}/mute`, {}, requestConfig(options)), ["conversation", "data"]),
   block: async (id, options = {}) => unwrap(await api.patch(`/messages/conversations/${id}/block`, {}, requestConfig(options)), ["conversation", "data"]),
-  addLabel: (id, label) => api.post(`/messages/conversations/${id}/labels`, label),
+  addLabel: (id, label, options = {}) => api.post(`/messages/conversations/${id}/labels`, label, requestConfig(options)),
   upload: async (file, options = {}) => {
     const formData = new FormData();
     formData.append("file", file);

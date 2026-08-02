@@ -34,6 +34,9 @@ const userRoutes = require("./routes/user.routes");
 const settingsRoutes = require("./routes/settings.routes");
 
 const adminRoutes = require("./routes/admin.routes");
+const adminChatDirectoryRoutes = require(
+  "./routes/adminChatDirectory.routes"
+);
 const adminSystemSettingRoutes = require(
   "./routes/adminSystemSetting.routes"
 );
@@ -435,6 +438,11 @@ app.use(
 app.use(
   "/api/admin",
   operationsAdminRoutes
+);
+
+app.use(
+  "/api/admin/chat-directory",
+  adminChatDirectoryRoutes
 );
 
 app.use(

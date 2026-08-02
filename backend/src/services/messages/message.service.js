@@ -287,6 +287,10 @@ const userSelect = {
   lastName: true,
   email: true,
   role: true,
+  accountType: true,
+  department: true,
+  departments: true,
+  employeeCode: true,
   trustScore: true,
   isVerified: true,
   status: true,
@@ -456,8 +460,34 @@ const serializeConversation = (conversation, currentUserId) => {
     (membership) => membership.userId === currentUserId
   );
 
+  const participantIsInternal =
+    (participant) =>
+      String(
+        participant?.accountType || ""
+      ).toUpperCase() !== "CUSTOMER" ||
+      String(
+        participant?.role || ""
+      ).toUpperCase() !== "USER" ||
+      String(
+        participant?.department || ""
+      ).toUpperCase() !== "CUSTOMER" ||
+      String(
+        participant?.employeeCode || ""
+      ).trim() !== "";
+
+  const channelType =
+    participants.length > 0 &&
+    participants.every(
+      participantIsInternal
+    )
+      ? "INTERNAL"
+      : "EXTERNAL";
+
   return {
     ...conversation,
+    channelType,
+    isInternal:
+      channelType === "INTERNAL",
     id: conversation.id,
     _id: String(conversation.id),
     participants,

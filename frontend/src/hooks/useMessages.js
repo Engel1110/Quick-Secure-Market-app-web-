@@ -748,16 +748,19 @@ export default function useMessages({ adminMode = false } = {}) {
           ) {
             const created =
               await chatService
-                .createConversation({
-                  receiverId:
-                    targetUserId,
-                  orderId:
-                    orderId ||
-                    undefined,
-                  productId:
-                    productId ||
-                    undefined
-                });
+                .createConversation(
+                  {
+                    receiverId:
+                      targetUserId,
+                    orderId:
+                      orderId ||
+                      undefined,
+                    productId:
+                      productId ||
+                      undefined
+                  },
+                  serviceOptions
+                );
 
             setActiveConversation(
               created
@@ -2539,6 +2542,78 @@ export default function useMessages({ adminMode = false } = {}) {
       }
     };
 
+  const createConversationWithUser =
+    useCallback(
+      async (target) => {
+        const receiverId =
+          normalizeEntityId(
+            target
+          );
+
+        if (!receiverId) {
+          setError(
+            "Selecciona un destinatario válido."
+          );
+
+          return null;
+        }
+
+        try {
+          setActionLoading(
+            "new-conversation"
+          );
+
+          setError("");
+          setNotice("");
+
+          const created =
+            await chatService
+              .createConversation(
+                {
+                  receiverId
+                },
+                serviceOptions
+              );
+
+          setConversations(
+            (current) =>
+              sortConversations(
+                dedupeConversations([
+                  created,
+                  ...current
+                ])
+              )
+          );
+
+          setActiveConversation(
+            created
+          );
+
+          setNotice(
+            target?.destinationType ===
+              "INTERNAL"
+              ? "Conversación interna abierta."
+              : "Conversación oficial con el usuario abierta."
+          );
+
+          return created;
+        } catch (
+          requestError
+        ) {
+          setError(
+            requestError?.response
+              ?.data?.message ||
+            "No se pudo abrir la conversación."
+          );
+
+          return null;
+        } finally {
+          setActionLoading("");
+        }
+      },
+      [serviceOptions]
+    );
+
   const selectConversation =
     useCallback(
       (conversation) => {
@@ -2609,6 +2684,7 @@ export default function useMessages({ adminMode = false } = {}) {
     notice,
 
     loadConversations,
+    createConversationWithUser,
     selectConversation,
 
     selectFile,

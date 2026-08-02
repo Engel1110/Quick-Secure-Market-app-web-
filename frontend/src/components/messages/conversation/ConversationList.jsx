@@ -53,7 +53,9 @@ export default function ConversationList({
   search = "",
   setSearch,
   onSelect,
-  onRefresh
+  onRefresh,
+  adminMode = false,
+  onNewConversation
 }) {
   const safeConversations =
     Array.isArray(conversations)
@@ -78,18 +80,32 @@ export default function ConversationList({
           </h2>
         </div>
 
-        <button
-          type="button"
-          className="qsm-icon-button"
-          onClick={() =>
-            onRefresh?.()
-          }
-          disabled={loading}
-          title="Actualizar conversaciones"
-          aria-label="Actualizar conversaciones"
-        >
-          ↻
-        </button>
+        <div className="qsm-conversation-header-actions">
+          {adminMode && (
+            <button
+              type="button"
+              className="qsm-new-conversation-button"
+              onClick={
+                onNewConversation
+              }
+            >
+              + Nueva
+            </button>
+          )}
+
+          <button
+            type="button"
+            className="qsm-icon-button"
+            onClick={() =>
+              onRefresh?.()
+            }
+            disabled={loading}
+            title="Actualizar conversaciones"
+            aria-label="Actualizar conversaciones"
+          >
+            ↻
+          </button>
+        </div>
       </div>
 
       <label className="qsm-chat-search">
@@ -248,13 +264,34 @@ export default function ConversationList({
                     </div>
 
                     <span className="qsm-conversation-product">
+                      {adminMode && (
+                        <b
+                          className={
+                            conversation?.channelType ===
+                              "INTERNAL"
+                              ? "qsm-channel-pill is-internal"
+                              : "qsm-channel-pill is-external"
+                          }
+                        >
+                          {conversation?.channelType ===
+                            "INTERNAL"
+                            ? "INTERNO"
+                            : "USUARIO"}
+                        </b>
+                      )}
+
                       {conversation
                         ?.product
                         ?.title ||
                         conversation
                           ?.product
                           ?.name ||
-                        "Conversación QSM"}
+                        (
+                          conversation?.channelType ===
+                            "INTERNAL"
+                            ? "Conversación entre oficinas"
+                            : "Conversación QSM"
+                        )}
                     </span>
 
                     <p>
