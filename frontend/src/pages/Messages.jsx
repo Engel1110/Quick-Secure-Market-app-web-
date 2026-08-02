@@ -4,7 +4,6 @@ import {
 } from "react";
 
 import Sidebar from "../components/Sidebar";
-import AdminSidebar from "../components/admin/AdminSidebar";
 import Topbar from "../components/Topbar";
 import AiAssistant from "../components/AiAssistant";
 
@@ -183,17 +182,15 @@ export default function Messages({
         className="qsm-messages-shell"
         style={{
           gridTemplateColumns:
-            sidebarCollapsed
-              ? "96px minmax(0, 1fr)"
-              : adminMode
-                ? "280px minmax(0, 1fr)"
+            adminMode
+              ? "minmax(0, 1fr)"
+              : sidebarCollapsed
+                ? "96px minmax(0, 1fr)"
                 : "300px minmax(0, 1fr)"
         }}
       >
         <div className="qsm-messages-sidebar">
-          {adminMode ? (
-            <AdminSidebar />
-          ) : (
+          {!adminMode && (
             <Sidebar />
           )}
         </div>

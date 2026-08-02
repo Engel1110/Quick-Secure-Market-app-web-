@@ -48,6 +48,7 @@ import {
 
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminProtectedRoute from "./components/AdminProtectedRoute";
+import AdminLayout from "./components/admin/AdminLayout";
 import "./styles/qsm-responsive-global.css";
 import "./styles/qsm-route-loading.css";
 
@@ -360,7 +361,9 @@ function App() {
                 "ADMINISTRATION"
               ]}
             >
-              <AdminDashboard />
+              <AdminLayout>
+                <AdminDashboard />
+              </AdminLayout>
             </AdminProtectedRoute>
           }
         />
@@ -378,7 +381,9 @@ function App() {
         "WAREHOUSE"
       ]}
     >
-      <WarehouseDashboard />
+      <AdminLayout>
+                <WarehouseDashboard />
+              </AdminLayout>
     </AdminProtectedRoute>
   }
 />
@@ -396,7 +401,9 @@ function App() {
         "DELIVERY"
       ]}
     >
-      <DeliveryDashboard />
+      <AdminLayout>
+                <DeliveryDashboard />
+              </AdminLayout>
     </AdminProtectedRoute>
   }
 />
@@ -412,7 +419,9 @@ function App() {
         "DISPUTES"
       ]}
     >
-      <DisputesDashboard />
+      <AdminLayout>
+                <DisputesDashboard />
+              </AdminLayout>
     </AdminProtectedRoute>
   }
 />
@@ -427,7 +436,9 @@ function App() {
         "AUDIT"
       ]}
     >
-      <AuditDashboard />
+      <AdminLayout>
+                <AuditDashboard />
+              </AdminLayout>
     </AdminProtectedRoute>
   }
 />
@@ -443,7 +454,9 @@ function App() {
         "VERIFICATION"
       ]}
     >
-      <VerificationDashboard />
+      <AdminLayout>
+                <VerificationDashboard />
+              </AdminLayout>
     </AdminProtectedRoute>
   }
 />
@@ -463,7 +476,9 @@ function App() {
         "ADMINISTRATION"
       ]}
     >
-      <FinanceDashboard />
+      <AdminLayout>
+                <FinanceDashboard />
+              </AdminLayout>
     </AdminProtectedRoute>
   }
 />
@@ -479,17 +494,23 @@ function App() {
         "SUPPORT"
       ]}
     >
-      <SupportDashboard />
+      <AdminLayout>
+                <SupportDashboard />
+              </AdminLayout>
     </AdminProtectedRoute>
   }
 />
 <Route
   path="/admin/moderation"
-  element={<ModerationDashboard />}
+  element={<AdminLayout>
+                <ModerationDashboard />
+              </AdminLayout>}
 />
 <Route
   path="/admin/security"
-  element={<SecurityDashboard />}
+  element={<AdminLayout>
+                <SecurityDashboard />
+              </AdminLayout>}
 />
 
         <Route
@@ -518,7 +539,9 @@ function App() {
                 "SUPPORT_AGENT"
               ]}
             >
-              <Messages adminMode />
+              <AdminLayout>
+                <Messages adminMode />
+              </AdminLayout>
             </AdminProtectedRoute>
           }
         />
@@ -537,7 +560,9 @@ function App() {
                 "ADMINISTRATION"
               ]}
             >
-              <InternalUsers />
+              <AdminLayout>
+                <InternalUsers />
+              </AdminLayout>
             </AdminProtectedRoute>
           }
         />
@@ -554,7 +579,9 @@ function App() {
                 "ADMINISTRATION"
               ]}
             >
-              <SystemSettings />
+              <AdminLayout>
+                <SystemSettings />
+              </AdminLayout>
             </AdminProtectedRoute>
           }
         />
