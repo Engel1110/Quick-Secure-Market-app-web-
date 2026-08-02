@@ -19,6 +19,7 @@ import { io } from "socket.io-client";
  */
 
 let socket = null;
+let activeSocketToken = "";
 
 /**
  * Tiempo máximo para esperar una confirmación del servidor.
@@ -52,6 +53,11 @@ const getSocketUrl = () => {
  * Busca el token en las ubicaciones utilizadas por QSM.
  */
 export const getStoredToken = () => {
+  const adminMode = typeof window !== "undefined" && window.location.pathname.startsWith("/admin");
+  if (adminMode) {
+    const adminToken = localStorage.getItem("qsm_admin_token") || sessionStorage.getItem("qsm_admin_token") || "";
+    if (adminToken) return adminToken;
+  }
   return (
     localStorage.getItem("qsm_token") ||
     sessionStorage.getItem("qsm_token") ||
@@ -157,6 +163,16 @@ export const connectSocket = (providedToken = "") => {
     return null;
   }
 
+  const tokenChanged =
+    Boolean(activeSocketToken) &&
+    activeSocketToken !== token;
+
+  if (tokenChanged && socket) {
+    socket.removeAllListeners();
+    socket.disconnect();
+    socket = null;
+  }
+
   if (!socket) {
     socket = io(getSocketUrl(), {
       autoConnect: false,
@@ -187,6 +203,8 @@ export const connectSocket = (providedToken = "") => {
   /**
    * Actualiza el token antes de cada conexión o reconexión.
    */
+  activeSocketToken = token;
+
   socket.auth = {
     token
   };
@@ -265,13 +283,29 @@ export const disconnectSocket = () => {
  * Garantiza que exista una conexión.
  */
 const ensureSocket = () => {
+  const expectedToken =
+    getStoredToken();
+
   if (!socket) {
-    return connectSocket();
+    return connectSocket(
+      expectedToken
+    );
+  }
+
+  if (
+    expectedToken &&
+    activeSocketToken !== expectedToken
+  ) {
+    return connectSocket(
+      expectedToken
+    );
   }
 
   if (!socket.connected) {
     socket.auth = {
-      token: getStoredToken()
+      token:
+        activeSocketToken ||
+        expectedToken
     };
 
     socket.connect();

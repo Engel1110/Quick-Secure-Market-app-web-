@@ -415,7 +415,7 @@ function conversationStateForUser(
   );
 }
 
-export default function useMessages() {
+export default function useMessages({ adminMode = false } = {}) {
   const location =
     useLocation();
 
@@ -438,20 +438,20 @@ export default function useMessages() {
     useRef(null);
 
   const user = useMemo(
-    () =>
-      safeJson(
-        localStorage.getItem(
-          "qsm_user"
-        )
-      ) ||
-      safeJson(
-        localStorage.getItem(
-          "user"
-        )
-      ) ||
-      {},
-    []
+    () => adminMode
+      ? (safeJson(localStorage.getItem("qsm_admin_user")) || safeJson(sessionStorage.getItem("qsm_admin_user")) || {})
+      : (safeJson(localStorage.getItem("qsm_user")) || safeJson(localStorage.getItem("user")) || {}),
+    [adminMode]
   );
+
+  const authenticationToken = useMemo(
+    () => adminMode
+      ? (localStorage.getItem("qsm_admin_token") || sessionStorage.getItem("qsm_admin_token") || "")
+      : "",
+    [adminMode]
+  );
+
+  const serviceOptions = useMemo(() => ({ adminMode }), [adminMode]);
 
   const currentUserId =
     normalizeEntityId(user);
@@ -671,8 +671,7 @@ export default function useMessages() {
           setError("");
 
           const received =
-            await chatService
-              .getConversations();
+            await chatService.getConversations(serviceOptions);
 
           const list =
             sortConversations(
@@ -872,7 +871,8 @@ export default function useMessages() {
           const received =
             await chatService
               .getMessages(
-                conversationId
+                conversationId,
+                serviceOptions
               );
 
           setMessages(
@@ -887,9 +887,7 @@ export default function useMessages() {
 
           try {
             await chatService
-              .markRead(
-                conversationId
-              );
+              .markRead(conversationId, serviceOptions);
 
             setConversationReadLocally(
               conversationId
@@ -1122,9 +1120,7 @@ export default function useMessages() {
           !mine
         ) {
           chatService
-            .markRead(
-              conversationId
-            )
+            .markRead(conversationId, serviceOptions)
             .then(() =>
               setConversationReadLocally(
                 conversationId
@@ -1522,7 +1518,7 @@ export default function useMessages() {
 
   useEffect(() => {
     const socket =
-      connectSocket();
+      connectSocket(authenticationToken);
 
     if (!socket) {
       setSocketConnected(
@@ -2009,7 +2005,7 @@ export default function useMessages() {
         if (file) {
           uploaded =
             await chatService
-              .upload(file);
+              .upload(file, serviceOptions);
         }
 
         const currentConversation =
@@ -2101,7 +2097,8 @@ export default function useMessages() {
         const created =
           await chatService
             .sendMessage(
-              payload
+              payload,
+              serviceOptions
             );
 
         setMessages(
@@ -2220,7 +2217,8 @@ export default function useMessages() {
 
         const updatedConversation =
           await chatService[action](
-            id
+            id,
+            serviceOptions
           );
 
         if (
@@ -2357,7 +2355,7 @@ export default function useMessages() {
 
         const updatedConversation =
           await chatService
-            .pinMessage(id);
+            .pinMessage(id, serviceOptions);
 
         applyConversationUpdate(
           updatedConversation
@@ -2421,7 +2419,8 @@ export default function useMessages() {
           await chatService
             .editMessage(
               id,
-              nextText.trim()
+              nextText.trim(),
+              serviceOptions
             );
 
         setMessages(
@@ -2481,7 +2480,7 @@ export default function useMessages() {
 
         const response =
           await chatService
-            .deleteMessage(id);
+            .deleteMessage(id, serviceOptions);
 
         const deleted =
           response?.data

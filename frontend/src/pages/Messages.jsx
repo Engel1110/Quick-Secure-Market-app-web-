@@ -21,7 +21,7 @@ import "../styles/messages.css";
 export default function Messages({
   adminMode = false
 }) {
-  const chat = useMessages();
+  const chat = useMessages({ adminMode });
 
   useEffect(() => {
     document.body.classList.add("qsm-messages-open");
@@ -189,11 +189,11 @@ export default function Messages({
                 : "300px minmax(0, 1fr)"
         }}
       >
-        <div className="qsm-messages-sidebar">
-          {!adminMode && (
+        {!adminMode && (
+          <div className="qsm-messages-sidebar">
             <Sidebar />
-          )}
-        </div>
+          </div>
+        )}
 
         <main className="qsm-messages-main">
           <Topbar />
