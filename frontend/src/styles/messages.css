@@ -2303,3 +2303,112 @@ body:not(.qsm-messages-open) {
     width: 100%;
   }
 }
+
+
+/* QSM FASE 6.3B.2 - IDENTIDAD OFICIAL */
+
+.qsm-message-bubble.is-qsm-official {
+  border-color: rgba(56, 189, 248, .52);
+  background: linear-gradient(145deg, rgba(8,47,73,.96), rgba(30,27,75,.94));
+  box-shadow: 0 10px 30px rgba(14,165,233,.12), inset 0 0 0 1px rgba(255,255,255,.025);
+}
+
+.qsm-message-row.is-mine .qsm-message-bubble.is-qsm-official {
+  background: linear-gradient(145deg, rgba(30,64,175,.96), rgba(91,33,182,.95));
+}
+
+.qsm-official-message-identity {
+  display: grid;
+  grid-template-columns: 30px minmax(0,1fr) 22px;
+  align-items: center;
+  gap: 9px;
+  margin: -2px -2px 10px;
+  padding: 8px 9px;
+  border: 1px solid rgba(125,211,252,.25);
+  border-radius: 11px;
+  background: rgba(2,6,23,.28);
+}
+
+.qsm-official-message-identity > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.qsm-official-message-identity strong {
+  color: #e0f2fe;
+  font-size: 9px;
+  font-weight: 950;
+  letter-spacing: .1em;
+}
+
+.qsm-official-message-identity small {
+  overflow: hidden;
+  color: #bae6fd;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qsm-official-shield {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(56,189,248,.3);
+  border-radius: 9px;
+  background: rgba(14,165,233,.14);
+  font-size: 15px;
+}
+
+.qsm-official-check {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #22c55e;
+  color: #052e16;
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.qsm-header-name-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.qsm-header-name-line h2 {
+  margin: 0;
+}
+
+.qsm-header-official-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 0 8px;
+  border: 1px solid rgba(56,189,248,.35);
+  border-radius: 999px;
+  background: rgba(14,165,233,.13);
+  color: #bae6fd;
+  font-size: 8px;
+  font-weight: 950;
+  letter-spacing: .08em;
+}
+
+@media (max-width: 640px) {
+  .qsm-official-message-identity {
+    grid-template-columns: 27px minmax(0,1fr) 20px;
+  }
+
+  .qsm-official-shield {
+    width: 27px;
+    height: 27px;
+  }
+
+  .qsm-header-official-badge {
+    font-size: 7px;
+  }
+}

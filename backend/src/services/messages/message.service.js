@@ -348,6 +348,71 @@ const conversationInclude = {
   }
 };
 
+const normalizeOfficialValue = (value) =>
+  String(value || "").trim();
+
+const normalizeOfficialUpper = (value) =>
+  normalizeOfficialValue(value).toUpperCase();
+
+const DEPARTMENT_LABELS = {
+  ADMINISTRATION: "Administración",
+  FINANCE: "Finanzas",
+  WAREHOUSE: "Almacén",
+  DELIVERY: "Delivery",
+  DISPUTES: "Disputas",
+  VERIFICATION: "Verificación",
+  SUPPORT: "Soporte",
+  SECURITY: "Seguridad",
+  MODERATION: "Moderación",
+  AUDIT: "Auditoría"
+};
+
+const isOfficialQsmUser = (user) => {
+  if (!user) return false;
+
+  const accountType = normalizeOfficialUpper(user.accountType);
+  const role = normalizeOfficialUpper(user.role);
+  const department = normalizeOfficialUpper(user.department);
+  const employeeCode = normalizeOfficialValue(user.employeeCode);
+
+  return (
+    ["INTERNAL", "ADMIN", "STAFF"].includes(accountType) ||
+    role !== "USER" ||
+    (department && department !== "CUSTOMER") ||
+    Boolean(employeeCode)
+  );
+};
+
+const buildOfficialIdentity = (user) => {
+  const official = isOfficialQsmUser(user);
+
+  if (!official) {
+    return {
+      official: false,
+      type: "CUSTOMER",
+      label: "Usuario de QSM",
+      department: "",
+      departmentLabel: "",
+      role: normalizeOfficialUpper(user?.role) || "USER",
+      employeeCode: ""
+    };
+  }
+
+  const department =
+    normalizeOfficialUpper(user?.department) ||
+    "ADMINISTRATION";
+
+  return {
+    official: true,
+    type: "QSM_OFFICIAL",
+    label: "QSM Oficial",
+    department,
+    departmentLabel: DEPARTMENT_LABELS[department] || department,
+    role: normalizeOfficialUpper(user?.role) || "STAFF",
+    employeeCode: normalizeOfficialValue(user?.employeeCode)
+  };
+};
+
 const serializeUser = (user) => {
   if (!user) {
     return null;
@@ -358,7 +423,8 @@ const serializeUser = (user) => {
     id: user.id,
     _id: toClientUserId(user.id),
     userId: user.id,
-    prismaId: user.id
+    prismaId: user.id,
+    officialIdentity: buildOfficialIdentity(user)
   };
 };
 
@@ -403,12 +469,20 @@ const serializeMessage = (message) => {
     return null;
   }
 
+  const messageOfficialIdentity =
+    buildOfficialIdentity(message.sender);
+
   return {
     ...message,
     _id: String(message.id),
     conversation: String(message.conversationId),
     sender: serializeUser(message.sender),
     receiver: serializeUser(message.receiver),
+    official: messageOfficialIdentity.official,
+    officialIdentity: messageOfficialIdentity,
+    senderType: messageOfficialIdentity.type,
+    senderDepartment: messageOfficialIdentity.department,
+    senderDepartmentLabel: messageOfficialIdentity.departmentLabel,
     product: serializeProduct(message.product),
     order: serializeOrder(message.order),
     replyTo: serializeReply(message.replyTo),

@@ -22,6 +22,24 @@ export default function ChatHeader({
   const avatar =
     getAvatar(otherUser);
 
+  const officialIdentity =
+    otherUser?.officialIdentity &&
+    typeof otherUser.officialIdentity === "object"
+      ? otherUser.officialIdentity
+      : null;
+
+  const official =
+    officialIdentity?.official === true;
+
+  const internalChannel =
+    conversation?.channelType === "INTERNAL" ||
+    conversation?.isInternal === true;
+
+  const departmentLabel =
+    officialIdentity?.departmentLabel ||
+    otherUser?.department ||
+    "Administración";
+
   const publicUserId =
     otherUser?.prismaId ??
     otherUser?.userId ??
@@ -30,7 +48,7 @@ export default function ChatHeader({
     "";
 
   const publicProfilePath =
-    publicUserId
+    publicUserId && !official
       ? `/users/${publicUserId}`
       : "";
 
@@ -99,10 +117,22 @@ export default function ChatHeader({
       </div>
 
       <div>
-        <h2>{name}</h2>
+        <div className="qsm-header-name-line">
+          <h2>{name}</h2>
+
+          {official && (
+            <span className="qsm-header-official-badge">
+              🛡 QSM OFICIAL
+            </span>
+          )}
+        </div>
 
         <p>
-          Ver perfil y reputación
+          {internalChannel
+            ? `Chat interno · ${departmentLabel}`
+            : official
+              ? `${departmentLabel} · Personal autorizado`
+              : "Ver perfil y reputación"}
         </p>
       </div>
     </>

@@ -43,6 +43,39 @@ export default function MessageBubble({
 
   const text = getMessageText(message);
 
+  const officialIdentity =
+    message?.officialIdentity &&
+    typeof message.officialIdentity === "object"
+      ? message.officialIdentity
+      : null;
+
+  const official =
+    officialIdentity?.official === true &&
+    message?.official === true;
+
+  const officialDepartment =
+    officialIdentity?.departmentLabel ||
+    message?.senderDepartmentLabel ||
+    officialIdentity?.department ||
+    message?.senderDepartment ||
+    "Administración";
+
+  const officialAgent =
+    [message?.sender?.firstName, message?.sender?.lastName]
+      .filter(Boolean)
+      .join(" ")
+      .trim() ||
+    message?.sender?.name ||
+    "Personal autorizado";
+
+  const internalMessage =
+    official &&
+    String(
+      message?.conversationType ||
+      message?.channelType ||
+      ""
+    ).toUpperCase() === "INTERNAL";
+
   const attachments =
     Array.isArray(
       message?.attachments
@@ -134,8 +167,37 @@ export default function MessageBubble({
           deleted
             ? "is-deleted"
             : ""
+        } ${
+          official
+            ? "is-qsm-official"
+            : ""
         }`}
       >
+        {official && !deleted && (
+          <div className="qsm-official-message-identity">
+            <span className="qsm-official-shield">🛡</span>
+
+            <div>
+              <strong>
+                {internalMessage
+                  ? "MENSAJE INTERNO QSM"
+                  : "QSM OFICIAL"}
+              </strong>
+
+              <small>
+                {officialDepartment}
+                {" · "}
+                {officialAgent}
+                {officialIdentity?.employeeCode
+                  ? ` · ${officialIdentity.employeeCode}`
+                  : ""}
+              </small>
+            </div>
+
+            <span className="qsm-official-check">✓</span>
+          </div>
+        )}
+
         {message?.replyTo && (
           <div className="qsm-message-reply">
             <strong>
