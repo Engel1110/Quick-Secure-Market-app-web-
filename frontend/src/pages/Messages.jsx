@@ -4,6 +4,7 @@ import {
 } from "react";
 
 import Sidebar from "../components/Sidebar";
+import AdminSidebar from "../components/admin/AdminSidebar";
 import Topbar from "../components/Topbar";
 import AiAssistant from "../components/AiAssistant";
 
@@ -18,7 +19,9 @@ import useMessages from "../hooks/useMessages";
 
 import "../styles/messages.css";
 
-export default function Messages() {
+export default function Messages({
+  adminMode = false
+}) {
   const chat = useMessages();
 
   useEffect(() => {
@@ -182,11 +185,17 @@ export default function Messages() {
           gridTemplateColumns:
             sidebarCollapsed
               ? "96px minmax(0, 1fr)"
-              : "300px minmax(0, 1fr)"
+              : adminMode
+                ? "280px minmax(0, 1fr)"
+                : "300px minmax(0, 1fr)"
         }}
       >
         <div className="qsm-messages-sidebar">
-          <Sidebar />
+          {adminMode ? (
+            <AdminSidebar />
+          ) : (
+            <Sidebar />
+          )}
         </div>
 
         <main className="qsm-messages-main">
@@ -195,23 +204,26 @@ export default function Messages() {
           <section className="qsm-messages-title">
             <div>
               <p className="qsm-eyebrow">
-                CENTRO DE MENSAJES QSM
+                {adminMode
+                  ? "CENTRO DE COMUNICACIÓN ADMINISTRATIVA"
+                  : "CENTRO DE MENSAJES QSM"}
               </p>
 
               <h1>
-                Conversaciones{" "}
+                {adminMode
+                  ? "Chat "
+                  : "Conversaciones "}
                 <span>
-                  seguras
+                  {adminMode
+                    ? "administrativo"
+                    : "seguras"}
                 </span>
               </h1>
 
               <p>
-                Comunícate con
-                compradores y
-                vendedores, comparte
-                evidencia y mantén
-                cada acuerdo dentro
-                de QSM.
+                {adminMode
+                  ? "Gestiona conversaciones operativas, utiliza respuestas predeterminadas y mantén la comunicación de cada área dentro de QSM."
+                  : "Comunícate con compradores y vendedores, comparte evidencia y mantén cada acuerdo dentro de QSM."}
               </p>
             </div>
 
@@ -222,12 +234,15 @@ export default function Messages() {
 
               <div>
                 <strong>
-                  Protección activa
+                  {adminMode
+                    ? "Canal administrativo"
+                    : "Protección activa"}
                 </strong>
 
                 <p>
-                  Mensajes asociados a
-                  productos y órdenes.
+                  {adminMode
+                    ? "Comunicación trazable por área, orden y caso."
+                    : "Mensajes asociados a productos y órdenes."}
                 </p>
               </div>
             </div>
@@ -436,7 +451,13 @@ export default function Messages() {
         }}
       />
 
-      <AiAssistant pageContext="messages" />
+      <AiAssistant
+        pageContext={
+          adminMode
+            ? "admin-messages"
+            : "messages"
+        }
+      />
     </div>
   );
 }

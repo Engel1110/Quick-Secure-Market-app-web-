@@ -493,6 +493,37 @@ function App() {
 />
 
         <Route
+          path="/admin/messages"
+          element={
+            <AdminProtectedRoute
+              allowedRoles={[
+                "SUPER_ADMIN",
+                "SENIOR_ADMIN",
+                "ADMIN",
+                "SUPERVISOR",
+                "AUDITOR",
+                "DISPUTE_MANAGER",
+                "DISPUTE_AGENT",
+                "VERIFICATION_MANAGER",
+                "VERIFICATION_AGENT",
+                "WAREHOUSE_MANAGER",
+                "WAREHOUSE_SUPERVISOR",
+                "WAREHOUSE_STAFF",
+                "DELIVERY_MANAGER",
+                "DELIVERY_SUPERVISOR",
+                "DELIVERY_AGENT",
+                "FINANCE_MANAGER",
+                "FINANCE_AGENT",
+                "SUPPORT_MANAGER",
+                "SUPPORT_AGENT"
+              ]}
+            >
+              <Messages adminMode />
+            </AdminProtectedRoute>
+          }
+        />
+
+        <Route
           path="/admin/internal-users"
           element={
             <AdminProtectedRoute
