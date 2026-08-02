@@ -104,6 +104,67 @@ const isAdminRequest = (config) => {
   );
 };
 
+const stripBearer = (value) =>
+  String(value || "")
+    .replace(/^Bearer\s+/i, "")
+    .trim();
+
+const isAdminSessionRequest = (
+  config
+) => {
+  if (
+    config?.qsmSession === "admin" ||
+    config?.qsmAdminMode === true
+  ) {
+    return true;
+  }
+
+  if (isAdminRequest(config)) {
+    return true;
+  }
+
+  const authorization =
+    getHeaderValue(
+      config?.headers,
+      "Authorization"
+    );
+
+  const tokenInRequest =
+    stripBearer(authorization);
+
+  const adminToken =
+    String(
+      getAdminToken() || ""
+    ).trim();
+
+  if (
+    tokenInRequest &&
+    adminToken &&
+    tokenInRequest === adminToken
+  ) {
+    return true;
+  }
+
+  const requestPath =
+    getRequestPath(config);
+
+  const insideBackOffice =
+    typeof window !== "undefined" &&
+    window.location.pathname
+      .startsWith("/admin");
+
+  return (
+    insideBackOffice &&
+    (
+      requestPath === "/messages" ||
+      requestPath.startsWith(
+        "/messages/"
+      ) ||
+      requestPath === "/upload/chat"
+    )
+  );
+};
+
 /*
 |--------------------------------------------------------------------------
 | Detectar FormData
@@ -148,6 +209,36 @@ const removeHeader = (
   ];
 };
 
+const getHeaderValue = (
+  headers,
+  headerName
+) => {
+  if (!headers) {
+    return "";
+  }
+
+  if (
+    typeof headers.get ===
+    "function"
+  ) {
+    return String(
+      headers.get(headerName) ||
+      headers.get(
+        headerName.toLowerCase()
+      ) ||
+      ""
+    ).trim();
+  }
+
+  return String(
+    headers[headerName] ||
+    headers[
+      headerName.toLowerCase()
+    ] ||
+    ""
+  ).trim();
+};
+
 const setHeader = (
   headers,
   headerName,
@@ -181,27 +272,43 @@ const setHeader = (
 
 api.interceptors.request.use(
   (config) => {
-    const adminRequest =
-      isAdminRequest(config);
-
-    const token = adminRequest
-      ? getAdminToken()
-      : getNormalToken();
-
     config.headers =
       config.headers || {};
+
+    const explicitAuthorization =
+      getHeaderValue(
+        config.headers,
+        "Authorization"
+      );
+
+    const adminRequest =
+      isAdminSessionRequest(config);
+
+    const selectedToken =
+      adminRequest
+        ? getAdminToken()
+        : getNormalToken();
 
     /*
     |--------------------------------------------------------------------------
     | Token correspondiente
     |--------------------------------------------------------------------------
+    |
+    | Si un servicio ya envió Authorization explícitamente, se conserva.
+    | Esto evita que /messages reemplace qsm_admin_token por qsm_token.
     */
 
-    if (token) {
+    if (explicitAuthorization) {
       setHeader(
         config.headers,
         "Authorization",
-        `Bearer ${token}`
+        explicitAuthorization
+      );
+    } else if (selectedToken) {
+      setHeader(
+        config.headers,
+        "Authorization",
+        `Bearer ${selectedToken}`
       );
     } else {
       removeHeader(
@@ -209,6 +316,11 @@ api.interceptors.request.use(
         "Authorization"
       );
     }
+
+    config.qsmResolvedSession =
+      adminRequest
+        ? "admin"
+        : "normal";
 
     /*
     |--------------------------------------------------------------------------
@@ -358,7 +470,10 @@ api.interceptors.response.use(
       error.response.status;
 
     const adminRequest =
-      isAdminRequest(
+      error.config
+        ?.qsmResolvedSession ===
+        "admin" ||
+      isAdminSessionRequest(
         error.config
       );
 

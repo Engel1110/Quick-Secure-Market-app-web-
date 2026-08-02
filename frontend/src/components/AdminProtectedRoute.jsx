@@ -143,8 +143,12 @@ function AdminProtectedRoute({
   ) {
     return (
       <Navigate
-        to="/admin/select-area"
+        to="/admin/dashboard"
         replace
+        state={{
+          accessDenied: true,
+          from: location.pathname
+        }}
       />
     );
   }

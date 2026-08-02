@@ -334,7 +334,7 @@ function App() {
           path="/admin"
           element={
             <Navigate
-              to="/admin/select-area"
+              to="/admin/dashboard"
               replace
             />
           }
@@ -639,7 +639,7 @@ function App() {
           path="/admin/*"
           element={
             <Navigate
-              to="/admin/select-area"
+              to="/admin/dashboard"
               replace
             />
           }
