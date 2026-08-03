@@ -1,21 +1,16 @@
-const nodemailer = require("nodemailer");
-const dns = require("node:dns");
+﻿const BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
 
-dns.setDefaultResultOrder("ipv4first");
-
-const REQUIRED_EMAIL_VARIABLES = [
-  "EMAIL_HOST",
-  "EMAIL_PORT",
-  "EMAIL_USER",
-  "EMAIL_PASS"
+const REQUIRED_BREVO_VARIABLES = [
+  "BREVO_API_KEY",
+  "EMAIL_USER"
 ];
 
 const getEmailConfiguration = () => ({
-  host: String(process.env.EMAIL_HOST || "").trim(),
-  port: Number(process.env.EMAIL_PORT || 587),
-  user: String(process.env.EMAIL_USER || "").trim(),
-  pass: String(process.env.EMAIL_PASS || ""),
-  fromName: String(process.env.EMAIL_FROM_NAME || "QSM Security").trim(),
+  apiKey: String(process.env.BREVO_API_KEY || "").trim(),
+  fromName: String(
+    process.env.EMAIL_FROM_NAME ||
+    "QSM Security"
+  ).trim(),
   fromAddress: String(
     process.env.EMAIL_FROM ||
     process.env.EMAIL_USER ||
@@ -26,112 +21,133 @@ const getEmailConfiguration = () => ({
 const validateEmailConfiguration = () => {
   const config = getEmailConfiguration();
 
-  const missing = REQUIRED_EMAIL_VARIABLES.filter(
+  const missing = REQUIRED_BREVO_VARIABLES.filter(
     (name) => !String(process.env[name] || "").trim()
   );
 
   if (missing.length > 0) {
     const error = new Error(
-      "Configuracion SMTP incompleta. Faltan: " +
+      "Configuracion Brevo incompleta. Faltan: " +
       missing.join(", ")
     );
 
-    error.code = "QSM_EMAIL_CONFIG_MISSING";
+    error.code = "QSM_BREVO_CONFIG_MISSING";
     error.missingVariables = missing;
-    throw error;
-  }
 
-  if (
-    !Number.isInteger(config.port) ||
-    config.port < 1 ||
-    config.port > 65535
-  ) {
-    const error = new Error("EMAIL_PORT no es valido.");
-    error.code = "QSM_EMAIL_PORT_INVALID";
     throw error;
   }
 
   return config;
 };
 
-let transporter = null;
+const normalizeRecipients = (to) => {
+  const values = Array.isArray(to) ? to : [to];
 
-const getTransporter = () => {
-  if (transporter) {
-    return transporter;
-  }
+  return values
+    .map((item) => {
+      if (typeof item === "string") {
+        return { email: item.trim() };
+      }
 
-  const config = validateEmailConfiguration();
-
-  transporter = nodemailer.createTransport({
-      family: 4,
-    host: config.host,
-    port: config.port,
-    secure: config.port === 465,
-    auth: {
-      user: config.user,
-      pass: config.pass
-    },
-    connectionTimeout: 15000,
-    greetingTimeout: 15000,
-    socketTimeout: 25000,
-    tls: {
-      minVersion: "TLSv1.2"
-    }
-  });
-
-  return transporter;
+      return {
+        email: String(item?.email || "").trim(),
+        ...(item?.name ? { name: String(item.name).trim() } : {})
+      };
+    })
+    .filter((item) => item.email);
 };
 
-const verifyEmailTransport = async () => {
+const extractBrevoError = async (response) => {
+  const raw = await response.text();
+
   try {
-    await getTransporter().verify();
-
-    return {
-      success: true,
-      message: "Conexion SMTP verificada correctamente."
-    };
-  } catch (error) {
-    const wrapped = new Error(
-      "No se pudo verificar la conexion SMTP: " +
-      (error?.response || error?.message || "Error desconocido")
-    );
-
-    wrapped.code = error?.code || "QSM_SMTP_VERIFY_FAILED";
-    wrapped.command = error?.command;
-    wrapped.responseCode = error?.responseCode;
-    throw wrapped;
+    const parsed = JSON.parse(raw);
+    return parsed?.message || parsed?.code || raw || "Error desconocido";
+  } catch {
+    return raw || "Error desconocido";
   }
 };
 
 const safeSendMail = async (options) => {
   const config = validateEmailConfiguration();
 
+  const payload = {
+    sender: {
+      name: config.fromName,
+      email: config.fromAddress
+    },
+    to: normalizeRecipients(options.to),
+    subject: String(options.subject || "").trim(),
+    htmlContent: String(options.html || ""),
+    textContent: String(options.text || "")
+  };
+
+  if (payload.to.length === 0) {
+    const error = new Error("No se indico un destinatario valido.");
+    error.code = "QSM_BREVO_RECIPIENT_REQUIRED";
+    throw error;
+  }
+
   try {
-    const result = await getTransporter().sendMail({
-      ...options,
-      from:
-        options.from ||
-        `"${config.fromName}" <${config.fromAddress}>`
+    const response = await fetch(BREVO_API_URL, {
+      method: "POST",
+      headers: {
+        accept: "application/json",
+        "api-key": config.apiKey,
+        "content-type": "application/json"
+      },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(25000)
     });
 
+    if (!response.ok) {
+      const detail = await extractBrevoError(response);
+
+      const error = new Error(
+        `Brevo rechazo el correo (${response.status}): ${detail}`
+      );
+
+      error.code = "QSM_BREVO_SEND_FAILED";
+      error.responseCode = response.status;
+      throw error;
+    }
+
+    const result = await response.json();
+
     return {
-      messageId: result.messageId,
-      accepted: result.accepted || [],
-      rejected: result.rejected || [],
-      response: result.response || ""
+      messageId: result?.messageId || null,
+      accepted: payload.to.map((item) => item.email),
+      rejected: [],
+      response: "BREVO_API_ACCEPTED"
     };
   } catch (error) {
+    if (error?.code === "QSM_BREVO_SEND_FAILED") {
+      throw error;
+    }
+
     const wrapped = new Error(
-      "No se pudo enviar el correo: " +
-      (error?.response || error?.message || "Error desconocido")
+      "No se pudo enviar el correo mediante Brevo: " +
+      (error?.message || "Error desconocido")
     );
 
-    wrapped.code = error?.code || "QSM_EMAIL_SEND_FAILED";
-    wrapped.command = error?.command;
-    wrapped.responseCode = error?.responseCode;
+    wrapped.code =
+      error?.name === "TimeoutError"
+        ? "QSM_BREVO_TIMEOUT"
+        : "QSM_BREVO_REQUEST_FAILED";
+
     throw wrapped;
   }
+};
+
+const verifyEmailTransport = async () => {
+  const config = validateEmailConfiguration();
+
+  return {
+    success: true,
+    message: "Configuracion de Brevo API detectada correctamente.",
+    provider: "BREVO_API",
+    sender: config.fromAddress
+  };
 };
 
 const escapeHtml = (value) =>
@@ -150,41 +166,37 @@ const sendPasswordResetEmail = async ({
 }) =>
   safeSendMail({
     to,
-    subject: "Restablece tu contrasena de Quick Secure Market",
+    subject: "Restablece tu contraseña de Quick Secure Market",
     text: [
       "Quick Secure Market",
       "",
-      "Recibimos una solicitud para restablecer tu contrasena.",
+      "Recibimos una solicitud para restablecer tu contraseña.",
       resetLink,
       "",
       "El enlace vence en 15 minutos.",
       "IP: " + ip,
-      "Dispositivo: " + device
+      "Dispositivo: " + device,
+      "",
+      "Si no solicitaste este cambio, ignora este correo."
     ].join("\n"),
     html: `
-      <div style="font-family:Arial;padding:32px;background:#f8fafc">
-        <h1 style="color:#2563eb">Quick Secure Market</h1>
-        <p>Recibimos una solicitud para restablecer tu contrasena.</p>
-        <p>
-          <a
-            href="${escapeHtml(resetLink)}"
-            style="
-              display:inline-block;
-              padding:14px 22px;
-              background:#2563eb;
-              color:white;
-              text-decoration:none;
-              border-radius:10px;
-              font-weight:bold;
-            "
-          >
-            Restablecer contrasena
-          </a>
-        </p>
-        <p>El enlace vence en 15 minutos.</p>
-        <p><b>IP:</b> ${escapeHtml(ip)}</p>
-        <p><b>Dispositivo:</b> ${escapeHtml(device)}</p>
-        <p>Si no solicitaste este cambio, ignora este correo.</p>
+      <div style="font-family:Arial,sans-serif;padding:32px;background:#f8fafc;color:#0f172a">
+        <div style="max-width:620px;margin:auto;background:#ffffff;padding:34px;border-radius:18px">
+          <h1 style="color:#2563eb">Quick Secure Market</h1>
+          <p>Recibimos una solicitud para restablecer tu contraseña.</p>
+          <p style="margin:30px 0">
+            <a
+              href="${escapeHtml(resetLink)}"
+              style="display:inline-block;padding:14px 22px;background:#2563eb;color:white;text-decoration:none;border-radius:10px;font-weight:bold"
+            >
+              Restablecer contraseña
+            </a>
+          </p>
+          <p>El enlace vence en <strong>15 minutos</strong>.</p>
+          <p><strong>IP:</strong> ${escapeHtml(ip)}</p>
+          <p><strong>Dispositivo:</strong> ${escapeHtml(device)}</p>
+          <p style="color:#64748b">Si no solicitaste este cambio, ignora este correo.</p>
+        </div>
       </div>
     `
   });
@@ -196,18 +208,20 @@ const sendPasswordChangedEmail = async ({
 }) =>
   safeSendMail({
     to,
-    subject: "Tu contrasena fue cambiada",
+    subject: "Tu contraseña de QSM fue cambiada",
     text: [
-      "La contrasena de tu cuenta QSM fue cambiada.",
+      "La contraseña de tu cuenta QSM fue cambiada.",
       "IP: " + ip,
-      "Dispositivo: " + device
+      "Dispositivo: " + device,
+      "",
+      "Si no fuiste tú, contacta con soporte."
     ].join("\n"),
     html: `
-      <div style="font-family:Arial;padding:32px;background:#f8fafc">
-        <h1 style="color:#16a34a">Contrasena actualizada</h1>
-        <p>La contrasena de tu cuenta QSM fue cambiada.</p>
-        <p><b>IP:</b> ${escapeHtml(ip)}</p>
-        <p><b>Dispositivo:</b> ${escapeHtml(device)}</p>
+      <div style="font-family:Arial,sans-serif;padding:32px;background:#f8fafc">
+        <h1 style="color:#16a34a">Contraseña actualizada</h1>
+        <p>La contraseña de tu cuenta QSM fue cambiada.</p>
+        <p><strong>IP:</strong> ${escapeHtml(ip)}</p>
+        <p><strong>Dispositivo:</strong> ${escapeHtml(device)}</p>
       </div>
     `
   });
@@ -215,12 +229,12 @@ const sendPasswordChangedEmail = async ({
 const sendTestEmail = async ({ to }) =>
   safeSendMail({
     to,
-    subject: "Prueba SMTP de QSM",
-    text: "La configuracion SMTP de QSM funciona correctamente.",
+    subject: "Prueba Brevo API de QSM",
+    text: "La integracion de QSM con Brevo API funciona correctamente.",
     html: `
-      <div style="font-family:Arial;padding:32px;background:#f8fafc">
-        <h1 style="color:#2563eb">SMTP de QSM confirmado</h1>
-        <p>La configuracion de correo funciona correctamente.</p>
+      <div style="font-family:Arial,sans-serif;padding:32px;background:#f8fafc">
+        <h1 style="color:#2563eb">Brevo API de QSM confirmada</h1>
+        <p>La integracion de correo funciona correctamente mediante HTTPS.</p>
       </div>
     `
   });
