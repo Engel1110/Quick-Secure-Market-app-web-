@@ -1512,6 +1512,63 @@ const deleteRecoveryEmail = async (
   }
 };
 
+const getForgotPasswordDestination = async (
+  req,
+  res
+) => {
+  try {
+    const cleanEmail = normalizeEmail(req.body?.email);
+
+    const genericResponse = {
+      success: true,
+      found: false,
+      recoveryAvailable: false,
+      recoveryEmailMasked: "",
+      message: "No encontramos un correo de recuperaciÃ³n verificado para esa cuenta."
+    };
+
+    if (!cleanEmail || !validator.isEmail(cleanEmail)) {
+      return res.status(200).json(genericResponse);
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { email: cleanEmail },
+      select: {
+        id: true,
+        status: true,
+        recoveryEmail: true,
+        recoveryEmailVerifiedAt: true
+      }
+    });
+
+    if (!user || ["BANNED","DELETED"].includes(normalizeUpper(user.status))) {
+      return res.status(200).json(genericResponse);
+    }
+
+    if (!user.recoveryEmail || !user.recoveryEmailVerifiedAt) {
+      return res.status(200).json({
+        ...genericResponse,
+        found: true,
+        message: "Esta cuenta todavÃ­a no tiene un correo de recuperaciÃ³n verificado."
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      found: true,
+      recoveryAvailable: true,
+      recoveryEmailMasked: maskEmail(user.recoveryEmail),
+      message: "Encontramos un correo de recuperaciÃ³n verificado."
+    });
+  } catch (error) {
+    console.error("Error getForgotPasswordDestination:", error);
+    return res.status(500).json({
+      success: false,
+      message: "No se pudo consultar el mÃ©todo de recuperaciÃ³n."
+    });
+  }
+};
+
 const forgotPassword = async (
   req,
   res
@@ -2034,6 +2091,7 @@ module.exports = {
   login,
   adminLogin,
   getMe,
+  getForgotPasswordDestination,
   getRecoveryEmailStatus,
   requestRecoveryEmailVerification,
   verifyRecoveryEmail,

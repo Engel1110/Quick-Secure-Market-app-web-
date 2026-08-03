@@ -8,6 +8,7 @@ const {
   login,
   adminLogin,
   getMe,
+  getForgotPasswordDestination,
   getRecoveryEmailStatus,
   requestRecoveryEmailVerification,
   verifyRecoveryEmail,
@@ -89,6 +90,12 @@ router.delete(
   "/recovery-email",
   authMiddleware,
   deleteRecoveryEmail
+);
+
+router.post(
+  "/forgot-password/destination",
+  forgotPasswordLimiter,
+  getForgotPasswordDestination
 );
 
 router.post(
