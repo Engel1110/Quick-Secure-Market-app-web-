@@ -118,11 +118,18 @@ model User {
   deletedAt        DateTime?
   deletedById      Int?
 
-  // Recuperaci?n y contrase?a
-  resetPasswordToken   String?
-  resetPasswordExpires DateTime?
-  passwordChangedAt    DateTime?
-  passwordVersion      Int       @default(0)
+// Recuperación y contraseña
+recoveryEmail                    String?
+pendingRecoveryEmail             String?
+recoveryEmailVerifiedAt          DateTime?
+recoveryEmailVerificationToken   String?   @unique
+recoveryEmailVerificationExpires DateTime?
+recoveryEmailUpdatedAt           DateTime?
+
+resetPasswordToken   String?
+resetPasswordExpires DateTime?
+passwordChangedAt    DateTime?
+passwordVersion      Int       @default(0)
 
   // Preferencias
   language                  String  @default("es")
@@ -1133,4 +1140,6 @@ model Shipping {
   @@index([buyerId, createdAt])
   @@index([sellerId, createdAt])
   @@index([status, createdAt])
+  @@index([recoveryEmail])
+  @@index([pendingRecoveryEmail])
 }
