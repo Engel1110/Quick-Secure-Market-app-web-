@@ -1,4 +1,7 @@
-﻿const nodemailer = require("nodemailer");
+const nodemailer = require("nodemailer");
+const dns = require("node:dns");
+
+dns.setDefaultResultOrder("ipv4first");
 
 const REQUIRED_EMAIL_VARIABLES = [
   "EMAIL_HOST",
@@ -61,6 +64,7 @@ const getTransporter = () => {
   const config = validateEmailConfiguration();
 
   transporter = nodemailer.createTransport({
+      family: 4,
     host: config.host,
     port: config.port,
     secure: config.port === 465,
