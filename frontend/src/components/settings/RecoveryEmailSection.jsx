@@ -301,7 +301,7 @@ function RecoveryEmailSection() {
                     event.target.value
                   )
                 }
-                placeholder="enyelfeliz2000@gmail.com"
+                placeholder="ejemplo@gmail.com"
                 autoComplete="email"
                 disabled={saving}
                 style={input}
