@@ -1088,7 +1088,7 @@ const forgotPassword = async (
       );
 
     const genericMessage =
-      "Si existe una cuenta asociada, recibir?s un correo de recuperaci?n.";
+      "Si existe una cuenta asociada, recibir\u00e1s un correo de recuperaci\u00f3n.";
 
     if (
       !cleanEmail ||
@@ -1154,12 +1154,39 @@ const forgotPassword = async (
       }
     });
 
-    const frontendUrl =
+    const configuredFrontendUrl =
       process.env.FRONTEND_URL ||
       getFrontendUrl();
 
+    const frontendUrl =
+      String(
+        configuredFrontendUrl || ""
+      )
+        .trim()
+        .replace(/\/+$/, "");
+
+    if (!frontendUrl) {
+      await prisma.user.update({
+        where: {
+          id: user.id
+        },
+        data: {
+          resetPasswordToken: null,
+          resetPasswordExpires: null
+        }
+      });
+
+      throw new Error(
+        "FRONTEND_URL no est\u00e1 configurado."
+      );
+    }
+
     const resetLink =
-      `${frontendUrl}/reset-password?token=${resetToken}`;
+      frontendUrl +
+      "/reset-password?token=" +
+      encodeURIComponent(
+        resetToken
+      );
 
     try {
       await sendPasswordResetEmail({
@@ -1175,10 +1202,8 @@ const forgotPassword = async (
           id: user.id
         },
         data: {
-          resetPasswordToken:
-            null,
-          resetPasswordExpires:
-            null
+          resetPasswordToken: null,
+          resetPasswordExpires: null
         }
       });
 
@@ -1198,7 +1223,7 @@ const forgotPassword = async (
     return res.status(500).json({
       success: false,
       message:
-        "Error enviando correo de recuperaci?n.",
+        "No se pudo enviar el correo de recuperaci\u00f3n.",
       error:
         process.env.NODE_ENV ===
         "development"
@@ -1213,17 +1238,24 @@ const resetPassword = async (
   res
 ) => {
   try {
-    const {
-      token,
-      password,
-      confirmPassword
-    } = req.body || {};
+    const token =
+      String(
+        req.body?.token || ""
+      ).trim();
+
+    const password =
+      String(
+        req.body?.password || ""
+      );
+
+    const confirmPassword =
+      req.body?.confirmPassword;
 
     if (!token || !password) {
       return res.status(400).json({
         success: false,
         message:
-          "Token y nueva contrase?a son obligatorios."
+          "Token y nueva contrase\u00f1a son obligatorios."
       });
     }
 
@@ -1236,7 +1268,7 @@ const resetPassword = async (
       return res.status(400).json({
         success: false,
         message:
-          "Las contrase?as no coinciden."
+          "Las contrase\u00f1as no coinciden."
       });
     }
 
@@ -1248,7 +1280,7 @@ const resetPassword = async (
       return res.status(400).json({
         success: false,
         message:
-          "La contrase?a debe tener al menos 8 caracteres, una may?scula, una min?scula, un n?mero y un s?mbolo."
+          "La contrase\u00f1a debe tener al menos 8 caracteres, una may\u00fascula, una min\u00fascula, un n\u00famero y un s\u00edmbolo."
       });
     }
 
@@ -1268,7 +1300,7 @@ const resetPassword = async (
       return res.status(400).json({
         success: false,
         message:
-          "Token inv?lido o expirado."
+          "El enlace es inv\u00e1lido, ya fue utilizado o expir\u00f3."
       });
     }
 
@@ -1285,13 +1317,13 @@ const resetPassword = async (
       return res.status(403).json({
         success: false,
         message:
-          "No es posible restablecer la contrase?a de esta cuenta."
+          "No es posible restablecer la contrase\u00f1a de esta cuenta."
       });
     }
 
     const samePassword =
       await bcrypt.compare(
-        String(password),
+        password,
         user.password
       );
 
@@ -1299,13 +1331,13 @@ const resetPassword = async (
       return res.status(400).json({
         success: false,
         message:
-          "La nueva contrase?a no puede ser igual a la contrase?a anterior."
+          "La nueva contrase\u00f1a no puede ser igual a la contrase\u00f1a anterior."
       });
     }
 
     const hashedPassword =
       await bcrypt.hash(
-        String(password),
+        password,
         BCRYPT_ROUNDS
       );
 
@@ -1359,7 +1391,7 @@ const resetPassword = async (
       });
     } catch (emailError) {
       console.error(
-        "No se pudo enviar aviso de contrase?a:",
+        "No se pudo enviar el aviso de contrase\u00f1a:",
         emailError.message
       );
     }
@@ -1367,7 +1399,7 @@ const resetPassword = async (
     return res.status(200).json({
       success: true,
       message:
-        "Contrase?a actualizada correctamente. Por seguridad, inicia sesi?n nuevamente.",
+        "Contrase\u00f1a actualizada correctamente. Por seguridad, inicia sesi\u00f3n nuevamente.",
       requireFaceCheck: true
     });
   } catch (error) {
@@ -1379,7 +1411,7 @@ const resetPassword = async (
     return res.status(500).json({
       success: false,
       message:
-        "Error restableciendo contrase?a.",
+        "No se pudo restablecer la contrase\u00f1a.",
       error:
         process.env.NODE_ENV ===
         "development"

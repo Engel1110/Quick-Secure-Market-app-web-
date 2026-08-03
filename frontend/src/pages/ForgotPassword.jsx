@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import api from "../services/api";
+import api from "../api/axios";
 
 function ForgotPassword() {
   const [email, setEmail] = useState("");
@@ -52,7 +52,7 @@ function ForgotPassword() {
         {message && <div style={successBox}>{message}</div>}
         {error && <div style={errorBox}>{error}</div>}
 
-        <form onSubmit={handleSubmit} style={form}>
+        <form onSubmit={handleSubmit} style={form} noValidate>
           <label style={field}>
             <span>Correo electrónico</span>
             <input
@@ -60,6 +60,8 @@ function ForgotPassword() {
               placeholder="ejemplo@correo.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+              disabled={loading}
               style={input}
             />
           </label>

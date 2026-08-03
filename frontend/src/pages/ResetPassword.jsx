@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import api from "../services/api";
+import api from "../api/axios";
 
 function ResetPassword() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const token = searchParams.get("token") || "";
+  const token = (searchParams.get("token") || "").trim();
 
   const [form, setForm] = useState({
     password: "",
@@ -95,7 +95,7 @@ function ResetPassword() {
         {message && <div style={successBox}>{message}</div>}
         {error && <div style={errorBox}>{error}</div>}
 
-        <form onSubmit={handleSubmit} style={formStyle}>
+        <form onSubmit={handleSubmit} style={formStyle} noValidate>
           <label style={field}>
             <span>Nueva contraseña</span>
             <input
@@ -107,6 +107,7 @@ function ResetPassword() {
               }
               style={input}
               autoComplete="new-password"
+              disabled={loading || !token}
             />
           </label>
 
