@@ -8,6 +8,10 @@ const {
   login,
   adminLogin,
   getMe,
+  getRecoveryEmailStatus,
+  requestRecoveryEmailVerification,
+  verifyRecoveryEmail,
+  deleteRecoveryEmail,
   forgotPassword,
   resetPassword,
   changePassword
@@ -59,6 +63,32 @@ router.post(
   "/admin/login",
   adminLoginLimiter,
   adminLogin
+);
+
+
+router.get(
+  "/recovery-email",
+  authMiddleware,
+  getRecoveryEmailStatus
+);
+
+router.post(
+  "/recovery-email/request-verification",
+  authMiddleware,
+  forgotPasswordLimiter,
+  requestRecoveryEmailVerification
+);
+
+router.post(
+  "/recovery-email/verify",
+  forgotPasswordLimiter,
+  verifyRecoveryEmail
+);
+
+router.delete(
+  "/recovery-email",
+  authMiddleware,
+  deleteRecoveryEmail
 );
 
 router.post(

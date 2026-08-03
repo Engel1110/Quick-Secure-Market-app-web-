@@ -7,7 +7,8 @@ const prisma = require("../utils/prisma");
 
 const {
   sendPasswordResetEmail,
-  sendPasswordChangedEmail
+  sendPasswordChangedEmail,
+  sendRecoveryEmailVerificationEmail
 } = require("../services/email.service");
 
 const {
@@ -1059,6 +1060,47 @@ const getMe = async (
 };
 
 
+
+const maskEmail = (email) => {
+  const clean =
+    String(email || "")
+      .trim()
+      .toLowerCase();
+
+  const atIndex =
+    clean.indexOf("@");
+
+  if (atIndex <= 0) {
+    return "";
+  }
+
+  const local =
+    clean.slice(0, atIndex);
+
+  const domain =
+    clean.slice(atIndex);
+
+  if (local.length === 1) {
+    return local + "***" + domain;
+  }
+
+  return (
+    local.charAt(0) +
+    "*".repeat(
+      Math.max(
+        local.length - 2,
+        3
+      )
+    ) +
+    local.charAt(
+      local.length - 1
+    ) +
+    domain
+  );
+};
+
+const RECOVERY_EMAIL_TOKEN_MINUTES = 15;
+
 const hashResetToken = (token) =>
   crypto
     .createHash("sha256")
@@ -1076,6 +1118,399 @@ const isStrongPassword = (password) =>
       minSymbols: 1
     }
   );
+
+
+const getRecoveryEmailStatus = async (
+  req,
+  res
+) => {
+  try {
+    const user =
+      req.prismaUser;
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "No autorizado."
+      });
+    }
+
+    const freshUser =
+      await prisma.user.findUnique({
+        where: {
+          id: user.id
+        },
+        select: {
+          email: true,
+          recoveryEmail: true,
+          pendingRecoveryEmail: true,
+          recoveryEmailVerifiedAt: true,
+          recoveryEmailVerificationExpires: true
+        }
+      });
+
+    return res.status(200).json({
+      success: true,
+      recoveryEmail: {
+        primaryEmail:
+          freshUser?.email || "",
+        recoveryEmailMasked:
+          maskEmail(
+            freshUser?.recoveryEmail
+          ),
+        pendingRecoveryEmailMasked:
+          maskEmail(
+            freshUser?.pendingRecoveryEmail
+          ),
+        verified:
+          Boolean(
+            freshUser?.recoveryEmail &&
+            freshUser?.recoveryEmailVerifiedAt
+          ),
+        pending:
+          Boolean(
+            freshUser?.pendingRecoveryEmail &&
+            freshUser?.recoveryEmailVerificationExpires &&
+            new Date(
+              freshUser.recoveryEmailVerificationExpires
+            ) > new Date()
+          )
+      }
+    });
+  } catch (error) {
+    console.error(
+      "Error getRecoveryEmailStatus:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "No se pudo consultar el correo de recuperación."
+    });
+  }
+};
+
+const requestRecoveryEmailVerification = async (
+  req,
+  res
+) => {
+  try {
+    const user =
+      req.prismaUser;
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "No autorizado."
+      });
+    }
+
+    const cleanRecoveryEmail =
+      normalizeEmail(
+        req.body?.recoveryEmail
+      );
+
+    if (
+      !cleanRecoveryEmail ||
+      !validator.isEmail(
+        cleanRecoveryEmail
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "El correo de recuperación no es válido."
+      });
+    }
+
+    if (
+      cleanRecoveryEmail ===
+      normalizeEmail(
+        user.email
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "El correo de recuperación debe ser diferente al correo principal."
+      });
+    }
+
+    const usedByAnotherUser =
+      await prisma.user.findFirst({
+        where: {
+          id: {
+            not: user.id
+          },
+          OR: [
+            {
+              email:
+                cleanRecoveryEmail
+            },
+            {
+              recoveryEmail:
+                cleanRecoveryEmail
+            }
+          ]
+        },
+        select: {
+          id: true
+        }
+      });
+
+    if (usedByAnotherUser) {
+      return res.status(409).json({
+        success: false,
+        message:
+          "Este correo ya está asociado a otra cuenta QSM."
+      });
+    }
+
+    const rawToken =
+      crypto
+        .randomBytes(32)
+        .toString("hex");
+
+    const tokenHash =
+      hashResetToken(
+        rawToken
+      );
+
+    const expiresAt =
+      new Date(
+        Date.now() +
+        RECOVERY_EMAIL_TOKEN_MINUTES *
+        60 *
+        1000
+      );
+
+    await prisma.user.update({
+      where: {
+        id: user.id
+      },
+      data: {
+        pendingRecoveryEmail:
+          cleanRecoveryEmail,
+        recoveryEmailVerificationToken:
+          tokenHash,
+        recoveryEmailVerificationExpires:
+          expiresAt
+      }
+    });
+
+    const frontendUrl =
+      String(
+        process.env.FRONTEND_URL ||
+        getFrontendUrl() ||
+        ""
+      )
+        .trim()
+        .replace(/\/+$/, "");
+
+    if (!frontendUrl) {
+      throw new Error(
+        "FRONTEND_URL no está configurado."
+      );
+    }
+
+    const verificationLink =
+      frontendUrl +
+      "/verify-recovery-email?token=" +
+      encodeURIComponent(
+        rawToken
+      );
+
+    try {
+      await sendRecoveryEmailVerificationEmail({
+        to:
+          cleanRecoveryEmail,
+        verificationLink,
+        expiresMinutes:
+          RECOVERY_EMAIL_TOKEN_MINUTES
+      });
+    } catch (emailError) {
+      await prisma.user.update({
+        where: {
+          id: user.id
+        },
+        data: {
+          pendingRecoveryEmail:
+            null,
+          recoveryEmailVerificationToken:
+            null,
+          recoveryEmailVerificationExpires:
+            null
+        }
+      });
+
+      throw emailError;
+    }
+
+    return res.status(200).json({
+      success: true,
+      message:
+        "Enviamos un enlace de verificación al correo indicado.",
+      pendingRecoveryEmailMasked:
+        maskEmail(
+          cleanRecoveryEmail
+        )
+    });
+  } catch (error) {
+    console.error(
+      "Error requestRecoveryEmailVerification:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "No se pudo enviar la verificación del correo de recuperación."
+    });
+  }
+};
+
+const verifyRecoveryEmail = async (
+  req,
+  res
+) => {
+  try {
+    const token =
+      String(
+        req.body?.token || ""
+      ).trim();
+
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "El token de verificación es obligatorio."
+      });
+    }
+
+    const user =
+      await prisma.user.findFirst({
+        where: {
+          recoveryEmailVerificationToken:
+            hashResetToken(
+              token
+            ),
+          recoveryEmailVerificationExpires: {
+            gt: new Date()
+          },
+          pendingRecoveryEmail: {
+            not: null
+          }
+        }
+      });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "El enlace es inválido, ya fue utilizado o expiró."
+      });
+    }
+
+    const verifiedEmail =
+      user.pendingRecoveryEmail;
+
+    await prisma.user.update({
+      where: {
+        id: user.id
+      },
+      data: {
+        recoveryEmail:
+          verifiedEmail,
+        recoveryEmailVerifiedAt:
+          new Date(),
+        recoveryEmailUpdatedAt:
+          new Date(),
+        pendingRecoveryEmail:
+          null,
+        recoveryEmailVerificationToken:
+          null,
+        recoveryEmailVerificationExpires:
+          null
+      }
+    });
+
+    return res.status(200).json({
+      success: true,
+      message:
+        "Correo de recuperación verificado correctamente.",
+      recoveryEmailMasked:
+        maskEmail(
+          verifiedEmail
+        )
+    });
+  } catch (error) {
+    console.error(
+      "Error verifyRecoveryEmail:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "No se pudo verificar el correo de recuperación."
+    });
+  }
+};
+
+const deleteRecoveryEmail = async (
+  req,
+  res
+) => {
+  try {
+    const user =
+      req.prismaUser;
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "No autorizado."
+      });
+    }
+
+    await prisma.user.update({
+      where: {
+        id: user.id
+      },
+      data: {
+        recoveryEmail:
+          null,
+        recoveryEmailVerifiedAt:
+          null,
+        recoveryEmailUpdatedAt:
+          new Date(),
+        pendingRecoveryEmail:
+          null,
+        recoveryEmailVerificationToken:
+          null,
+        recoveryEmailVerificationExpires:
+          null
+      }
+    });
+
+    return res.status(200).json({
+      success: true,
+      message:
+        "Correo de recuperación eliminado correctamente."
+    });
+  } catch (error) {
+    console.error(
+      "Error deleteRecoveryEmail:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        "No se pudo eliminar el correo de recuperación."
+    });
+  }
+};
 
 const forgotPassword = async (
   req,
@@ -1599,6 +2034,10 @@ module.exports = {
   login,
   adminLogin,
   getMe,
+  getRecoveryEmailStatus,
+  requestRecoveryEmailVerification,
+  verifyRecoveryEmail,
+  deleteRecoveryEmail,
   forgotPassword,
   resetPassword,
   changePassword

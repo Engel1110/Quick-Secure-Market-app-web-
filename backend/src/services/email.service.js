@@ -1,4 +1,4 @@
-﻿const BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
+const BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
 
 const REQUIRED_BREVO_VARIABLES = [
   "BREVO_API_KEY",
@@ -239,10 +239,58 @@ const sendTestEmail = async ({ to }) =>
     `
   });
 
+
+const sendRecoveryEmailVerificationEmail = async ({
+  to,
+  verificationLink,
+  expiresMinutes = 15
+}) =>
+  safeSendMail({
+    to,
+    subject:
+      "Verifica tu correo de recuperación de QSM",
+    text: [
+      "Quick Secure Market",
+      "",
+      "Confirma este correo como método de recuperación de tu cuenta.",
+      verificationLink,
+      "",
+      "El enlace vence en " + expiresMinutes + " minutos.",
+      "",
+      "Si no solicitaste este cambio, ignora este correo."
+    ].join("\n"),
+    html: `
+      <div style="font-family:Arial,sans-serif;padding:32px;background:#f8fafc;color:#0f172a">
+        <div style="max-width:620px;margin:auto;background:#ffffff;padding:34px;border-radius:18px">
+          <h1 style="color:#2563eb">Quick Secure Market</h1>
+          <h2>Verifica tu correo de recuperación</h2>
+          <p>
+            Confirma que este correo será utilizado para recuperar tu cuenta QSM.
+          </p>
+          <p style="margin:30px 0">
+            <a
+              href="${escapeHtml(verificationLink)}"
+              style="display:inline-block;padding:14px 22px;background:#2563eb;color:white;text-decoration:none;border-radius:10px;font-weight:bold"
+            >
+              Verificar correo
+            </a>
+          </p>
+          <p>
+            El enlace vence en <strong>${expiresMinutes} minutos</strong>.
+          </p>
+          <p style="color:#64748b">
+            Si no solicitaste este cambio, ignora este correo.
+          </p>
+        </div>
+      </div>
+    `
+  });
+
 module.exports = {
   validateEmailConfiguration,
   verifyEmailTransport,
   sendTestEmail,
   sendPasswordResetEmail,
-  sendPasswordChangedEmail
+  sendPasswordChangedEmail,
+  sendRecoveryEmailVerificationEmail
 };

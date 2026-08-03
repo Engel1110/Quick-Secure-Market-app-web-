@@ -12,6 +12,7 @@ import api from "../api/axios";
 import Sidebar from "../components/Sidebar";
 import Topbar from "../components/Topbar";
 import AiAssistant from "../components/AiAssistant";
+import RecoveryEmailSection from "../components/settings/RecoveryEmailSection";
 
 import {
   useAuth
@@ -1648,6 +1649,8 @@ function Settings() {
                         </select>
                       </div>
                     </div>
+
+                    <RecoveryEmailSection />
 
                     <form
                       onSubmit={

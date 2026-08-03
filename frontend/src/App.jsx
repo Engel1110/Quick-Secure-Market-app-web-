@@ -75,6 +75,7 @@ const ProductHistory = lazy(() => import("./pages/ProductHistory"));
 const CompleteProfile = lazy(() => import("./pages/CompleteProfile"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const VerifyRecoveryEmail = lazy(() => import("./pages/VerifyRecoveryEmail"));
 const VoucherCompra = lazy(() => import("./pages/VoucherCompra"));
 const OrderTracking = lazy(() => import("./pages/OrderTracking"));
 const AdminLogin = lazy(() => import("./pages/admin/auth/AdminLogin"));
@@ -144,6 +145,11 @@ function App() {
         <Route
           path="/reset-password"
           element={<ResetPassword />}
+        />
+
+        <Route
+          path="/verify-recovery-email"
+          element={<VerifyRecoveryEmail />}
         />
 
         {/* =====================================================
