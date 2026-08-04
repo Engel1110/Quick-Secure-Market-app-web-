@@ -48,6 +48,7 @@ const reviewRoutes = require("./routes/review.routes");
 
 const warehouseRoutes = require("./routes/warehouse.routes");
 const fraudRoutes = require("./routes/fraud.routes");
+const aiRoutes = require("./routes/ai.routes");
 const disputeRoutes = require("./routes/dispute.routes");
 const verificationRoutes = require("./routes/verification.routes");
 const securityRoutes = require("./routes/security.routes");
@@ -80,7 +81,7 @@ const uploadRoutes = require("./routes/upload.routes");
 
 /*
 |--------------------------------------------------------------------------
-| Aplicación HTTP
+| AplicaciÃ³n HTTP
 |--------------------------------------------------------------------------
 */
 
@@ -89,9 +90,9 @@ const server = http.createServer(app);
 
 /*
 |--------------------------------------------------------------------------
-| Orígenes permitidos
+| OrÃ­genes permitidos
 |--------------------------------------------------------------------------
-| La lista proviene del mismo módulo que utiliza Socket.IO.
+| La lista proviene del mismo mÃ³dulo que utiliza Socket.IO.
 | Esto evita mantener dos configuraciones CORS diferentes.
 |--------------------------------------------------------------------------
 */
@@ -103,7 +104,7 @@ const isOriginAllowed = (origin) => {
   |--------------------------------------------------------------------------
   | Solicitudes sin Origin
   |--------------------------------------------------------------------------
-  | Postman, aplicaciones móviles, llamadas internas y herramientas backend
+  | Postman, aplicaciones mÃ³viles, llamadas internas y herramientas backend
   | pueden enviar solicitudes sin encabezado Origin.
   |--------------------------------------------------------------------------
   */
@@ -123,7 +124,7 @@ const isOriginAllowed = (origin) => {
 |--------------------------------------------------------------------------
 | Proxy
 |--------------------------------------------------------------------------
-| Necesario cuando la aplicación está detrás de Render, Railway, Nginx,
+| Necesario cuando la aplicaciÃ³n estÃ¡ detrÃ¡s de Render, Railway, Nginx,
 | Vercel Proxy u otro proxy inverso.
 |--------------------------------------------------------------------------
 */
@@ -194,10 +195,10 @@ app.use(
 
 /*
 |--------------------------------------------------------------------------
-| Archivos estáticos
+| Archivos estÃ¡ticos
 |--------------------------------------------------------------------------
-| server.js está ubicado en backend/src/server.js
-| uploads está ubicado en backend/uploads
+| server.js estÃ¡ ubicado en backend/src/server.js
+| uploads estÃ¡ ubicado en backend/uploads
 |--------------------------------------------------------------------------
 */
 
@@ -248,7 +249,7 @@ app.use(
 
 /*
 |--------------------------------------------------------------------------
-| Protección contra HTTP Parameter Pollution
+| ProtecciÃ³n contra HTTP Parameter Pollution
 |--------------------------------------------------------------------------
 */
 
@@ -274,7 +275,7 @@ const globalLimiter = rateLimit({
   message: {
     success: false,
     message:
-      "Demasiadas solicitudes. Intenta nuevamente más tarde."
+      "Demasiadas solicitudes. Intenta nuevamente mÃ¡s tarde."
   },
 
   skip(req) {
@@ -288,7 +289,7 @@ const globalLimiter = rateLimit({
 
 /*
 |--------------------------------------------------------------------------
-| Rate limit de autenticación
+| Rate limit de autenticaciÃ³n
 |--------------------------------------------------------------------------
 */
 
@@ -314,7 +315,7 @@ const authLimiter = rateLimit({
   message: {
     success: false,
     message:
-      "Demasiados intentos de autenticación. Intenta nuevamente más tarde."
+      "Demasiados intentos de autenticaciÃ³n. Intenta nuevamente mÃ¡s tarde."
   }
 });
 
@@ -374,7 +375,7 @@ app.get("/api/health", async (req, res) => {
 
 /*
 |--------------------------------------------------------------------------
-| Autenticación y usuarios
+| AutenticaciÃ³n y usuarios
 |--------------------------------------------------------------------------
 */
 
@@ -401,7 +402,7 @@ app.use(
 
 /*
 |--------------------------------------------------------------------------
-| Administración
+| AdministraciÃ³n
 |--------------------------------------------------------------------------
 */
 
@@ -478,7 +479,7 @@ app.use(
 
 /*
 |--------------------------------------------------------------------------
-| Seguridad, almacén y operaciones
+| Seguridad, almacÃ©n y operaciones
 |--------------------------------------------------------------------------
 */
 
@@ -490,6 +491,11 @@ app.use(
 app.use(
   "/api/fraud",
   fraudRoutes
+);
+
+app.use(
+  "/api/ai",
+  aiRoutes
 );
 
 app.use(
@@ -510,10 +516,10 @@ app.use(
 
 /*
 |--------------------------------------------------------------------------
-| Mensajería
+| MensajerÃ­a
 |--------------------------------------------------------------------------
-| Las rutas específicas deben registrarse ANTES de /api/messages.
-| Así evitamos que una ruta dinámica como /:messageId capture "search".
+| Las rutas especÃ­ficas deben registrarse ANTES de /api/messages.
+| AsÃ­ evitamos que una ruta dinÃ¡mica como /:messageId capture "search".
 |--------------------------------------------------------------------------
 */
 
@@ -534,7 +540,7 @@ app.use(
 
 /*
 |--------------------------------------------------------------------------
-| Notificaciones, envíos, pagos y uploads
+| Notificaciones, envÃ­os, pagos y uploads
 |--------------------------------------------------------------------------
 */
 
@@ -593,7 +599,7 @@ app.use(
   ) => {
     /*
     |--------------------------------------------------------------------------
-    | Evitar advertencia por parámetro no utilizado
+    | Evitar advertencia por parÃ¡metro no utilizado
     |--------------------------------------------------------------------------
     */
 
@@ -629,7 +635,7 @@ app.use(
       return res.status(403).json({
         success: false,
         message:
-          "El origen de la solicitud no está permitido."
+          "El origen de la solicitud no estÃ¡ permitido."
       });
     }
 
@@ -646,7 +652,7 @@ app.use(
       return res.status(413).json({
         success: false,
         message:
-          "La solicitud supera el tamaño permitido."
+          "La solicitud supera el tamaÃ±o permitido."
       });
     }
 
@@ -691,14 +697,14 @@ app.use(
     if (error?.code === "P2003") {
       return res.status(409).json({
         success: false,
-        message: "La operación entra en conflicto con registros relacionados."
+        message: "La operaciÃ³n entra en conflicto con registros relacionados."
       });
     }
 
     if (error?.name === "PrismaClientValidationError") {
       return res.status(400).json({
         success: false,
-        message: "Los datos enviados no son válidos."
+        message: "Los datos enviados no son vÃ¡lidos."
       });
     }
 
@@ -740,7 +746,7 @@ app.use(
 | Socket.IO
 |--------------------------------------------------------------------------
 | initializeSocket:
-| - crea una única instancia
+| - crea una Ãºnica instancia
 | - autentica el JWT
 | - registra la sala personal
 | - registra message.socket.js
@@ -766,23 +772,23 @@ const PORT =
 const startServer = async () => {
   try {
     if (!process.env.DATABASE_URL) {
-      throw new Error("No se encontró DATABASE_URL en backend/.env.");
+      throw new Error("No se encontrÃ³ DATABASE_URL en backend/.env.");
     }
 
     if (!process.env.JWT_SECRET && !process.env.JWT_ACCESS_SECRET) {
-      throw new Error("No se encontró JWT_SECRET ni JWT_ACCESS_SECRET en backend/.env.");
+      throw new Error("No se encontrÃ³ JWT_SECRET ni JWT_ACCESS_SECRET en backend/.env.");
     }
 
     console.log("Conectando con PostgreSQL/Supabase...");
     await prisma.$queryRaw`SELECT 1`;
 
     server.listen(PORT, "0.0.0.0", () => {
-      console.log(`Servidor ejecutándose en puerto ${PORT}`);
+      console.log(`Servidor ejecutÃ¡ndose en puerto ${PORT}`);
       console.log("PostgreSQL/Supabase conectado");
       console.log("Socket.IO activo");
       console.log(`Entorno: ${process.env.NODE_ENV || "development"}`);
       console.log(`Uploads disponibles en: ${uploadsPath}`);
-      console.log(`Orígenes permitidos: ${allowedOrigins.join(", ")}`);
+      console.log(`OrÃ­genes permitidos: ${allowedOrigins.join(", ")}`);
     });
   } catch (error) {
     console.error("No se pudo iniciar el servidor:");
@@ -814,7 +820,7 @@ const scheduleForcedExit = (
 ) => {
   setTimeout(() => {
     console.error(
-      "Cierre forzado después de 10 segundos."
+      "Cierre forzado despuÃ©s de 10 segundos."
     );
 
     process.exit(exitCode);
@@ -930,7 +936,7 @@ process.on(
   "uncaughtException",
   (error) => {
     shutdown(
-      "Excepción no controlada",
+      "ExcepciÃ³n no controlada",
       error
     );
   }

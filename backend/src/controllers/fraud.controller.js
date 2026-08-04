@@ -1,7 +1,8 @@
 const { prisma, parsePositiveInt } = require("../utils/prismaCompat");
 const { createNotification } = require("../services/notification.service");
+const { buildAnalysis, MODULES } = require("../services/qsm-ai-core.service");
 
-const riskLevelSpanish = { LOW: "Bajo", MEDIUM: "Medio", HIGH: "Alto", CRITICAL: "Crítico" };
+const riskLevelSpanish = { LOW: "Bajo", MEDIUM: "Medio", HIGH: "Alto", CRITICAL: "CrÃ­tico" };
 
 async function analyzeProductRisk(product) {
   let riskLevel = "LOW";
@@ -11,23 +12,23 @@ async function analyzeProductRisk(product) {
   const descriptionLength = String(product.description || "").length;
   const imageCount = Array.isArray(product.images) ? product.images.length : 0;
 
-  if (Number(product.price) <= 10000 && ["Gaming", "Tecnologia", "Tecnología", "Celulares", "Computadoras"].includes(product.category)) {
+  if (Number(product.price) <= 10000 && ["Gaming", "Tecnologia", "TecnologÃ­a", "Celulares", "Computadoras"].includes(product.category)) {
     riskLevel = "HIGH";
     confidenceScore -= 35;
-    reasons.push("Precio sospechosamente bajo para esta categoría en República Dominicana.");
-    evidenceRequired.push("Foto del equipo encendido", "Video corto funcionando", "Número de serie visible", "Explicación clara del precio bajo");
+    reasons.push("Precio sospechosamente bajo para esta categorÃ­a en RepÃºblica Dominicana.");
+    evidenceRequired.push("Foto del equipo encendido", "Video corto funcionando", "NÃºmero de serie visible", "ExplicaciÃ³n clara del precio bajo");
   }
   if (descriptionLength < 40) {
     if (riskLevel !== "HIGH") riskLevel = "MEDIUM";
     confidenceScore -= 15;
-    reasons.push("La descripción es muy corta para validar el estado real del producto.");
-    evidenceRequired.push("Descripción más detallada del producto");
+    reasons.push("La descripciÃ³n es muy corta para validar el estado real del producto.");
+    evidenceRequired.push("DescripciÃ³n mÃ¡s detallada del producto");
   }
   if (imageCount < 2) {
     if (riskLevel !== "HIGH") riskLevel = "MEDIUM";
     confidenceScore -= 10;
     reasons.push("El anuncio tiene pocas fotos.");
-    evidenceRequired.push("Más fotos desde diferentes ángulos");
+    evidenceRequired.push("MÃ¡s fotos desde diferentes Ã¡ngulos");
   }
   if (product.quality === "UNKNOWN") {
     if (riskLevel !== "HIGH") riskLevel = "MEDIUM";
@@ -38,13 +39,13 @@ async function analyzeProductRisk(product) {
   if (product.specialPriceReason !== "NONE" && String(product.specialPriceExplanation || "").length < 30) {
     if (riskLevel !== "HIGH") riskLevel = "MEDIUM";
     confidenceScore -= 10;
-    reasons.push("El motivo del precio especial necesita una explicación más completa.");
-    evidenceRequired.push("Explicación más clara del motivo de venta rápida");
+    reasons.push("El motivo del precio especial necesita una explicaciÃ³n mÃ¡s completa.");
+    evidenceRequired.push("ExplicaciÃ³n mÃ¡s clara del motivo de venta rÃ¡pida");
   }
   return {
     riskLevel,
     confidenceScore: Math.max(0, Math.min(100, confidenceScore)),
-    reason: reasons.length ? reasons.join(" ") : "Producto sin señales críticas de fraude.",
+    reason: reasons.length ? reasons.join(" ") : "Producto sin seÃ±ales crÃ­ticas de fraude.",
     evidenceRequired: [...new Set(evidenceRequired)]
   };
 }
@@ -69,6 +70,26 @@ async function createFraudAlertForProduct(req, res) {
     if (!product) return res.status(404).json({ message: "Producto no encontrado" });
 
     const analysis = await analyzeProductRisk(product);
+
+    const coreAnalysis = buildAnalysis({
+      module: MODULES.FRAUD,
+      riskScore: 100 - analysis.confidenceScore,
+      riskLevel: analysis.riskLevel,
+      confidenceScore: analysis.confidenceScore,
+      reasons: analysis.reason ? [analysis.reason] : [],
+      recommendations: [
+        "Agregar evidencia real del producto.",
+        "Mantener toda la operacion dentro de QSM.",
+        "Solicitar revision humana cuando el riesgo sea alto."
+      ],
+      evidenceRequired: analysis.evidenceRequired,
+      humanReviewRequired: ["HIGH", "CRITICAL"].includes(
+        analysis.riskLevel
+      ),
+      source: "QSM_FRAUD_CONTROLLER_V1",
+      metadata: { productId }
+    });
+
     const [alert] = await prisma.$transaction([
       prisma.fraudAlert.create({
         data: { productId, type: "PRODUCT_RISK", level: analysis.riskLevel, message: analysis.reason },
@@ -87,11 +108,11 @@ async function createFraudAlertForProduct(req, res) {
     ]);
 
     if (["HIGH", "CRITICAL"].includes(analysis.riskLevel)) {
-      await createNotification(product.sellerId, "SECURITY_ALERT", "Alerta antifraude en tu publicación", "Quick Secure Market detectó señales de riesgo en tu producto. Revisa las evidencias requeridas para aumentar la confianza.");
+      await createNotification(product.sellerId, "SECURITY_ALERT", "Alerta antifraude en tu publicaciÃ³n", "Quick Secure Market detectÃ³ seÃ±ales de riesgo en tu producto. Revisa las evidencias requeridas para aumentar la confianza.");
     }
 
     return res.status(201).json({
-      message: "Análisis antifraude completado correctamente",
+      message: "AnÃ¡lisis antifraude completado correctamente",
       resultado: {
         nivelDeRiesgo: riskLevelSpanish[analysis.riskLevel],
         codigoInternoRiesgo: analysis.riskLevel,
@@ -99,15 +120,16 @@ async function createFraudAlertForProduct(req, res) {
         motivo: analysis.reason,
         evidenciasRequeridas: analysis.evidenceRequired,
         recomendacionDelAsistente: [
-          "Tu publicación fue analizada por Quick Secure Assistant.",
-          "Si el precio está por debajo del mercado dominicano, agrega una explicación clara.",
-          "Sube fotos reales desde varios ángulos.",
+          "Tu publicaciÃ³n fue analizada por Quick Secure Assistant.",
+          "Si el precio estÃ¡ por debajo del mercado dominicano, agrega una explicaciÃ³n clara.",
+          "Sube fotos reales desde varios Ã¡ngulos.",
           "Agrega un video corto mostrando el equipo encendido y funcionando.",
-          "Incluye número de serie, IMEI o factura si aplica.",
-          "Mientras más evidencias agregues, mayor será tu puntaje de confianza."
+          "Incluye nÃºmero de serie, IMEI o factura si aplica.",
+          "Mientras mÃ¡s evidencias agregues, mayor serÃ¡ tu puntaje de confianza."
         ]
       },
-      alerta: serializeAlert(alert)
+      alerta: serializeAlert(alert),
+      qsmAiCore: coreAnalysis
     });
   } catch (error) {
     console.error("Error generando alerta antifraude:", error);
