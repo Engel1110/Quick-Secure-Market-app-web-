@@ -259,6 +259,9 @@ function serializeReport(product) {
     priority: priority(product),
     source: reportSource(product),
     aiScore: Number(product.riskScore || 0),
+
+    /* QSM_FASE3_5_LUNA_ANALYSIS */
+    aiAnalysis: asObject(product.aiAnalysis),
     createdAt: product.createdAt,
     lastUpdate: relativeTime(
       moderation.updatedAt || product.updatedAt
@@ -715,6 +718,26 @@ async function applyModerationAction(req, res) {
       updatedAt: new Date().toISOString()
     };
 
+    /* QSM_FASE3_5_MODERATOR_DECISION */
+    const moderatorDecision = {
+      action,
+      reason,
+      moderatorId,
+      moderatorName: moderation.actionByName,
+      decidedAt: moderation.updatedAt,
+      lunaDecision:
+        currentAnalysis.decision || null,
+      lunaRiskLevel:
+        currentAnalysis.riskLevel ||
+        product.riskLevel ||
+        null,
+      lunaRiskScore: Number(
+        currentAnalysis.riskScore ??
+        product.riskScore ??
+        0
+      )
+    };
+
     if (action === "DISMISS_REPORT") {
       moderation.status = "DISMISSED";
     } else if (action === "RESOLVE_REPORT") {
@@ -732,16 +755,33 @@ async function applyModerationAction(req, res) {
       const productData = {
         aiAnalysis: {
           ...currentAnalysis,
-          moderation
+          moderation,
+          moderatorDecision
         }
       };
 
+      /* QSM_FASE3_6_PRODUCT_STATUS */
       if (action === "HIDE_CONTENT") {
         productData.status = "HIDDEN";
       }
 
       if (action === "RESTORE_CONTENT") {
         productData.status = "ACTIVE";
+      }
+
+      if (action === "DISMISS_REPORT") {
+        productData.status = "ACTIVE";
+      }
+
+      if (action === "RESOLVE_REPORT") {
+        productData.status = "ACTIVE";
+      }
+
+      if (
+        action === "BAN_USER" ||
+        action === "SUSPEND_USER"
+      ) {
+        productData.status = "HIDDEN";
       }
 
       await tx.product.update({

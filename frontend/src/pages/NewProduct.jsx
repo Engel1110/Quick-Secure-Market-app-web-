@@ -656,6 +656,10 @@ function NewProduct() {
     setFieldErrors
   ] = useState({});
 
+  const [qsmCoreAnalysis, setQsmCoreAnalysis] = useState(null);
+  const [qsmCoreLoading, setQsmCoreLoading] = useState(false);
+  const [qsmCoreError, setQsmCoreError] = useState("");
+
   /*
   |--------------------------------------------------------------------------
   | Usuario normalizado
@@ -1615,6 +1619,119 @@ const suspiciousAlerts =
   | Cambios del formulario
   |--------------------------------------------------------------------------
   */
+
+const runQsmCoreAnalysis = async () => {
+  if (qsmCoreLoading) {
+    return;
+  }
+
+  setQsmCoreLoading(true);
+  setQsmCoreError("");
+
+  try {
+    const response = await api.post(
+      "/ai/preview/product",
+      {
+        product: {
+          title: String(form.title || "").trim(),
+          description: String(form.description || "").trim(),
+          price: Number(form.price || 0),
+          category: form.category,
+          condition: form.condition,
+          brand: String(form.brand || "").trim(),
+          model: String(form.model || "").trim(),
+          serialNumber: String(form.serialNumber || "").trim(),
+          imei: String(form.imei || "").replace(/\s+/g, ""),
+          vehicleDetails: {
+            vin: String(form.vin || "")
+              .trim()
+              .toUpperCase()
+          },
+          images: imageFiles.map(
+            (file) => file?.name || "imagen"
+          ),
+          publicationScore,
+          riskScore: riskLevel.score
+        },
+
+        seller: {
+          trustScore,
+          status: isVerified
+            ? "VERIFIED"
+            : "PENDING"
+        },
+
+        legacyAnalysis: {
+          publicationScore,
+          publicationLevel: publicationLevel.name,
+          confidenceScore: publicationScore,
+          fraudRiskScore: riskLevel.score
+        },
+
+        duplicateMatches: []
+      }
+    );
+
+    const analysisResult =
+      response?.data?.analysis || null;
+
+    setQsmCoreAnalysis(
+      analysisResult
+    );
+
+    return analysisResult;
+  } catch (requestError) {
+    setQsmCoreAnalysis(null);
+
+    setQsmCoreError(
+      requestError?.response?.data?.message ||
+      requestError?.message ||
+      "No se pudo analizar la publicación con QSM AI Core."
+    );
+  } finally {
+    setQsmCoreLoading(false);
+  }
+};
+
+/* QSM_LUNA_AUTO_ANALYSIS */
+useEffect(() => {
+  const hasMinimumData =
+    form.title.trim().length >= 5 &&
+    form.description.trim().length >= 40 &&
+    Number(form.price) > 0 &&
+    Boolean(form.category) &&
+    Boolean(form.condition);
+
+  if (!hasMinimumData) {
+    setQsmCoreAnalysis(null);
+    setQsmCoreError("");
+    return undefined;
+  }
+
+  const timer = window.setTimeout(() => {
+    runQsmCoreAnalysis();
+  }, 800);
+
+  return () => {
+    window.clearTimeout(timer);
+  };
+}, [
+  form.title,
+  form.description,
+  form.price,
+  form.category,
+  form.condition,
+  form.brand,
+  form.model,
+  form.serialNumber,
+  form.imei,
+  form.vin,
+  imageFiles.length,
+  publicationScore,
+  riskLevel.score,
+  trustScore,
+  isVerified
+]);
 
 const handleChange = (
   event
@@ -3423,7 +3540,8 @@ if (
 
   const buildProductPayload = ({
     uploadedImages,
-    uploadedVideo
+    uploadedVideo,
+    mandatoryAnalysis
   }) => {
     const payload = {
       title:
@@ -3606,6 +3724,24 @@ estimatedSaleTime:
         }
     };
 
+    /* QSM_AI_ANALYSIS_PAYLOAD */
+    if (mandatoryAnalysis) {
+      payload.aiAnalysis = {
+        riskScore: mandatoryAnalysis.riskScore ?? 0,
+        riskLevel: mandatoryAnalysis.riskLevel ?? "LOW",
+        decision: mandatoryAnalysis.decision ?? "APPROVED",
+        reasons: Array.isArray(mandatoryAnalysis.reasons)
+          ? mandatoryAnalysis.reasons
+          : [],
+        recommendations: Array.isArray(mandatoryAnalysis.recommendations)
+          ? mandatoryAnalysis.recommendations
+          : [],
+        humanReviewRequired:
+          Boolean(mandatoryAnalysis.humanReviewRequired),
+        source: "LUNA"
+      };
+    }
+
     return payload;
   };
 
@@ -3757,7 +3893,20 @@ estimatedSaleTime:
       try {
         setSubmitting(true);
 
-        /*
+/* QSM_MANDATORY_ANALYSIS_FINAL */
+setUploadingText(
+  "LUNA está validando la publicación..."
+);
+
+const mandatoryAnalysis =
+  await runQsmCoreAnalysis();
+
+if (!mandatoryAnalysis) {
+  throw new Error(
+    "QSM AI Core no devolvió un análisis válido. Intenta nuevamente."
+  );
+}
+/*
         |--------------------------------------------------------------------------
         | 1. Subir imágenes y video
         |--------------------------------------------------------------------------
@@ -3799,7 +3948,8 @@ estimatedSaleTime:
         const payload =
           buildProductPayload({
             uploadedImages,
-            uploadedVideo
+            uploadedVideo,
+            mandatoryAnalysis
           });
 
         const response =
@@ -5713,6 +5863,113 @@ estimatedSaleTime:
       <p style={aiSubtitle}>
         Evaluación dinámica de calidad, riesgo y confianza.
       </p>
+
+      <button
+        type="button"
+        onClick={runQsmCoreAnalysis}
+        disabled={
+          qsmCoreLoading ||
+          form.title.trim().length < 5 ||
+          form.description.trim().length < 40 ||
+          Number(form.price) <= 0
+        }
+        style={{
+          marginTop: "12px",
+          minHeight: "42px",
+          padding: "10px 14px",
+          border: "1px solid rgba(103,232,249,.28)",
+          borderRadius: "13px",
+          background:
+            "linear-gradient(135deg, rgba(34,211,238,.18), rgba(99,102,241,.22))",
+          color: "#e0f2fe",
+          fontSize: "11px",
+          fontWeight: 900,
+          cursor: "pointer"
+        }}
+      >
+        {qsmCoreLoading
+          ? "Analizando con QSM Core..."
+          : "Analizar publicación con QSM Core"}
+      </button>
+
+      {qsmCoreError && (
+        <div
+          style={{
+            marginTop: "10px",
+            padding: "11px",
+            border: "1px solid rgba(248,113,113,.25)",
+            borderRadius: "12px",
+            background: "rgba(127,29,29,.18)",
+            color: "#fecaca",
+            fontSize: "11px"
+          }}
+        >
+          {qsmCoreError}
+        </div>
+      )}
+
+      {qsmCoreAnalysis && (
+        <section
+          style={{
+            marginTop: "12px",
+            padding: "13px",
+            border: "1px solid rgba(103,232,249,.20)",
+            borderRadius: "15px",
+            background: "rgba(2,6,23,.48)"
+          }}
+        >
+          <p style={sectionEyebrow}>
+            ANÁLISIS REAL DEL CORE
+          </p>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns:
+                "repeat(3, minmax(0, 1fr))",
+              gap: "8px",
+              marginTop: "9px"
+            }}
+          >
+            <div>
+              <small style={{ color: "#64748b" }}>Riesgo</small>
+              <strong style={{ display: "block" }}>
+                {qsmCoreAnalysis.riskScore}/100
+              </strong>
+            </div>
+
+            <div>
+              <small style={{ color: "#64748b" }}>Nivel</small>
+              <strong style={{ display: "block" }}>
+                {qsmCoreAnalysis.riskLevel}
+              </strong>
+            </div>
+
+            <div>
+              <small style={{ color: "#64748b" }}>Decisión</small>
+              <strong style={{ display: "block" }}>
+                {qsmCoreAnalysis.decision}
+              </strong>
+            </div>
+          </div>
+
+          {qsmCoreAnalysis.reasons?.map(
+            (reason, index) => (
+              <p
+                key={`${reason}-${index}`}
+                style={{
+                  margin: "7px 0 0",
+                  color: "#94a3b8",
+                  fontSize: "10px",
+                  lineHeight: "15px"
+                }}
+              >
+                • {reason}
+              </p>
+            )
+          )}
+        </section>
+      )}
     </div>
 
     <span

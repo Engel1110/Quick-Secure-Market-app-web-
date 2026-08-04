@@ -7,6 +7,10 @@ const {
   MODULES
 } = require("../services/qsm-ai-core.service");
 
+const {
+  analyzeProductRisk
+} = require("../utils/fraudEngine");
+
 const getAiStatus = async (_req, res) => {
   return res.json({
     success: true,
@@ -27,9 +31,56 @@ const previewProductAnalysis = async (req, res) => {
       ? req.body.duplicateMatches
       : [];
 
+    const seller =
+      req.body?.seller && typeof req.body.seller === "object"
+        ? req.body.seller
+        : {};
+
+    const legacyFraudAlerts = analyzeProductRisk({
+      title: product.title,
+      category: product.category,
+      price: product.price,
+      condition: product.condition,
+      seller
+    });
+
+    const alertRiskScore = legacyFraudAlerts.reduce((score, alert) => {
+      const level = String(alert?.level || "").toUpperCase();
+
+      if (level === "HIGH") return score + 25;
+      if (level === "MEDIUM") return score + 12;
+      if (level === "LOW") return score + 5;
+
+      return score;
+    }, 0);
+
+    const mergedLegacyAnalysis = {
+      ...legacyAnalysis,
+      fraudRiskScore: Math.min(
+        100,
+        Math.max(
+          Number(legacyAnalysis?.fraudRiskScore || 0),
+          alertRiskScore
+        )
+      ),
+      reasons: [
+        ...(Array.isArray(legacyAnalysis?.reasons)
+          ? legacyAnalysis.reasons
+          : []),
+        ...legacyFraudAlerts
+          .map((alert) => alert?.message)
+          .filter(Boolean)
+      ]
+    };
+
     return res.json({
       success: true,
-      analysis: analyzeProduct({ product, legacyAnalysis, duplicateMatches })
+      analysis: analyzeProduct({
+        product,
+        legacyAnalysis: mergedLegacyAnalysis,
+        duplicateMatches
+      }),
+      legacyFraudAlerts
     });
   } catch (error) {
     return res.status(500).json({

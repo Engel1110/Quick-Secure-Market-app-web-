@@ -1120,6 +1120,29 @@ function ModerationModal({
     ? report.evidence
     : [];
 
+  /* QSM_FASE3_4_LUNA_DETAIL */
+  const lunaAnalysis =
+    report.aiAnalysis ||
+    report.analysis ||
+    {};
+
+  const lunaReasons =
+    Array.isArray(lunaAnalysis.reasons)
+      ? lunaAnalysis.reasons
+      : [];
+
+  const lunaRecommendations =
+    Array.isArray(lunaAnalysis.recommendations)
+      ? lunaAnalysis.recommendations
+      : [];
+
+  /* QSM_FASE3_5_MODERATOR_RESULT */
+  const moderatorDecision =
+    lunaAnalysis.moderatorDecision &&
+    typeof lunaAnalysis.moderatorDecision === "object"
+      ? lunaAnalysis.moderatorDecision
+      : null;
+
   return (
     <div
       className="moderation-modal-backdrop"
@@ -1211,6 +1234,138 @@ function ModerationModal({
             </ul>
           ) : (
             <p>No hay evidencias registradas.</p>
+          )}
+
+          <section className="moderation-luna-panel">
+            <div className="moderation-luna-header">
+              <div>
+                <p className="moderation-eyebrow">QSM AI · LUNA</p>
+                <h3>Análisis inteligente</h3>
+              </div>
+
+              <span className="moderation-luna-score">
+                {Number(
+                  lunaAnalysis.riskScore ??
+                  report.aiScore ??
+                  0
+                )}%
+              </span>
+            </div>
+
+            <div className="moderation-grid">
+              <div>
+                <label>Nivel de riesgo</label>
+                <strong>
+                  {lunaAnalysis.riskLevel ||
+                    report.priority ||
+                    "Sin determinar"}
+                </strong>
+              </div>
+
+              <div>
+                <label>Decisión</label>
+                <strong>
+                  {lunaAnalysis.decision ||
+                    "REVISIÓN MANUAL"}
+                </strong>
+              </div>
+
+              <div>
+                <label>Revisión humana</label>
+                <strong>
+                  {lunaAnalysis.humanReviewRequired
+                    ? "REQUERIDA"
+                    : "RECOMENDADA"}
+                </strong>
+              </div>
+            </div>
+
+            {lunaReasons.length > 0 && (
+              <>
+                <h3>Razones detectadas</h3>
+                <ul>
+                  {lunaReasons.map((reason, index) => (
+                    <li key={`${reason}-${index}`}>
+                      {reason}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+
+            {lunaRecommendations.length > 0 && (
+              <>
+                <h3>Recomendaciones de LUNA</h3>
+                <ul>
+                  {lunaRecommendations.map(
+                    (recommendation, index) => (
+                      <li key={`${recommendation}-${index}`}>
+                        {recommendation}
+                      </li>
+                    )
+                  )}
+                </ul>
+              </>
+            )}
+          </section>
+
+          {moderatorDecision && (
+            <section className="moderation-decision-panel">
+              <p className="moderation-eyebrow">
+                DECISIÓN FINAL DEL MODERADOR
+              </p>
+
+              <div className="moderation-grid">
+                <div>
+                  <label>Acción</label>
+                  <strong>
+                    {moderatorDecision.action || "SIN ACCIÓN"}
+                  </strong>
+                </div>
+
+                <div>
+                  <label>Moderador</label>
+                  <strong>
+                    {moderatorDecision.moderatorName ||
+                      "Moderador QSM"}
+                  </strong>
+                </div>
+
+                <div>
+                  <label>Fecha</label>
+                  <strong>
+                    {moderatorDecision.decidedAt
+                      ? new Date(
+                          moderatorDecision.decidedAt
+                        ).toLocaleString()
+                      : "Sin fecha"}
+                  </strong>
+                </div>
+              </div>
+
+              <h3>Motivo de la decisión</h3>
+
+              <p>
+                {moderatorDecision.reason ||
+                  "No se registró un motivo."}
+              </p>
+
+              <p className="moderation-decision-note">
+                LUNA recomendó:
+                {" "}
+                {moderatorDecision.lunaDecision ||
+                  "Sin decisión"}
+                {" · "}
+                Riesgo:
+                {" "}
+                {moderatorDecision.lunaRiskLevel ||
+                  "Sin nivel"}
+                {" "}
+                ({Number(
+                  moderatorDecision.lunaRiskScore || 0
+                )}%)
+              </p>
+            </section>
           )}
 
           <hr />
@@ -1984,6 +2139,63 @@ const moderationStyles = `
     color: #bbc2db;
     font-size: 13px;
     line-height: 1.7;
+  }
+
+  .moderation-luna-panel {
+    margin-top: 22px;
+    border: 1px solid rgba(94, 217, 255, 0.28);
+    border-radius: 16px;
+    padding: 18px;
+    background: linear-gradient(
+      145deg,
+      rgba(9, 35, 62, 0.72),
+      rgba(24, 16, 62, 0.62)
+    );
+  }
+
+  .moderation-luna-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 14px;
+  }
+
+  .moderation-luna-header h3 {
+    margin: 0;
+  }
+
+  .moderation-luna-score {
+    display: grid;
+    min-width: 64px;
+    min-height: 42px;
+    place-items: center;
+    border: 1px solid rgba(94, 217, 255, 0.34);
+    border-radius: 999px;
+    color: #7de7ff;
+    background: rgba(34, 211, 238, 0.1);
+    font-weight: 900;
+  }
+
+  .moderation-decision-panel {
+    margin-top: 18px;
+    border: 1px solid rgba(74, 222, 128, 0.28);
+    border-radius: 16px;
+    padding: 18px;
+    background: rgba(20, 83, 45, 0.16);
+  }
+
+  .moderation-decision-panel h3 {
+    margin-top: 16px;
+    margin-bottom: 8px;
+  }
+
+  .moderation-decision-note {
+    margin-top: 14px;
+    padding: 12px;
+    border-radius: 12px;
+    background: rgba(15, 23, 42, 0.55);
+    color: #cbd5e1;
   }
 
   .moderation-modal-body hr {
