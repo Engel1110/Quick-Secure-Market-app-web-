@@ -159,9 +159,31 @@ function AiAssistant({ pageContext }) {
         >
           <div className="qsm-ai-panel__aurora" />
 
+          <aside
+            className="qsm-ai-luna-showcase"
+            aria-label="LUNA, asistente oficial de QSM"
+          >
+            <div className="qsm-ai-luna-showcase__glow" />
+
+            <img
+              src="/qsm-ai/luna-officer.png"
+              alt="LUNA, asistente oficial de QSM Marketplace"
+            />
+
+            <div className="qsm-ai-luna-showcase__card">
+              <span>QSM AI OFFICER</span>
+              <strong>LUNA</strong>
+              <p>Protegiendo tu experiencia en QSM Marketplace.</p>
+            </div>
+          </aside>
+
           <header className="qsm-ai-officer-header">
             <div className="qsm-ai-officer-header__avatar">
-              <LunaPortrait />
+              <img
+                className="qsm-ai-officer-header__image"
+                src="/qsm-ai/luna-officer.png"
+                alt="LUNA"
+              />
             </div>
 
             <div className="qsm-ai-officer-header__identity">
