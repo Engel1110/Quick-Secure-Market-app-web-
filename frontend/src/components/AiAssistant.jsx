@@ -17,8 +17,9 @@ const DEFAULT_CORE = {
   version: "1.0.0",
   mode: "RULE_BASED",
   provider: "INTERNAL",
-  capabilities: []
-};
+  capabilities: [],
+  modules: [],
+  decisions: []};
 
 function AiAssistant({ pageContext }) {
   const location = useLocation();
@@ -67,6 +68,18 @@ function AiAssistant({ pageContext }) {
               response.data?.capabilities
             )
               ? response.data.capabilities
+              : [],
+          modules:
+            Array.isArray(
+              response.data?.modules
+            )
+              ? response.data.modules
+              : [],
+          decisions:
+            Array.isArray(
+              response.data?.decisions
+            )
+              ? response.data.decisions
               : []
         });
       } catch {
@@ -131,7 +144,7 @@ function AiAssistant({ pageContext }) {
             : "Abrir QSM AI"
         }
       >
-        <LunaBadge compact />
+        <AiOrb compact />
 
         <span className="qsm-ai-launcher__text">
           <strong>QSM AI</strong>
@@ -325,6 +338,79 @@ function AiAssistant({ pageContext }) {
                     </strong>
                   </div>
                 </section>
+
+                <section className="qsm-ai-phase23">
+                  <div className="qsm-ai-phase23__header">
+                    <div>
+                      <span className="qsm-ai-guide__label">
+                        CORE EN TIEMPO REAL
+                      </span>
+
+                      <h3>
+                        Módulos disponibles
+                      </h3>
+                    </div>
+
+                    <span className={statusClass}>
+                      {core.status}
+                    </span>
+                  </div>
+
+                  <div className="qsm-ai-phase23__modules">
+                    {core.modules.length > 0 ? (
+                      core.modules.map((module) => (
+                        <span key={module}>
+                          {module}
+                        </span>
+                      ))
+                    ) : (
+                      <span>
+                        Cargando módulos...
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="qsm-ai-phase23__capabilities">
+                    {core.capabilities.map((capability) => (
+                      <div
+                        key={capability.code}
+                        className={
+                          capability.status === "ACTIVE"
+                            ? "active"
+                            : capability.status === "ADAPTER_READY"
+                              ? "ready"
+                              : "inactive"
+                        }
+                      >
+                        <span />
+
+                        <div>
+                          <strong>
+                            {capability.code}
+                          </strong>
+
+                          <small>
+                            {capability.description}
+                          </small>
+                        </div>
+
+                        <b>
+                          {capability.status}
+                        </b>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="qsm-ai-phase23__footer">
+                    <span>
+                      Decisiones del Core
+                    </span>
+
+                    <strong>
+                      {core.decisions.length}
+                    </strong>
+                  </div>
+                </section>
               </>
             ) : (
               <GuideView
@@ -405,24 +491,23 @@ function GuideView({
   );
 }
 
-function LunaBadge({ compact = false }) {
+function AiOrb({ compact = false }) {
   return (
     <span
       className={
         compact
-          ? "qsm-luna-badge qsm-luna-badge--compact"
-          : "qsm-luna-badge"
+          ? "qsm-ai-orb qsm-ai-orb--compact"
+          : "qsm-ai-orb"
       }
       aria-hidden="true"
     >
-      <span className="qsm-luna-badge__halo" />
-      <span className="qsm-luna-badge__head">
-        <span className="qsm-luna-badge__visor" />
-        <span className="qsm-luna-badge__eye qsm-luna-badge__eye--left" />
-        <span className="qsm-luna-badge__eye qsm-luna-badge__eye--right" />
-        <span className="qsm-luna-badge__line" />
-      </span>
-      <span className="qsm-luna-badge__ring" />
+      <span className="qsm-ai-orb__halo" />
+      <span className="qsm-ai-orb__core" />
+      <span className="qsm-ai-orb__ring qsm-ai-orb__ring--one" />
+      <span className="qsm-ai-orb__ring qsm-ai-orb__ring--two" />
+      <span className="qsm-ai-orb__particle qsm-ai-orb__particle--one" />
+      <span className="qsm-ai-orb__particle qsm-ai-orb__particle--two" />
+      <span className="qsm-ai-orb__particle qsm-ai-orb__particle--three" />
     </span>
   );
 }

@@ -41,22 +41,22 @@
   letter-spacing: 1.1px;
 }
 
-.qsm-luna-badge {
+.qsm-ai-orb {
   position: relative;
   width: 58px;
   height: 58px;
   flex: 0 0 58px;
   border-radius: 50%;
-  animation: qsm-ai-float 3.1s ease-in-out infinite;
+  animation: qsm-ai-float 3.2s ease-in-out infinite;
 }
 
-.qsm-luna-badge--compact {
+.qsm-ai-orb--compact {
   width: 48px;
   height: 48px;
   flex-basis: 48px;
 }
 
-.qsm-luna-badge__halo {
+.qsm-ai-orb__halo {
   position: absolute;
   inset: -7px;
   border-radius: 50%;
@@ -65,62 +65,58 @@
   animation: qsm-ai-halo 2.6s ease-in-out infinite;
 }
 
-.qsm-luna-badge__head {
+.qsm-ai-orb__core {
   position: absolute;
-  inset: 4px;
-  overflow: hidden;
-  border: 1px solid rgba(165, 243, 252, .75);
+  inset: 3px;
   border-radius: 50%;
-  background: radial-gradient(circle at 50% 35%, #cbd5e1 0 13%, #64748b 14% 25%, #1e293b 26% 54%, #172554 55% 100%);
-  box-shadow: inset 0 -8px 14px rgba(2, 6, 23, .7), 0 0 24px rgba(56, 189, 248, .55);
+  background: radial-gradient(circle at 32% 28%, #fff 0 4%, #67e8f9 12%, #38bdf8 30%, #6366f1 60%, #312e81 83%, #090f2b 100%);
+  box-shadow: inset -9px -11px 20px rgba(2, 6, 23, .42), inset 8px 7px 14px rgba(255, 255, 255, .2), 0 0 28px rgba(56, 189, 248, .56);
+  animation: qsm-ai-breathe 2.2s ease-in-out infinite;
 }
 
-.qsm-luna-badge__visor {
+.qsm-ai-orb__ring {
   position: absolute;
-  left: 20%;
-  right: 20%;
-  top: 35%;
-  height: 24%;
-  border-radius: 999px;
-  background: rgba(8, 47, 73, .9);
-  border: 1px solid rgba(103, 232, 249, .7);
-}
-
-.qsm-luna-badge__eye {
-  position: absolute;
-  top: 44%;
-  width: 7%;
-  height: 7%;
+  border: 1px solid rgba(165, 243, 252, .78);
   border-radius: 50%;
-  background: #67e8f9;
-  box-shadow: 0 0 8px #22d3ee;
+  pointer-events: none;
 }
 
-.qsm-luna-badge__eye--left {
-  left: 36%;
-}
-
-.qsm-luna-badge__eye--right {
-  right: 36%;
-}
-
-.qsm-luna-badge__line {
-  position: absolute;
-  left: 34%;
-  right: 34%;
-  bottom: 23%;
-  height: 2px;
-  border-radius: 999px;
-  background: #8b5cf6;
-  box-shadow: 0 0 7px #8b5cf6;
-}
-
-.qsm-luna-badge__ring {
-  position: absolute;
+.qsm-ai-orb__ring--one {
   inset: -2px;
-  border: 1px solid rgba(165, 243, 252, .7);
-  border-radius: 50%;
   animation: qsm-ai-spin 5s linear infinite;
+}
+
+.qsm-ai-orb__ring--two {
+  inset: 7px -6px;
+  transform: rotate(64deg);
+  animation: qsm-ai-spin-reverse 4.2s linear infinite;
+}
+
+.qsm-ai-orb__particle {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #cffafe;
+  box-shadow: 0 0 9px #67e8f9;
+}
+
+.qsm-ai-orb__particle--one {
+  top: 3px;
+  right: 7px;
+  animation: qsm-ai-particle-one 2.8s ease-in-out infinite;
+}
+
+.qsm-ai-orb__particle--two {
+  left: 0;
+  bottom: 13px;
+  animation: qsm-ai-particle-two 3.1s ease-in-out infinite;
+}
+
+.qsm-ai-orb__particle--three {
+  right: 0;
+  bottom: 5px;
+  animation: qsm-ai-particle-three 2.4s ease-in-out infinite;
 }
 
 .qsm-ai-panel {
@@ -592,11 +588,183 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .qsm-luna-badge,
-  .qsm-luna-badge__halo,
-  .qsm-luna-badge__ring,
+  .qsm-ai-orb,
+  .qsm-ai-orb__halo,
+  .qsm-ai-orb__core,
+  .qsm-ai-orb__ring,
+  .qsm-ai-orb__particle,
   .qsm-ai-panel,
   .qsm-ai-officer-intro__seal {
     animation: none !important;
+  }
+}
+
+
+.qsm-ai-phase23 {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid rgba(103, 232, 249, .14);
+  border-radius: 18px;
+  background: rgba(2, 6, 23, .48);
+}
+
+.qsm-ai-phase23__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.qsm-ai-phase23__header h3 {
+  margin: 5px 0 0;
+  font-size: 14px;
+}
+
+.qsm-ai-phase23__header > span {
+  margin-left: auto;
+  padding: 6px 8px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 950;
+  letter-spacing: 1px;
+}
+
+.qsm-ai-phase23__header > span.online {
+  background: rgba(34, 197, 94, .12);
+  color: #86efac;
+}
+
+.qsm-ai-phase23__header > span.offline {
+  background: rgba(244, 63, 94, .12);
+  color: #fda4af;
+}
+
+.qsm-ai-phase23__header > span.connecting {
+  background: rgba(245, 158, 11, .12);
+  color: #fbbf24;
+}
+
+.qsm-ai-phase23__modules {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.qsm-ai-phase23__modules span {
+  padding: 6px 8px;
+  border: 1px solid rgba(103, 232, 249, .14);
+  border-radius: 999px;
+  background: rgba(14, 116, 144, .1);
+  color: #a5f3fc;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .5px;
+}
+
+.qsm-ai-phase23__capabilities {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.qsm-ai-phase23__capabilities > div {
+  display: grid;
+  grid-template-columns: 8px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, .1);
+  border-radius: 13px;
+  background: rgba(15, 23, 42, .44);
+}
+
+.qsm-ai-phase23__capabilities > div > span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #64748b;
+  box-shadow: 0 0 10px currentColor;
+}
+
+.qsm-ai-phase23__capabilities > div.active > span {
+  background: #4ade80;
+}
+
+.qsm-ai-phase23__capabilities > div.ready > span {
+  background: #38bdf8;
+}
+
+.qsm-ai-phase23__capabilities > div > div {
+  display: grid;
+  gap: 2px;
+}
+
+.qsm-ai-phase23__capabilities strong {
+  font-size: 10px;
+}
+
+.qsm-ai-phase23__capabilities small {
+  color: #64748b;
+  font-size: 9px;
+  line-height: 13px;
+}
+
+.qsm-ai-phase23__capabilities b {
+  color: #94a3b8;
+  font-size: 8px;
+  letter-spacing: .5px;
+}
+
+.qsm-ai-phase23__footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(148, 163, 184, .1);
+  color: #64748b;
+  font-size: 10px;
+}
+
+.qsm-ai-phase23__footer strong {
+  color: #67e8f9;
+}
+
+@keyframes qsm-ai-spin-reverse {
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+@keyframes qsm-ai-particle-one {
+  0%, 100% {
+    transform: translate(0, 0);
+    opacity: .45;
+  }
+  50% {
+    transform: translate(5px, -6px);
+    opacity: 1;
+  }
+}
+
+@keyframes qsm-ai-particle-two {
+  0%, 100% {
+    transform: translate(0, 0);
+    opacity: .4;
+  }
+  50% {
+    transform: translate(-4px, 5px);
+    opacity: 1;
+  }
+}
+
+@keyframes qsm-ai-particle-three {
+  0%, 100% {
+    transform: translate(0, 0);
+    opacity: .46;
+  }
+  50% {
+    transform: translate(4px, 4px);
+    opacity: 1;
   }
 }
