@@ -1,369 +1,407 @@
-import { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+﻿import {
+  useEffect,
+  useMemo,
+  useState
+} from "react";
+
+import {
+  Link,
+  useLocation
+} from "react-router-dom";
+
+import api from "../api/axios";
+import "./AiAssistant.css";
+
+const DEFAULT_CORE = {
+  status: "CONNECTING",
+  version: "1.0.0",
+  mode: "RULE_BASED",
+  provider: "INTERNAL"
+};
 
 function AiAssistant({ pageContext }) {
   const location = useLocation();
+
   const [open, setOpen] = useState(false);
   const [activeGuide, setActiveGuide] = useState(null);
+  const [core, setCore] = useState(DEFAULT_CORE);
 
-  const currentPath = pageContext || location.pathname;
+  const currentPath =
+    pageContext || location.pathname;
 
-  const contextInfo = getContextInfo(currentPath);
+  const guides = useMemo(
+    () => getGuides(),
+    []
+  );
 
-  const guides = {
-    dashboard: {
-      title: "Ayuda en el Dashboard",
-      message: "Aquí puedes ver tu progreso, Trust Score, estado de verificación y próximos pasos.",
-      steps: [
-        "Revisa tu nivel actual QSM.",
-        "Completa tu verificación para desbloquear funciones.",
-        "Usa acciones rápidas para ir al marketplace, perfil o disputas.",
-        "Aumenta tu Trust Score con actividad segura."
-      ],
-      actionText: "Completar verificación",
-      actionLink: "/complete-profile"
-    },
-    profile: {
-      title: "Ayuda en Mi Perfil",
-      message: "Aquí puedes administrar tu foto 2x2, portada, datos personales y seguridad.",
-      steps: [
-        "Sube una foto 2x2 real.",
-        "Agrega una portada opcional.",
-        "Actualiza tus datos personales.",
-        "Solicita cambio de contraseña si lo necesitas."
-      ],
-      actionText: "Ir a perfil",
-      actionLink: "/profile"
-    },
-    marketplace: {
-      title: "Ayuda en Marketplace",
-      message: "Aquí puedes explorar productos, revisar riesgos y comprar con protección QSM.",
-      steps: [
-        "Revisa el Trust Score del vendedor.",
-        "Verifica si el producto tiene alertas.",
-        "Abre el detalle del producto.",
-        "Compra con Protección QSM."
-      ],
-      actionText: "Ver marketplace",
-      actionLink: "/marketplace"
-    },
-    disputes: {
-      title: "Ayuda en Disputas",
-      message: "Aquí puedes abrir disputas cuando un producto llega dañado, diferente o no recibido.",
-      steps: [
-        "Selecciona la orden afectada.",
-        "Describe el problema.",
-        "Adjunta evidencia.",
-        "QSM revisará el caso."
-      ],
-      actionText: "Abrir disputas",
-      actionLink: "/disputes"
-    },
-    checkout: {
-      title: "Ayuda en Checkout",
-      message: "Aquí se confirma la compra protegida mediante escrow.",
-      steps: [
-        "Confirma el producto.",
-        "QSM retiene el pago.",
-        "El vendedor entrega.",
-        "Confirmas recepción."
-      ],
-      actionText: "Ver órdenes",
-      actionLink: "/orders"
-    },
-    register: {
-      title: "Ayuda en Registro",
-      message: "Crea tu cuenta con correo o Google y luego completa tu identidad QSM.",
-      steps: [
-        "Completa tus datos.",
-        "Acepta los términos.",
-        "Crea tu cuenta.",
-        "Completa la verificación."
-      ],
-      actionText: "Registrarme",
-      actionLink: "/register"
-    }
-  };
+  useEffect(() => {
+    let active = true;
 
-  const defaultGuide = guides.dashboard;
+    const checkCore = async () => {
+      try {
+        const response =
+          await api.get("/ai/status");
 
-  const selectGuide = (key) => {
-    setActiveGuide(guides[key] || defaultGuide);
-  };
+        if (!active) {
+          return;
+        }
+
+        setCore({
+          status:
+            response.data?.status ||
+            "ACTIVE",
+          version:
+            response.data?.engine?.version ||
+            "1.0.0",
+          mode:
+            response.data?.engine?.mode ||
+            "RULE_BASED",
+          provider:
+            response.data?.engine?.provider ||
+            "INTERNAL"
+        });
+      } catch {
+        if (active) {
+          setCore({
+            ...DEFAULT_CORE,
+            status: "OFFLINE"
+          });
+        }
+      }
+    };
+
+    checkCore();
+
+    const timer =
+      window.setInterval(
+        checkCore,
+        60000
+      );
+
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  const statusClass =
+    core.status === "ACTIVE"
+      ? "online"
+      : core.status === "OFFLINE"
+        ? "offline"
+        : "connecting";
 
   return (
     <>
-      <button className="qsm-ai-floating-button" onClick={() => setOpen(!open)} style={floatingButton}>
-        <span style={pulseDot}></span>
-        QSM AI
+      <button
+        type="button"
+        className={`qsm-ai-launcher ${statusClass}`}
+        onClick={() =>
+          setOpen((value) => !value)
+        }
+        aria-expanded={open}
+        aria-label={
+          open
+            ? "Cerrar QSM AI"
+            : "Abrir QSM AI"
+        }
+      >
+        <AiOrb compact />
+
+        <span className="qsm-ai-launcher__text">
+          <strong>QSM AI</strong>
+          <small>{core.status}</small>
+        </span>
       </button>
 
       {open && (
-        <div className="qsm-ai-assistant-box" style={assistantBox}>
-          <div style={topBar}>
-            <div style={avatar}>🤖</div>
+        <section className="qsm-ai-panel">
+          <div className="qsm-ai-panel__aurora" />
 
-            <div>
-              <h3 style={{ margin: 0 }}>QSM AI</h3>
-              <p style={subtitle}>{contextInfo}</p>
+          <header className="qsm-ai-panel__header">
+            <AiOrb />
+
+            <div className="qsm-ai-panel__identity">
+              <span>QSM INTELLIGENCE</span>
+              <h3>QSM AI</h3>
+              <p>{getContextInfo(currentPath)}</p>
             </div>
 
-            <button onClick={() => setOpen(false)} style={closeButton}>
+            <button
+              type="button"
+              className="qsm-ai-panel__close"
+              onClick={() => setOpen(false)}
+              aria-label="Cerrar asistente"
+            >
               ×
             </button>
+          </header>
+
+          <div className="qsm-ai-panel__core-status">
+            <span
+              className={`qsm-ai-panel__status-dot ${statusClass}`}
+            />
+
+            <div>
+              <strong>
+                Core {core.version}
+              </strong>
+
+              <small>
+                {core.mode} · {core.provider}
+              </small>
+            </div>
+
+            <b className={statusClass}>
+              {core.status}
+            </b>
           </div>
 
-          <div className="qsm-ai-assistant-body" style={body}>
+          <div className="qsm-ai-panel__body">
             {!activeGuide ? (
               <>
-                <div style={aiBubble}>
-                  Estoy aquí para ayudarte en esta área de QSM. Elige una opción:
+                <div className="qsm-ai-welcome">
+                  <span>✦</span>
+
+                  <div>
+                    <strong>
+                      Hola, soy QSM AI.
+                    </strong>
+
+                    <p>
+                      Estoy conectado al núcleo de inteligencia de QSM. Selecciona un área para recibir orientación.
+                    </p>
+                  </div>
                 </div>
 
-                <div style={quickGrid}>
-                  <button style={quickButton} onClick={() => selectGuide("dashboard")}>
-                    🏠 Ayuda del Dashboard
-                  </button>
-
-                  <button style={quickButton} onClick={() => selectGuide("profile")}>
-                    👤 Ayuda del Perfil
-                  </button>
-
-                  <button style={quickButton} onClick={() => selectGuide("marketplace")}>
-                    🛒 Ayuda Marketplace
-                  </button>
-
-                  <button style={quickButton} onClick={() => selectGuide("disputes")}>
-                    ⚖ Ayuda Disputas
-                  </button>
-
-                  <button style={quickButton} onClick={() => selectGuide("checkout")}>
-                    💰 Ayuda Checkout
-                  </button>
+                <div className="qsm-ai-options">
+                  {[
+                    ["dashboard", "◈", "Dashboard"],
+                    ["profile", "◎", "Perfil"],
+                    ["marketplace", "◇", "Marketplace"],
+                    ["disputes", "⚖", "Disputas"],
+                    ["checkout", "▣", "Checkout"],
+                    ["security", "⬡", "Seguridad"]
+                  ].map(
+                    ([key, icon, label]) => (
+                      <button
+                        type="button"
+                        key={key}
+                        onClick={() =>
+                          setActiveGuide(
+                            guides[key]
+                          )
+                        }
+                      >
+                        <span>{icon}</span>
+                        {label}
+                      </button>
+                    )
+                  )}
                 </div>
               </>
             ) : (
-              <div>
-                <button onClick={() => setActiveGuide(null)} style={backButton}>
+              <div className="qsm-ai-guide">
+                <button
+                  type="button"
+                  className="qsm-ai-guide__back"
+                  onClick={() =>
+                    setActiveGuide(null)
+                  }
+                >
                   ← Volver
                 </button>
 
-                <h2 style={guideTitle}>{activeGuide.title}</h2>
+                <span className="qsm-ai-guide__label">
+                  GUÍA INTELIGENTE
+                </span>
 
-                <p style={guideMessage}>{activeGuide.message}</p>
+                <h2>{activeGuide.title}</h2>
 
-                <div style={stepsBox}>
-                  {activeGuide.steps.map((step, index) => (
-                    <div key={index} style={stepItem}>
-                      <div style={stepNumber}>{index + 1}</div>
-                      <p>{step}</p>
-                    </div>
-                  ))}
+                <p className="qsm-ai-guide__message">
+                  {activeGuide.message}
+                </p>
+
+                <div className="qsm-ai-guide__steps">
+                  {activeGuide.steps.map(
+                    (step, index) => (
+                      <div
+                        className="qsm-ai-guide__step"
+                        key={step}
+                      >
+                        <span>{index + 1}</span>
+                        <p>{step}</p>
+                      </div>
+                    )
+                  )}
                 </div>
 
-                <Link to={activeGuide.actionLink} style={actionButton}>
+                <Link
+                  to={activeGuide.actionLink}
+                  className="qsm-ai-guide__action"
+                  onClick={() =>
+                    setOpen(false)
+                  }
+                >
                   {activeGuide.actionText}
+                  <span>→</span>
                 </Link>
               </div>
             )}
           </div>
 
-          <div style={footer}>
-            <span>Modo demo QSM</span>
-            <span>IA simulada</span>
-          </div>
-        </div>
+          <footer className="qsm-ai-panel__footer">
+            <span>QSM AI Core</span>
+            <span>Supervisión humana activa</span>
+          </footer>
+        </section>
       )}
     </>
   );
 }
 
-function getContextInfo(path) {
-  if (path.includes("dashboard")) return "Ayuda para tu progreso QSM";
-  if (path.includes("profile")) return "Ayuda para tu perfil";
-  if (path.includes("marketplace")) return "Ayuda para comprar seguro";
-  if (path.includes("disputes")) return "Ayuda con disputas";
-  if (path.includes("checkout")) return "Ayuda con escrow";
-  if (path.includes("register")) return "Ayuda de registro";
-  return "Asistente de Quick Secure Market";
+function AiOrb({ compact = false }) {
+  return (
+    <span
+      className={
+        compact
+          ? "qsm-ai-orb qsm-ai-orb--compact"
+          : "qsm-ai-orb"
+      }
+      aria-hidden="true"
+    >
+      <span className="qsm-ai-orb__halo" />
+      <span className="qsm-ai-orb__core" />
+      <span className="qsm-ai-orb__ring qsm-ai-orb__ring--one" />
+      <span className="qsm-ai-orb__ring qsm-ai-orb__ring--two" />
+      <span className="qsm-ai-orb__particle qsm-ai-orb__particle--one" />
+      <span className="qsm-ai-orb__particle qsm-ai-orb__particle--two" />
+      <span className="qsm-ai-orb__particle qsm-ai-orb__particle--three" />
+    </span>
+  );
 }
 
-const floatingButton = {
-  position: "fixed",
-  right: "24px",
-  bottom: "24px",
-  zIndex: 100,
-  display: "flex",
-  alignItems: "center",
-  gap: "9px",
-  background: "linear-gradient(135deg, #35d0c3, #7c3aed)",
-  color: "white",
-  border: "none",
-  borderRadius: "999px",
-  padding: "13px 20px",
-  fontWeight: "900",
-  cursor: "pointer",
-  boxShadow: "0 0 28px rgba(53,208,195,0.45)"
-};
+function getGuides() {
+  return {
+    dashboard: {
+      title: "Ayuda en el Dashboard",
+      message:
+        "Revisa tu actividad, progreso, confianza y próximos pasos dentro de QSM.",
+      steps: [
+        "Consulta tu Trust Score.",
+        "Completa las verificaciones pendientes.",
+        "Revisa compras, ventas y disputas.",
+        "Usa las acciones rápidas para continuar."
+      ],
+      actionText: "Ir al Dashboard",
+      actionLink: "/dashboard"
+    },
+    profile: {
+      title: "Ayuda en Mi Perfil",
+      message:
+        "Administra tus datos, identidad y seguridad desde un solo lugar.",
+      steps: [
+        "Revisa tus datos personales.",
+        "Actualiza tu fotografía.",
+        "Completa la verificación de identidad.",
+        "Configura tu correo de recuperación."
+      ],
+      actionText: "Ir a Mi Perfil",
+      actionLink: "/profile"
+    },
+    marketplace: {
+      title: "Compra con mayor seguridad",
+      message:
+        "Analiza la publicación y las señales de riesgo antes de comprar.",
+      steps: [
+        "Revisa el Trust Score del vendedor.",
+        "Consulta la verificación del producto.",
+        "Abre el historial del producto.",
+        "Mantén el pago dentro de QSM."
+      ],
+      actionText: "Abrir Marketplace",
+      actionLink: "/marketplace"
+    },
+    disputes: {
+      title: "Ayuda con Disputas",
+      message:
+        "Documenta correctamente el problema para facilitar la revisión.",
+      steps: [
+        "Selecciona la orden afectada.",
+        "Describe el problema.",
+        "Adjunta evidencias.",
+        "Consulta las actualizaciones del caso."
+      ],
+      actionText: "Ver Disputas",
+      actionLink: "/disputes"
+    },
+    checkout: {
+      title: "Compra protegida QSM",
+      message:
+        "Confirma la compra y mantén toda la operación dentro del flujo protegido.",
+      steps: [
+        "Verifica producto y vendedor.",
+        "Confirma el método de entrega.",
+        "Realiza el pago protegido.",
+        "Confirma la recepción."
+      ],
+      actionText: "Ver Órdenes",
+      actionLink: "/orders"
+    },
+    security: {
+      title: "Seguridad de tu cuenta",
+      message:
+        "Protege el acceso y revisa recuperación, contraseñas y sesiones.",
+      steps: [
+        "Configura un correo de recuperación.",
+        "Utiliza una contraseña fuerte.",
+        "Revisa alertas y sesiones.",
+        "Reporta accesos sospechosos."
+      ],
+      actionText: "Abrir Configuración",
+      actionLink: "/settings"
+    }
+  };
+}
 
-const pulseDot = {
-  width: "9px",
-  height: "9px",
-  borderRadius: "50%",
-  background: "#86efac",
-  boxShadow: "0 0 16px #86efac"
-};
+function getContextInfo(path) {
+  const value =
+    String(path || "").toLowerCase();
 
-const assistantBox = {
-  position: "fixed",
-  right: "24px",
-  bottom: "82px",
-  width: "350px",
-  maxHeight: "520px",
-  background: "rgba(8,17,35,0.94)",
-  border: "1px solid rgba(53,208,195,0.42)",
-  borderRadius: "22px",
-  zIndex: 101,
-  overflow: "hidden",
-  backdropFilter: "blur(22px)",
-  boxShadow: "0 25px 80px rgba(0,0,0,0.65)"
-};
+  if (value.includes("dashboard")) {
+    return "Resumen inteligente de tu actividad";
+  }
 
-const topBar = {
-  padding: "15px",
-  display: "flex",
-  alignItems: "center",
-  gap: "12px",
-  background: "rgba(15,23,42,0.94)",
-  borderBottom: "1px solid rgba(53,208,195,0.22)",
-  color: "white"
-};
+  if (
+    value.includes("profile") ||
+    value.includes("verification")
+  ) {
+    return "Identidad, perfil y confianza";
+  }
 
-const avatar = {
-  width: "40px",
-  height: "40px",
-  borderRadius: "14px",
-  background: "linear-gradient(135deg, #0f766e, #312e81)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center"
-};
+  if (
+    value.includes("marketplace") ||
+    value.includes("product")
+  ) {
+    return "Productos, riesgo y seguridad";
+  }
 
-const subtitle = {
-  margin: "3px 0 0",
-  color: "#94a3b8",
-  fontSize: "12px"
-};
+  if (value.includes("dispute")) {
+    return "Seguimiento de disputas";
+  }
 
-const closeButton = {
-  marginLeft: "auto",
-  background: "transparent",
-  color: "white",
-  border: "none",
-  fontSize: "24px",
-  cursor: "pointer"
-};
+  if (
+    value.includes("checkout") ||
+    value.includes("order")
+  ) {
+    return "Compra y entrega protegida";
+  }
 
-const body = {
-  padding: "15px",
-  color: "white",
-  maxHeight: "385px",
-  overflowY: "auto"
-};
+  if (value.includes("message")) {
+    return "Mensajería segura QSM";
+  }
 
-const aiBubble = {
-  background: "rgba(15,23,42,0.92)",
-  border: "1px solid rgba(53,208,195,0.22)",
-  borderRadius: "16px",
-  padding: "13px",
-  lineHeight: "23px",
-  color: "#e5e7eb",
-  marginBottom: "14px"
-};
-
-const quickGrid = {
-  display: "grid",
-  gap: "9px"
-};
-
-const quickButton = {
-  background: "rgba(2,6,23,0.82)",
-  color: "#e5e7eb",
-  border: "1px solid rgba(53,208,195,0.32)",
-  borderRadius: "13px",
-  padding: "11px",
-  cursor: "pointer",
-  textAlign: "left",
-  fontWeight: "800"
-};
-
-const backButton = {
-  background: "transparent",
-  color: "#35d0c3",
-  border: "none",
-  cursor: "pointer",
-  fontWeight: "900",
-  marginBottom: "8px"
-};
-
-const guideTitle = {
-  margin: "0 0 8px",
-  fontSize: "21px"
-};
-
-const guideMessage = {
-  color: "#cbd5e1",
-  lineHeight: "23px"
-};
-
-const stepsBox = {
-  marginTop: "14px",
-  display: "grid",
-  gap: "9px"
-};
-
-const stepItem = {
-  display: "flex",
-  gap: "10px",
-  alignItems: "flex-start",
-  background: "rgba(15,23,42,0.82)",
-  border: "1px solid rgba(53,208,195,0.16)",
-  borderRadius: "13px",
-  padding: "9px"
-};
-
-const stepNumber = {
-  width: "26px",
-  height: "26px",
-  borderRadius: "50%",
-  background: "#35d0c3",
-  color: "#020617",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontWeight: "900",
-  flexShrink: 0
-};
-
-const actionButton = {
-  display: "block",
-  marginTop: "16px",
-  textAlign: "center",
-  background: "#35d0c3",
-  color: "#020617",
-  textDecoration: "none",
-  padding: "13px",
-  borderRadius: "13px",
-  fontWeight: "900"
-};
-
-const footer = {
-  padding: "10px 15px",
-  display: "flex",
-  justifyContent: "space-between",
-  color: "#64748b",
-  fontSize: "11px",
-  borderTop: "1px solid rgba(53,208,195,0.16)"
-};
+  return "Inteligencia de Quick Secure Market";
+}
 
 export default AiAssistant;
