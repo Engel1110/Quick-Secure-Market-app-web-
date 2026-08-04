@@ -7,6 +7,7 @@ const {
   createProduct,
   getProducts,
   getMyProducts,
+  getProductHistory,
   getProductById,
   updateProduct,
   improveProductEvidence,
@@ -57,6 +58,11 @@ router.put(
 | Detalle, edición y eliminación
 |--------------------------------------------------------------------------
 */
+
+router.get(
+  "/:id/history",
+  getProductHistory
+);
 
 router.get(
   "/:id",

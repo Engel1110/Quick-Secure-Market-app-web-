@@ -1955,6 +1955,410 @@ const getMyProducts = async (
 |--------------------------------------------------------------------------
 */
 
+
+const getProductHistory = async (req, res) => {
+  try {
+    const id = parsePositiveInt(req.params.id);
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: "ID de producto no valido."
+      });
+    }
+
+    const product = await prisma.product.findUnique({
+      where: { id },
+      include: {
+        seller: {
+          select: SELLER_SELECT
+        },
+        orders: {
+          orderBy: { createdAt: "asc" },
+          include: {
+            buyer: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                isVerified: true,
+                trustScore: true
+              }
+            },
+            payments: {
+              orderBy: { createdAt: "asc" }
+            },
+            shipping: true,
+            dispute: true
+          }
+        }
+      }
+    });
+
+    if (!product || product.status === "DISABLED") {
+      return res.status(404).json({
+        success: false,
+        message: "Producto no encontrado."
+      });
+    }
+
+    const vehicleDetails =
+      product.vehicleDetails &&
+      typeof product.vehicleDetails === "object" &&
+      !Array.isArray(product.vehicleDetails)
+        ? product.vehicleDetails
+        : {};
+
+    const duplicateClauses = [];
+
+    if (product.imei) {
+      duplicateClauses.push({ imei: product.imei });
+    }
+
+    if (product.serialNumber) {
+      duplicateClauses.push({
+        serialNumber: product.serialNumber
+      });
+    }
+
+    if (product.photoHash) {
+      duplicateClauses.push({
+        photoHash: product.photoHash
+      });
+    }
+
+    if (vehicleDetails.vin) {
+      duplicateClauses.push({
+        vehicleDetails: {
+          path: ["vin"],
+          equals: vehicleDetails.vin
+        }
+      });
+    }
+
+    const duplicates = duplicateClauses.length
+      ? await prisma.product.findMany({
+          where: {
+            id: { not: product.id },
+            status: { not: "DISABLED" },
+            OR: duplicateClauses
+          },
+          select: {
+            id: true,
+            title: true,
+            qsmCode: true,
+            status: true,
+            imei: true,
+            serialNumber: true,
+            photoHash: true,
+            vehicleDetails: true,
+            createdAt: true
+          },
+          orderBy: { createdAt: "desc" },
+          take: 10
+        })
+      : [];
+
+    const auditLogs = await prisma.auditLog.findMany({
+      where: {
+        entityType: {
+          in: ["PRODUCT", "Product", "product"]
+        },
+        entityId: String(product.id)
+      },
+      orderBy: { createdAt: "asc" },
+      take: 100,
+      select: {
+        id: true,
+        actorName: true,
+        actorRole: true,
+        module: true,
+        action: true,
+        description: true,
+        severity: true,
+        status: true,
+        createdAt: true
+      }
+    });
+
+    const timeline = [];
+
+    const addEvent = ({
+      type,
+      title,
+      description,
+      date,
+      status = "INFO",
+      source = "QSM",
+      metadata = {}
+    }) => {
+      if (!date) return;
+
+      timeline.push({
+        type,
+        title,
+        description,
+        date,
+        status,
+        source,
+        metadata
+      });
+    };
+
+    addEvent({
+      type: "PRODUCT_CREATED",
+      title: "Producto publicado",
+      description: "La publicacion fue creada en Quick Secure Market.",
+      date: product.createdAt,
+      status: product.status,
+      metadata: { qsmCode: product.qsmCode }
+    });
+
+    if (product.lastEditedAt) {
+      addEvent({
+        type: "PRODUCT_EDITED",
+        title: "Producto actualizado",
+        description: "La informacion o las evidencias fueron modificadas.",
+        date: product.lastEditedAt,
+        status: "UPDATED",
+        metadata: { editedBy: product.lastEditedBy }
+      });
+    }
+
+    if (product.isQsmVerified) {
+      addEvent({
+        type: "PRODUCT_VERIFIED",
+        title: "Verificacion QSM registrada",
+        description: "El producto alcanzo los criterios actuales de verificacion.",
+        date: product.updatedAt,
+        status: "VERIFIED"
+      });
+    }
+
+    for (const order of product.orders) {
+      addEvent({
+        type: "ORDER_CREATED",
+        title: "Compra iniciada",
+        description: "Se creo la orden " + (order.orderCode || "#" + order.id) + ".",
+        date: order.createdAt,
+        status: order.status,
+        source: "ORDER",
+        metadata: {
+          orderId: order.id,
+          buyer: order.buyer
+            ? [order.buyer.firstName, order.buyer.lastName].filter(Boolean).join(" ")
+            : "",
+          amount: order.totalAmount
+        }
+      });
+
+      if (order.paymentConfirmedAt) {
+        addEvent({
+          type: "PAYMENT_CONFIRMED",
+          title: "Pago validado",
+          description: "El pago de la orden fue confirmado.",
+          date: order.paymentConfirmedAt,
+          status: order.paymentStatus,
+          source: "PAYMENT",
+          metadata: {
+            orderId: order.id,
+            method: order.paymentMethod,
+            amount: order.totalAmount
+          }
+        });
+      }
+
+      if (order.warehouseReceivedAt) {
+        addEvent({
+          type: "WAREHOUSE_RECEIVED",
+          title: "Recibido en almacen",
+          description: "QSM registro la recepcion fisica del producto.",
+          date: order.warehouseReceivedAt,
+          status: order.warehouseStatus,
+          source: "WAREHOUSE"
+        });
+      }
+
+      if (order.outForDeliveryAt) {
+        addEvent({
+          type: "OUT_FOR_DELIVERY",
+          title: "Producto en ruta",
+          description: "La entrega fue despachada.",
+          date: order.outForDeliveryAt,
+          status: order.deliveryStatus,
+          source: "SHIPPING"
+        });
+      }
+
+      if (order.deliveredAt) {
+        addEvent({
+          type: "DELIVERED",
+          title: "Producto entregado",
+          description: "La entrega fue confirmada.",
+          date: order.deliveredAt,
+          status: order.deliveryStatus,
+          source: "SHIPPING"
+        });
+      }
+
+      if (order.completedAt) {
+        addEvent({
+          type: "ORDER_COMPLETED",
+          title: "Compra completada",
+          description: "La operacion fue cerrada correctamente.",
+          date: order.completedAt,
+          status: order.status,
+          source: "ORDER"
+        });
+      }
+
+      if (order.cancelledAt) {
+        addEvent({
+          type: "ORDER_CANCELLED",
+          title: "Compra cancelada",
+          description: order.cancellationReason || "La operacion fue cancelada.",
+          date: order.cancelledAt,
+          status: "CANCELLED",
+          source: "ORDER"
+        });
+      }
+
+      if (order.dispute) {
+        addEvent({
+          type: "DISPUTE_OPENED",
+          title: "Disputa abierta",
+          description: order.dispute.reason || "Se abrio una disputa.",
+          date: order.dispute.createdAt,
+          status: order.dispute.status,
+          source: "DISPUTE",
+          metadata: {
+            disputeId: order.dispute.id,
+            disputeCode: order.dispute.disputeCode
+          }
+        });
+
+        if (order.dispute.resolvedAt || order.dispute.closedAt) {
+          addEvent({
+            type: "DISPUTE_RESOLVED",
+            title: "Disputa resuelta",
+            description: order.dispute.resolution || "La disputa fue cerrada.",
+            date: order.dispute.closedAt || order.dispute.resolvedAt,
+            status: order.dispute.status,
+            source: "DISPUTE"
+          });
+        }
+      }
+    }
+
+    for (const log of auditLogs) {
+      addEvent({
+        type: "AUDIT_" + String(log.action || "EVENT").toUpperCase(),
+        title: log.action || "Actividad auditada",
+        description: log.description || "QSM registro una accion.",
+        date: log.createdAt,
+        status: log.status,
+        source: log.module || "AUDIT",
+        metadata: {
+          actorName: log.actorName,
+          actorRole: log.actorRole,
+          severity: log.severity
+        }
+      });
+    }
+
+    timeline.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    const duplicateMatches = duplicates.map((item) => {
+      const itemVehicle =
+        item.vehicleDetails &&
+        typeof item.vehicleDetails === "object" &&
+        !Array.isArray(item.vehicleDetails)
+          ? item.vehicleDetails
+          : {};
+
+      const reasons = [];
+
+      if (product.imei && item.imei === product.imei) reasons.push("IMEI");
+      if (product.serialNumber && item.serialNumber === product.serialNumber) {
+        reasons.push("NUMERO_DE_SERIE");
+      }
+      if (product.photoHash && item.photoHash === product.photoHash) {
+        reasons.push("PHOTO_HASH");
+      }
+      if (vehicleDetails.vin && itemVehicle.vin === vehicleDetails.vin) {
+        reasons.push("VIN");
+      }
+
+      return { ...item, reasons };
+    });
+
+    const images = [
+      ...(Array.isArray(product.images) ? product.images : []),
+      product.imageUrl
+    ].filter(Boolean);
+
+    return res.json({
+      success: true,
+      history: {
+        product: {
+          id: product.id,
+          title: product.title,
+          description: product.description,
+          price: product.price,
+          category: product.category,
+          condition: product.condition,
+          quality: product.quality,
+          brand: product.brand,
+          model: product.model,
+          qsmCode: product.qsmCode,
+          previousQsmCode: product.previousQsmCode,
+          serialNumber: product.serialNumber,
+          imei: product.imei,
+          vehicleDetails,
+          status: product.status,
+          verificationStatus: product.verificationStatus,
+          verificationMode: product.verificationMode,
+          isQsmVerified: product.isQsmVerified,
+          certified: product.certified,
+          riskLevel: product.riskLevel,
+          riskLabel: product.riskLabel,
+          riskScore: product.riskScore,
+          confidenceScore: product.confidenceScore,
+          publicationScore: product.publicationScore,
+          publicationLevel: product.publicationLevel,
+          aiAnalysis: product.aiAnalysis,
+          evidence: product.evidence,
+          evidenceRequired: product.evidenceRequired,
+          images: [...new Set(images)],
+          createdAt: product.createdAt,
+          updatedAt: product.updatedAt,
+          lastEditedAt: product.lastEditedAt,
+          seller: serializeSeller(product.seller)
+        },
+        timeline,
+        duplicates: {
+          status: duplicateMatches.length ? "POSSIBLE_DUPLICATE" : "NO_MATCHES",
+          count: duplicateMatches.length,
+          matches: duplicateMatches
+        },
+        summary: {
+          totalEvents: timeline.length,
+          totalOrders: product.orders.length,
+          completedOrders: product.orders.filter((item) => item.status === "COMPLETED").length,
+          disputes: product.orders.filter((item) => Boolean(item.dispute)).length,
+          images: [...new Set(images)].length
+        }
+      }
+    });
+  } catch (error) {
+    return sendControllerError(
+      res,
+      error,
+      "Error obteniendo el historial del producto."
+    );
+  }
+};
+
 const getProductById = async (
   req,
   res
@@ -3265,6 +3669,7 @@ module.exports = {
   createProduct,
   getProducts,
   getMyProducts,
+  getProductHistory,
   getProductById,
   updateProduct,
   improveProductEvidence,
