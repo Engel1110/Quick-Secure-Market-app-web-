@@ -82,6 +82,14 @@ const safeSendMail = async (options) => {
     textContent: String(options.text || "")
   };
 
+  console.log("========== BREVO ==========");
+  console.log({
+    sender: payload.sender,
+    to: payload.to,
+    subject: payload.subject
+  });
+  console.log("===========================");
+
   if (payload.to.length === 0) {
     const error = new Error("No se indico un destinatario valido.");
     error.code = "QSM_BREVO_RECIPIENT_REQUIRED";
