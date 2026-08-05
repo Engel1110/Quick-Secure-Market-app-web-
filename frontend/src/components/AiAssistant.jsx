@@ -30,6 +30,8 @@ const DEFAULT_CORE = {
   error: ""
 };
 
+/* QSM_FASE10_BLOCK2_LUNA_HERO */
+
 function AiAssistant({ pageContext }) {
   const location = useLocation();
 
@@ -256,13 +258,7 @@ function AiAssistant({ pageContext }) {
               src="/qsm-ai/luna-fullbody.png"
               alt="LUNA, androide oficial de QSM Marketplace"
             />
-
-            <img
-              className="qsm-ai-luna-showcase__officer-card"
-              src="/qsm-ai/luna-officer-card.png"
-              alt="LUNA protegiendo tu experiencia en QSM Marketplace"
-            />
-          </aside>
+</aside>
 
           <header className="qsm-ai-officer-header">
             <div className="qsm-ai-officer-header__avatar">
@@ -318,23 +314,36 @@ function AiAssistant({ pageContext }) {
           <div className="qsm-ai-panel__body">
             {!activeGuide ? (
               <>
-                <section className="qsm-ai-officer-intro">
+                <section className="qsm-ai-officer-intro qsm-ai-luna-hero">
+                  <div className="qsm-ai-luna-hero__city" />
+
                   <div className="qsm-ai-officer-intro__copy">
                     <span className="qsm-ai-guide__label">
-                      PROTECCIÓN QSM
+                      ASISTENTE INTELIGENTE QSM
                     </span>
 
                     <h2>
-                      Hola, soy {assistantName}.
+                      ¡Hola{core.user?.firstName
+                        ? `, ${core.user.firstName}`
+                        : ""}! 👋
                     </h2>
 
                     <p>
-                      Estoy aquí para ayudarte a comprar, vender y navegar con mayor seguridad dentro de QSM.
+                      Estoy aquí para ayudarte a administrar tu plataforma
+                      de manera inteligente, segura y personalizada.
                     </p>
-                  </div>
 
-                  <div className="qsm-ai-officer-intro__seal">
-                    <span>Q</span>
+                    <div className="qsm-ai-luna-hero__status">
+                      <span
+                        className={`qsm-ai-panel__status-dot ${statusClass}`}
+                      />
+
+                      <strong>
+                        {core.authenticated
+                          ? "Contexto privado conectado"
+                          : "Modo público activo"}
+                      </strong>
+                    </div>
                   </div>
                 </section>
 
@@ -345,11 +354,11 @@ function AiAssistant({ pageContext }) {
                     </span>
 
                     <strong>
-                      Protección inteligente activa
+                      LUNA está supervisando tu experiencia
                     </strong>
 
                     <p>
-                      Supervisión humana disponible cuando el Core recomienda revisión.
+                      Análisis inteligente, prevención de riesgos y asistencia contextual en tiempo real.
                     </p>
                   </div>
 
