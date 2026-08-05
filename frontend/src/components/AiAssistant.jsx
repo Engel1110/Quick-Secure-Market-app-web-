@@ -34,6 +34,8 @@ const DEFAULT_CORE = {
 
 /* QSM_FASE10_BLOCK3_PROFESSIONAL_FINISH */
 
+/* QSM_FASE11_BLOCK1_HERO_ANCHORED_LUNA */
+
 function AiAssistant({ pageContext }) {
   const location = useLocation();
 
@@ -248,21 +250,7 @@ function AiAssistant({ pageContext }) {
           aria-label="Asistente oficial de QSM Marketplace"
         >
           <div className="qsm-ai-panel__aurora" />
-
-          <aside
-            className="qsm-ai-luna-showcase"
-            aria-label="LUNA, asistente oficial de QSM"
-          >
-            <div className="qsm-ai-luna-showcase__glow" />
-
-            <img
-              className="qsm-ai-luna-showcase__fullbody"
-              src="/qsm-ai/luna-fullbody.png"
-              alt="LUNA, androide oficial de QSM Marketplace"
-            />
-</aside>
-
-          <header className="qsm-ai-officer-header">
+<header className="qsm-ai-officer-header">
             <div className="qsm-ai-officer-header__avatar">
               <img
                 className="qsm-ai-officer-header__image"
@@ -346,6 +334,18 @@ function AiAssistant({ pageContext }) {
                           : "Modo público activo"}
                       </strong>
                     </div>
+                  </div>
+                  <div
+                    className="qsm-ai-luna-hero__character"
+                    aria-hidden="true"
+                  >
+                    <div className="qsm-ai-luna-hero__character-glow" />
+
+                    <img
+                      src="/qsm-ai/luna-fullbody.png"
+                      alt=""
+                      className="qsm-ai-luna-hero__character-image"
+                    />
                   </div>
                 </section>
 

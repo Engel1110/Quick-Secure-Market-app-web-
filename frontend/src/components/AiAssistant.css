@@ -1759,3 +1759,206 @@
     padding-right: 120px;
   }
 }
+
+
+/* QSM_FASE11_BLOCK1_HERO_ANCHORED_LUNA */
+
+/*
+  La antigua imagen flotante deja de participar
+  completamente en el diseño.
+*/
+.qsm-ai-panel--officer > .qsm-ai-luna-showcase,
+.qsm-ai-panel--officer .qsm-ai-luna-showcase {
+  display: none !important;
+}
+
+/*
+  El hero se convierte en el contenedor real
+  de la imagen completa de LUNA.
+*/
+.qsm-ai-luna-hero {
+  position: relative !important;
+  isolation: isolate;
+  min-height: 224px !important;
+  overflow: hidden !important;
+  padding:
+    22px 166px 22px 18px !important;
+}
+
+.qsm-ai-luna-hero::before {
+  z-index: 1 !important;
+}
+
+.qsm-ai-luna-hero__city {
+  z-index: 0 !important;
+}
+
+.qsm-ai-luna-hero .qsm-ai-officer-intro__copy {
+  position: relative;
+  z-index: 4 !important;
+  min-width: 0;
+}
+
+.qsm-ai-luna-hero h2 {
+  position: relative;
+  z-index: 4;
+  max-width: 230px;
+  margin:
+    8px 0 10px !important;
+  color: #f8fafc;
+}
+
+.qsm-ai-luna-hero p {
+  position: relative;
+  z-index: 4;
+  max-width: 235px !important;
+  margin: 0;
+  color: #cbd5e1 !important;
+}
+
+.qsm-ai-luna-hero__status {
+  position: relative;
+  z-index: 5;
+}
+
+/*
+  Personaje fijo y contenido dentro del saludo.
+*/
+.qsm-ai-luna-hero__character {
+  position: absolute;
+  right: -5px;
+  bottom: -4px;
+  z-index: 3;
+  width: 176px;
+  height: 220px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.qsm-ai-luna-hero__character-glow {
+  position: absolute;
+  right: 5px;
+  bottom: 8px;
+  width: 150px;
+  height: 178px;
+  border-radius: 50%;
+  background:
+    radial-gradient(
+      circle,
+      rgba(34, 211, 238, .27),
+      rgba(99, 102, 241, .14) 48%,
+      transparent 72%
+    );
+  filter: blur(15px);
+}
+
+.qsm-ai-luna-hero__character-image {
+  position: absolute;
+  right: -3px;
+  bottom: -10px;
+  width: 174px;
+  height: 230px;
+  display: block;
+  object-fit: contain;
+  object-position: center bottom;
+  filter:
+    drop-shadow(
+      0 16px 24px rgba(0, 0, 0, .74)
+    )
+    drop-shadow(
+      0 0 15px rgba(34, 211, 238, .2)
+    );
+}
+
+/*
+  Impide que Core o las tarjetas se monten
+  encima del texto del saludo.
+*/
+.qsm-ai-core-strip {
+  position: relative !important;
+  z-index: 8 !important;
+}
+
+.qsm-ai-panel__body {
+  position: relative !important;
+  z-index: 5 !important;
+}
+
+.qsm-ai-officer-card,
+.qsm-ai-live-summary,
+.qsm-ai-officer-actions,
+.qsm-ai-officer-insights,
+.qsm-ai-phase23 {
+  position: relative;
+  z-index: 6 !important;
+}
+
+/*
+  Remueve líneas decorativas poco profesionales.
+*/
+.qsm-ai-panel--officer hr,
+.qsm-ai-panel--officer section::after,
+.qsm-ai-panel--officer section::before {
+  border-bottom: 0;
+}
+
+.qsm-ai-phase23__footer,
+.qsm-ai-phase23__decisions,
+.qsm-ai-panel__footer {
+  border-top: 0 !important;
+}
+
+/*
+  Responsive.
+*/
+@media (max-width: 560px) {
+  .qsm-ai-luna-hero {
+    min-height: 205px !important;
+    padding:
+      18px 126px 18px 15px !important;
+  }
+
+  .qsm-ai-luna-hero h2 {
+    max-width: 175px;
+    font-size: 21px;
+  }
+
+  .qsm-ai-luna-hero p {
+    max-width: 185px !important;
+    font-size: 10px;
+    line-height: 15px;
+  }
+
+  .qsm-ai-luna-hero__character {
+    right: -10px;
+    width: 142px;
+    height: 202px;
+  }
+
+  .qsm-ai-luna-hero__character-image {
+    right: -4px;
+    bottom: -8px;
+    width: 142px;
+    height: 208px;
+  }
+
+  .qsm-ai-luna-hero__character-glow {
+    width: 125px;
+    height: 155px;
+  }
+}
+
+@media (max-width: 390px) {
+  .qsm-ai-luna-hero {
+    padding-right: 108px !important;
+  }
+
+  .qsm-ai-luna-hero__character {
+    right: -18px;
+    width: 126px;
+  }
+
+  .qsm-ai-luna-hero__character-image {
+    width: 126px;
+  }
+}
