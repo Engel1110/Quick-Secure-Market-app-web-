@@ -32,6 +32,8 @@ const DEFAULT_CORE = {
 
 /* QSM_FASE10_BLOCK2_LUNA_HERO */
 
+/* QSM_FASE10_BLOCK3_PROFESSIONAL_FINISH */
+
 function AiAssistant({ pageContext }) {
   const location = useLocation();
 
@@ -592,7 +594,7 @@ function AiAssistant({ pageContext }) {
 
                   <div className="qsm-ai-phase23__footer">
                     <span>
-                      Decisiones del Core
+                      Actividad inteligente
                     </span>
 
                     <strong>
@@ -878,17 +880,17 @@ function buildLunaModules({
   const modules = [
     {
       code: "CORE_ENGINE",
-      label: "Core Engine",
+      label: "Núcleo inteligente",
       public: true
     },
     {
       code: "PUBLIC_GUIDANCE",
-      label: "Guía pública",
+      label: "Orientación pública",
       public: true
     },
     {
       code: "BUYER_PROFILE",
-      label: "Buyer Profile",
+      label: "Perfil del comprador",
       topics: [
         "MY_PROFILE",
         "MY_ORDERS",
@@ -897,7 +899,7 @@ function buildLunaModules({
     },
     {
       code: "SELLER_PROFILE",
-      label: "Seller Profile",
+      label: "Perfil del vendedor",
       topics: [
         "MY_PRODUCTS",
         "MY_SALES"
@@ -905,7 +907,7 @@ function buildLunaModules({
     },
     {
       code: "MARKETPLACE_INTELLIGENCE",
-      label: "Marketplace Intelligence",
+      label: "Inteligencia del Marketplace",
       topics: [
         "HOW_TO_BUY",
         "HOW_TO_SELL",
@@ -914,7 +916,7 @@ function buildLunaModules({
     },
     {
       code: "TRANSACTION_SECURITY",
-      label: "Transaction Security",
+      label: "Seguridad transaccional",
       topics: [
         "PUBLIC_SECURITY",
         "SECURITY_ANALYSIS",
@@ -923,19 +925,19 @@ function buildLunaModules({
     },
     {
       code: "CONVERSATION_MEMORY",
-      label: "Conversation Memory",
+      label: "Memoria conversacional",
       topics: [
         "MY_MESSAGES"
       ]
     },
     {
       code: "OPERATIONAL_INTELLIGENCE",
-      label: "Operational Intelligence",
+      label: "Inteligencia operacional",
       privateOnly: true
     },
     {
       code: "PREDICTIVE_INTELLIGENCE",
-      label: "Predictive Intelligence",
+      label: "Inteligencia predictiva",
       privateOnly: true
     },
     {
@@ -945,12 +947,12 @@ function buildLunaModules({
     },
     {
       code: "BACKOFFICE_INTELLIGENCE",
-      label: "BackOffice Intelligence",
+      label: "Inteligencia del BackOffice",
       backofficeOnly: true
     },
     {
       code: "AUDIT_TRACEABILITY",
-      label: "Audit & Traceability",
+      label: "Auditoría y trazabilidad",
       topics: [
         "AUDIT",
         "READ_ONLY_REPORTS",
@@ -1011,13 +1013,13 @@ function buildLunaCapabilities({
 
   return [
     {
-      code: "SECURE_GUIDANCE",
+      code: "ORIENTACIÓN SEGURA",
       description:
         "Orientación segura dentro de QSM.",
       status: "ACTIVE"
     },
     {
-      code: "CONTEXT_AWARENESS",
+      code: "CONTEXTO INTELIGENTE",
       description:
         "Comprende la sección actual de la plataforma.",
       status:
@@ -1026,7 +1028,7 @@ function buildLunaCapabilities({
           : "READY"
     },
     {
-      code: "USER_PROFILE",
+      code: "PERFIL DEL USUARIO",
       description:
         "Utiliza el perfil privado del usuario.",
       status:
@@ -1035,7 +1037,7 @@ function buildLunaCapabilities({
           : "LIMITED"
     },
     {
-      code: "MARKETPLACE_ANALYSIS",
+      code: "ANÁLISIS DEL MARKETPLACE",
       description:
         "Analiza productos, vendedores y precios.",
       status:
@@ -1047,13 +1049,13 @@ function buildLunaCapabilities({
           : "READY"
     },
     {
-      code: "FRAUD_PREVENTION",
+      code: "PREVENCIÓN DE FRAUDE",
       description:
         "Detecta señales y patrones de riesgo.",
       status: "ACTIVE"
     },
     {
-      code: "PREDICTIVE_ENGINE",
+      code: "MOTOR PREDICTIVO",
       description:
         "Genera indicadores y escenarios predictivos.",
       status:
@@ -1062,7 +1064,7 @@ function buildLunaCapabilities({
           : "LIMITED"
     },
     {
-      code: "MEMORY",
+      code: "MEMORIA",
       description:
         "Mantiene contexto entre conversaciones.",
       status:
@@ -1071,7 +1073,7 @@ function buildLunaCapabilities({
           : "LIMITED"
     },
     {
-      code: "MODULE_ORCHESTRATION",
+      code: "ORQUESTACIÓN DE MÓDULOS",
       description:
         `${modules.length} módulos coordinados por LUNA.`,
       status: "ACTIVE"
