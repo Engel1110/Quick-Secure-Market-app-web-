@@ -1,8 +1,4 @@
-import {
-  useEffect,
-  useMemo,
-  useState
-} from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 
 import {
   Link,
@@ -41,6 +37,8 @@ const DEFAULT_CORE = {
 const LUNA_DIALOGUE_ENDPOINT =
   "/ai/memory/message";
 
+/* QSM_FASE11_BLOCK3_CHAT_LAYOUT */
+
 function AiAssistant({ pageContext }) {
   const location = useLocation();
 
@@ -66,6 +64,8 @@ function AiAssistant({ pageContext }) {
 
   const [chatError, setChatError] =
     useState("");
+
+  const chatEndRef = useRef(null);
 
   const currentPath =
     pageContext || location.pathname;
@@ -266,7 +266,14 @@ function AiAssistant({ pageContext }) {
           value.trim()
       );
 
-    return (
+    useEffect(() => {
+    chatEndRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest"
+    });
+  }, [chatMessages, chatSending]);
+
+  return (
       response?.trim() ||
       "Procesé tu solicitud, pero no recibí una respuesta textual."
     );
@@ -873,6 +880,11 @@ function AiAssistant({ pageContext }) {
                   </div>
                 </article>
               )}
+
+              <div
+                ref={chatEndRef}
+                className="qsm-ai-chat__end"
+              />
             </div>
 
             {chatError && (
@@ -898,6 +910,15 @@ function AiAssistant({ pageContext }) {
                 maxLength={500}
                 disabled={chatSending}
                 autoComplete="off"
+                onKeyDown={(event) => {
+                  if (
+                    event.key === "Enter" &&
+                    !event.shiftKey
+                  ) {
+                    event.preventDefault();
+                    sendLunaQuestion(event);
+                  }
+                }}
               />
 
               <button
