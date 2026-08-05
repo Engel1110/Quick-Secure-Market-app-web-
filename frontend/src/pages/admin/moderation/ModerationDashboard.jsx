@@ -14,9 +14,9 @@ const USE_MOCK_DATA = false;
 
 const REPORT_STATUS = {
   OPEN: "Abierto",
-  IN_REVIEW: "En revisiÃ³n",
+  IN_REVIEW: "En revisión",
   ESCALATED: "Escalado",
-  ACTION_TAKEN: "AcciÃ³n aplicada",
+  ACTION_TAKEN: "Acción aplicada",
   RESOLVED: "Resuelto",
   DISMISSED: "Descartado"
 };
@@ -26,7 +26,7 @@ const REPORT_TYPE = {
   USER: "Usuario",
   MESSAGE: "Mensaje",
   IMAGE: "Imagen",
-  REVIEW: "ReseÃ±a",
+  REVIEW: "Reseña",
   PROFILE: "Perfil"
 };
 
@@ -47,7 +47,7 @@ const PRIORITY_LABELS = {
   LOW: "Baja",
   MEDIUM: "Media",
   HIGH: "Alta",
-  CRITICAL: "CrÃ­tica"
+  CRITICAL: "Crítica"
 };
 
 const MOCK_DATA = {
@@ -71,7 +71,7 @@ const MOCK_DATA = {
       targetId: "PRD-2041",
       title: "iPhone 15 Pro posiblemente falsificado",
       description:
-        "El precio estÃ¡ muy por debajo del mercado y las imÃ¡genes aparecen en otras publicaciones.",
+        "El precio está muy por debajo del mercado y las imágenes aparecen en otras publicaciones.",
       reason: "COUNTERFEIT",
       status: "OPEN",
       priority: "CRITICAL",
@@ -89,7 +89,7 @@ const MOCK_DATA = {
       },
       reportedUser: {
         id: "USR-1001",
-        name: "Carlos MartÃ­nez",
+        name: "Carlos Martínez",
         email: "carlos@example.com",
         trustScore: 38,
         accountStatus: "ACTIVE",
@@ -98,13 +98,13 @@ const MOCK_DATA = {
       },
       reportedBy: {
         id: "USR-3001",
-        name: "Ana RodrÃ­guez"
+        name: "Ana Rodríguez"
       },
       assignedModerator: null,
       evidence: [
         "Precio 58% menor al promedio",
         "Imagen detectada en 4 publicaciones",
-        "Cuenta creada hace 3 dÃ­as"
+        "Cuenta creada hace 3 días"
       ],
       relatedEntities: {
         productId: "PRD-2041",
@@ -118,7 +118,7 @@ const MOCK_DATA = {
       targetId: "MSG-8301",
       title: "Mensaje con intento de sacar la compra de QSM",
       description:
-        "El vendedor enviÃ³ un nÃºmero de WhatsApp y solicitÃ³ pago fuera de la plataforma.",
+        "El vendedor envió un número de WhatsApp y solicitó pago fuera de la plataforma.",
       reason: "SCAM",
       status: "IN_REVIEW",
       priority: "HIGH",
@@ -133,11 +133,11 @@ const MOCK_DATA = {
         name: "Mensaje privado",
         status: "VISIBLE",
         content:
-          "EscrÃ­beme al WhatsApp para darte mejor precio y pagar por transferencia."
+          "Escríbeme al WhatsApp para darte mejor precio y pagar por transferencia."
       },
       reportedUser: {
         id: "USR-1002",
-        name: "Pedro JimÃ©nez",
+        name: "Pedro Jiménez",
         email: "pedro@example.com",
         trustScore: 51,
         accountStatus: "ACTIVE",
@@ -146,14 +146,14 @@ const MOCK_DATA = {
       },
       reportedBy: {
         id: "SYSTEM",
-        name: "IA de ModeraciÃ³n"
+        name: "IA de Moderación"
       },
       assignedModerator: {
         id: "MODERATOR-101",
-        name: "Laura MÃ©ndez"
+        name: "Laura Méndez"
       },
       evidence: [
-        "NÃºmero telefÃ³nico detectado",
+        "Número telefónico detectado",
         "Solicitud de pago externo",
         "Palabras asociadas a transferencia"
       ],
@@ -167,9 +167,9 @@ const MOCK_DATA = {
       id: "MOD-9006",
       type: "USER",
       targetId: "USR-1003",
-      title: "Usuario reportado por mÃºltiples compradores",
+      title: "Usuario reportado por múltiples compradores",
       description:
-        "Tres compradores reportaron publicaciones engaÃ±osas y productos no entregados.",
+        "Tres compradores reportaron publicaciones engañosas y productos no entregados.",
       reason: "FRAUD",
       status: "ESCALATED",
       priority: "CRITICAL",
@@ -199,12 +199,12 @@ const MOCK_DATA = {
       },
       assignedModerator: {
         id: "MODERATOR-102",
-        name: "JosÃ© RamÃ­rez"
+        name: "José Ramírez"
       },
       evidence: [
         "9 reportes recibidos",
         "3 disputas abiertas",
-        "Trust Score crÃ­tico",
+        "Trust Score crítico",
         "Dos productos retirados anteriormente"
       ],
       relatedEntities: {
@@ -238,7 +238,7 @@ const MOCK_DATA = {
       },
       reportedUser: {
         id: "USR-1004",
-        name: "MarÃ­a PÃ©rez",
+        name: "María Pérez",
         email: "maria@example.com",
         trustScore: 69,
         accountStatus: "ACTIVE",
@@ -247,7 +247,7 @@ const MOCK_DATA = {
       },
       reportedBy: {
         id: "SYSTEM",
-        name: "IA de imÃ¡genes"
+        name: "IA de imágenes"
       },
       assignedModerator: null,
       evidence: [
@@ -264,9 +264,9 @@ const MOCK_DATA = {
       id: "MOD-9004",
       type: "PROFILE",
       targetId: "USR-1005",
-      title: "Perfil con informaciÃ³n ofensiva",
+      title: "Perfil con información ofensiva",
       description:
-        "La biografÃ­a del usuario contiene lenguaje ofensivo y amenazas.",
+        "La biografía del usuario contiene lenguaje ofensivo y amenazas.",
       reason: "OFFENSIVE",
       status: "ACTION_TAKEN",
       priority: "HIGH",
@@ -283,7 +283,7 @@ const MOCK_DATA = {
       },
       reportedUser: {
         id: "USR-1005",
-        name: "Luis GÃ³mez",
+        name: "Luis Gómez",
         email: "luis@example.com",
         trustScore: 47,
         accountStatus: "SUSPENDED",
@@ -296,7 +296,7 @@ const MOCK_DATA = {
       },
       assignedModerator: {
         id: "MODERATOR-103",
-        name: "Ana GÃ³mez"
+        name: "Ana Gómez"
       },
       evidence: [
         "Lenguaje ofensivo detectado",
@@ -311,7 +311,7 @@ const MOCK_DATA = {
   moderators: [
     {
       id: "MODERATOR-101",
-      name: "Laura MÃ©ndez",
+      name: "Laura Méndez",
       activeCases: 7,
       resolvedToday: 10,
       averageTime: "7 min",
@@ -320,7 +320,7 @@ const MOCK_DATA = {
     },
     {
       id: "MODERATOR-102",
-      name: "JosÃ© RamÃ­rez",
+      name: "José Ramírez",
       activeCases: 9,
       resolvedToday: 8,
       averageTime: "9 min",
@@ -329,7 +329,7 @@ const MOCK_DATA = {
     },
     {
       id: "MODERATOR-103",
-      name: "Ana GÃ³mez",
+      name: "Ana Gómez",
       activeCases: 5,
       resolvedToday: 12,
       averageTime: "6 min",
@@ -351,7 +351,7 @@ const MOCK_DATA = {
       id: "AI-001",
       title: "Posible producto falsificado",
       description:
-        "La IA detectÃ³ imÃ¡genes reutilizadas y precio anormal.",
+        "La IA detectó imágenes reutilizadas y precio anormal.",
       severity: "CRITICAL",
       score: 94,
       reportId: "MOD-9008"
@@ -360,7 +360,7 @@ const MOCK_DATA = {
       id: "AI-002",
       title: "Pago fuera de QSM",
       description:
-        "Se detectÃ³ WhatsApp y solicitud de transferencia.",
+        "Se detectó WhatsApp y solicitud de transferencia.",
       severity: "HIGH",
       score: 91,
       reportId: "MOD-9007"
@@ -378,23 +378,23 @@ const MOCK_DATA = {
   recentActivity: [
     {
       id: "ACT-001",
-      icon: "ðŸš¨",
-      title: "Reporte crÃ­tico creado",
+      icon: "🚨",
+      title: "Reporte crítico creado",
       description:
-        "MOD-9008 fue enviado a revisiÃ³n prioritaria.",
+        "MOD-9008 fue enviado a revisión prioritaria.",
       time: "Hace 6 minutos"
     },
     {
       id: "ACT-002",
-      icon: "ðŸ¤–",
-      title: "IA bloqueÃ³ un mensaje",
+      icon: "🤖",
+      title: "IA bloqueó un mensaje",
       description:
-        "Se detectÃ³ intento de pago fuera de QSM.",
+        "Se detectó intento de pago fuera de QSM.",
       time: "Hace 28 minutos"
     },
     {
       id: "ACT-003",
-      icon: "â›”",
+      icon: "⛔",
       title: "Usuario suspendido",
       description:
         "USR-1005 fue suspendido por lenguaje ofensivo.",
@@ -402,7 +402,7 @@ const MOCK_DATA = {
     },
     {
       id: "ACT-004",
-      icon: "âœ…",
+      icon: "✅",
       title: "Reporte resuelto",
       description:
         "Un producto reportado fue restaurado.",
@@ -445,19 +445,19 @@ function ModerationDashboard() {
 
       if (!response.ok) {
         throw new Error(
-          `No fue posible cargar ModeraciÃ³n (${response.status}).`
+          `No fue posible cargar Moderación (${response.status}).`
         );
       }
 
       const result = await response.json();
       setDashboardData(normalizeModerationResponse(result));
     } catch (requestError) {
-      console.error("Error cargando ModeraciÃ³n:", requestError);
+      console.error("Error cargando Moderación:", requestError);
 
       if (USE_MOCK_DATA) {
         setDashboardData(MOCK_DATA);
         setError(
-          "Modo demostraciÃ³n activo. El dashboard estÃ¡ preparado para conectar el backend."
+          "Modo demostración activo. El dashboard está preparado para conectar el backend."
         );
       } else {
         setDashboardData(null);
@@ -624,7 +624,7 @@ function ModerationDashboard() {
 
           throw new Error(
             responseData?.message ||
-            "No fue posible aplicar la acciÃ³n."
+            "No fue posible aplicar la acción."
           );
         }
       }
@@ -709,9 +709,8 @@ function ModerationDashboard() {
     if (!id) return;
 
     const routes = {
-      /* QSM_FIX_MODERATION_VIEW_PRODUCT */
-      PRODUCT: `/product/${id}`,
-      USER: `/profile/${id}`,
+      PRODUCT: `/admin/moderation/products/${id}`,
+      USER: `/admin/users/${id}`,
       MESSAGE: `/admin/messages/${id}`,
       DISPUTE: `/admin/disputes/${id}`,
       VERIFICATION: `/admin/verification/${id}`
@@ -729,7 +728,7 @@ function ModerationDashboard() {
       <div className="moderation-loading">
         <style>{moderationStyles}</style>
         <div className="moderation-loader" />
-        <h2>Cargando Dashboard de ModeraciÃ³n...</h2>
+        <h2>Cargando Dashboard de Moderación...</h2>
       </div>
     );
   }
@@ -738,7 +737,7 @@ function ModerationDashboard() {
     return (
       <div className="moderation-loading">
         <style>{moderationStyles}</style>
-        <h2>No se pudo cargar ModeraciÃ³n</h2>
+        <h2>No se pudo cargar Moderación</h2>
         <p>{error}</p>
 
         <button
@@ -760,7 +759,7 @@ function ModerationDashboard() {
           <div>
             <p className="moderation-eyebrow">QSM ADMIN</p>
             <h1 className="moderation-title">
-              Centro de ModeraciÃ³n
+              Centro de Moderación
             </h1>
             <p className="moderation-subtitle">
               Control de productos, usuarios, mensajes,
@@ -773,7 +772,7 @@ function ModerationDashboard() {
               className="moderation-button"
               onClick={() => navigate("/admin/select-area")}
             >
-              â† Todas las Ã¡reas
+              ← Todas las áreas
             </button>
 
             <button
@@ -796,42 +795,42 @@ function ModerationDashboard() {
             {
               title: "Reportes abiertos",
               value: dashboardData.kpis.openReports,
-              icon: "ðŸš¨"
+              icon: "🚨"
             },
             {
-              title: "En revisiÃ³n",
+              title: "En revisión",
               value: dashboardData.kpis.inReview,
-              icon: "ðŸ•µï¸"
+              icon: "🕵️"
             },
             {
-              title: "IA detectÃ³",
+              title: "IA detectó",
               value: dashboardData.kpis.aiDetected,
-              icon: "ðŸ¤–"
+              icon: "🤖"
             },
             {
               title: "Productos",
               value: dashboardData.kpis.reportedProducts,
-              icon: "ðŸ“¦"
+              icon: "📦"
             },
             {
               title: "Usuarios",
               value: dashboardData.kpis.reportedUsers,
-              icon: "ðŸ‘¤"
+              icon: "👤"
             },
             {
               title: "Suspendidos",
               value: dashboardData.kpis.suspendedUsers,
-              icon: "â›”"
+              icon: "⛔"
             },
             {
               title: "Baneados",
               value: dashboardData.kpis.bannedUsers,
-              icon: "ðŸš«"
+              icon: "🚫"
             },
             {
               title: "Resueltos hoy",
               value: dashboardData.kpis.resolvedToday,
-              icon: "âœ…"
+              icon: "✅"
             }
           ].map((card) => (
             <div
@@ -913,7 +912,7 @@ function ModerationDashboard() {
                 <option value="LOW">Baja</option>
                 <option value="MEDIUM">Media</option>
                 <option value="HIGH">Alta</option>
-                <option value="CRITICAL">CrÃ­tica</option>
+                <option value="CRITICAL">Crítica</option>
               </select>
 
               <button
@@ -930,7 +929,7 @@ function ModerationDashboard() {
                   <tr>
                     <th>ID</th>
                     <th>Tipo</th>
-                    <th>TÃ­tulo</th>
+                    <th>Título</th>
                     <th>Usuario</th>
                     <th>Motivo</th>
                     <th>IA</th>
@@ -1021,7 +1020,7 @@ function ModerationDashboard() {
 
           <aside className="moderation-side">
             <div className="moderation-card">
-              <h3>ðŸ¤– Alertas IA</h3>
+              <h3>🤖 Alertas IA</h3>
 
               {dashboardData.aiAlerts.map((alert) => (
                 <div
@@ -1038,7 +1037,7 @@ function ModerationDashboard() {
             </div>
 
             <div className="moderation-card">
-              <h3>ðŸ‘® Moderadores</h3>
+              <h3>👮 Moderadores</h3>
 
               {dashboardData.moderators.map((user) => (
                 <div
@@ -1052,7 +1051,7 @@ function ModerationDashboard() {
                     </div>
                   </div>
 
-                  <div>{user.online ? "ðŸŸ¢" : "âšª"}</div>
+                  <div>{user.online ? "🟢" : "⚪"}</div>
                 </div>
               ))}
             </div>
@@ -1112,10 +1111,6 @@ function ModerationModal({
   const [selectedModerator, setSelectedModerator] =
     useState(report.assignedModerator?.id || "");
 
-  /* QSM_MODERATION_USER_PROFILE */
-  const [showUserProfile, setShowUserProfile] =
-    useState(false);
-
   const moderator = moderators.find(
     (item) => item.id === selectedModerator
   );
@@ -1161,7 +1156,7 @@ function ModerationModal({
         <div className="moderation-modal-header">
           <div>
             <p className="moderation-eyebrow">
-              ModeraciÃ³n
+              Moderación
             </p>
             <h2>{report.id}</h2>
             <p>{report.title}</p>
@@ -1171,7 +1166,7 @@ function ModerationModal({
             className="moderation-button"
             onClick={onClose}
           >
-            âœ•
+            ✕
           </button>
         </div>
 
@@ -1224,7 +1219,7 @@ function ModerationModal({
 
           <hr />
 
-          <h3>DescripciÃ³n</h3>
+          <h3>Descripción</h3>
           <p>{report.description}</p>
 
           <h3>Evidencias</h3>
@@ -1244,8 +1239,8 @@ function ModerationModal({
           <section className="moderation-luna-panel">
             <div className="moderation-luna-header">
               <div>
-                <p className="moderation-eyebrow">QSM AI Â· LUNA</p>
-                <h3>AnÃ¡lisis inteligente</h3>
+                <p className="moderation-eyebrow">QSM AI · LUNA</p>
+                <h3>Análisis inteligente</h3>
               </div>
 
               <span className="moderation-luna-score">
@@ -1268,15 +1263,15 @@ function ModerationModal({
               </div>
 
               <div>
-                <label>DecisiÃ³n</label>
+                <label>Decisión</label>
                 <strong>
                   {lunaAnalysis.decision ||
-                    "REVISIÃ“N MANUAL"}
+                    "REVISIÓN MANUAL"}
                 </strong>
               </div>
 
               <div>
-                <label>RevisiÃ³n humana</label>
+                <label>Revisión humana</label>
                 <strong>
                   {lunaAnalysis.humanReviewRequired
                     ? "REQUERIDA"
@@ -1317,14 +1312,14 @@ function ModerationModal({
           {moderatorDecision && (
             <section className="moderation-decision-panel">
               <p className="moderation-eyebrow">
-                DECISIÃ“N FINAL DEL MODERADOR
+                DECISIÓN FINAL DEL MODERADOR
               </p>
 
               <div className="moderation-grid">
                 <div>
-                  <label>AcciÃ³n</label>
+                  <label>Acción</label>
                   <strong>
-                    {moderatorDecision.action || "SIN ACCIÃ“N"}
+                    {moderatorDecision.action || "SIN ACCIÓN"}
                   </strong>
                 </div>
 
@@ -1348,19 +1343,19 @@ function ModerationModal({
                 </div>
               </div>
 
-              <h3>Motivo de la decisiÃ³n</h3>
+              <h3>Motivo de la decisión</h3>
 
               <p>
                 {moderatorDecision.reason ||
-                  "No se registrÃ³ un motivo."}
+                  "No se registró un motivo."}
               </p>
 
               <p className="moderation-decision-note">
-                LUNA recomendÃ³:
+                LUNA recomendó:
                 {" "}
                 {moderatorDecision.lunaDecision ||
-                  "Sin decisiÃ³n"}
-                {" Â· "}
+                  "Sin decisión"}
+                {" · "}
                 Riesgo:
                 {" "}
                 {moderatorDecision.lunaRiskLevel ||
@@ -1417,7 +1412,7 @@ function ModerationModal({
 
           <hr />
 
-          <h3>Acciones rÃ¡pidas</h3>
+          <h3>Acciones rápidas</h3>
 
           <div className="moderation-actions">
             <button
@@ -1435,14 +1430,15 @@ function ModerationModal({
 
             <button
               className="moderation-button"
-              disabled={!report.reportedUser}
+              disabled={!relatedEntities.userId}
               onClick={() =>
-                setShowUserProfile((current) => !current)
+                openRelatedArea(
+                  "USER",
+                  relatedEntities.userId
+                )
               }
             >
-              {showUserProfile
-                ? "Cerrar Usuario"
-                : "Ver Usuario"}
+              Ver Usuario
             </button>
 
             <button
@@ -1474,61 +1470,9 @@ function ModerationModal({
             </button>
           </div>
 
-          {showUserProfile && (
-            <section
-              style={{
-                marginTop: "16px",
-                padding: "18px",
-                border: "1px solid rgba(103,232,249,.25)",
-                borderRadius: "16px",
-                background: "rgba(2,6,23,.55)"
-              }}
-            >
-              <p className="moderation-eyebrow">
-                PERFIL DEL USUARIO
-              </p>
-
-              <div className="moderation-grid">
-                <div>
-                  <label>Nombre</label>
-                  <strong>{report.reportedUser?.name || "Sin nombre"}</strong>
-                </div>
-
-                <div>
-                  <label>Correo</label>
-                  <strong>{report.reportedUser?.email || "Sin correo"}</strong>
-                </div>
-
-                <div>
-                  <label>Estado</label>
-                  <strong>
-                    {report.reportedUser?.accountStatus || "PENDING"}
-                  </strong>
-                </div>
-
-                <div>
-                  <label>Trust Score</label>
-                  <strong>{report.reportedUser?.trustScore ?? 0}</strong>
-                </div>
-
-                <div>
-                  <label>Advertencias</label>
-                  <strong>{report.reportedUser?.warnings ?? 0}</strong>
-                </div>
-
-                <div>
-                  <label>Reportes recibidos</label>
-                  <strong>
-                    {report.reportedUser?.reportsReceived ?? 0}
-                  </strong>
-                </div>
-              </div>
-            </section>
-          )}
-
           <hr />
 
-          <h3>Aplicar moderaciÃ³n</h3>
+          <h3>Aplicar moderación</h3>
 
           <div className="moderation-actions">
             <button
@@ -1538,32 +1482,28 @@ function ModerationModal({
                 onAction(report, "WARN_USER")
               }
             >
-              âš  Advertir
+              ⚠ Advertir
             </button>
 
-            {/* QSM_CONTEXTUAL_PRODUCT_ACTIONS */}
-            {String(report.target?.status || "").toUpperCase() ===
-            "HIDDEN" ? (
-              <button
-                className="moderation-button moderation-button-success"
-                disabled={isSaving}
-                onClick={() =>
-                  onAction(report, "RESTORE_CONTENT")
-                }
-              >
-                ðŸ‘ Reactivar publicaciÃ³n
-              </button>
-            ) : (
-              <button
-                className="moderation-button moderation-button-info"
-                disabled={isSaving}
-                onClick={() =>
-                  onAction(report, "HIDE_CONTENT")
-                }
-              >
-                ðŸ™ˆ Ocultar publicaciÃ³n
-              </button>
-            )}
+            <button
+              className="moderation-button moderation-button-info"
+              disabled={isSaving}
+              onClick={() =>
+                onAction(report, "HIDE_CONTENT")
+              }
+            >
+              🙈 Ocultar publicación
+            </button>
+
+            <button
+              className="moderation-button moderation-button-success"
+              disabled={isSaving}
+              onClick={() =>
+                onAction(report, "RESTORE_CONTENT")
+              }
+            >
+              👁 Restaurar publicación
+            </button>
 
             <button
               className="moderation-button moderation-button-warning"
@@ -1572,7 +1512,7 @@ function ModerationModal({
                 onAction(report, "SUSPEND_USER")
               }
             >
-              â›” Suspender
+              ⛔ Suspender
             </button>
 
             <button
@@ -1582,7 +1522,7 @@ function ModerationModal({
                 onAction(report, "BAN_USER")
               }
             >
-              ðŸš« Banear
+              🚫 Banear
             </button>
 
             <button
@@ -1592,7 +1532,7 @@ function ModerationModal({
                 onAction(report, "RESTORE_USER")
               }
             >
-              â™» Restaurar usuario
+              ♻ Restaurar usuario
             </button>
 
             <button
@@ -1602,7 +1542,7 @@ function ModerationModal({
                 onAction(report, "RESOLVE_REPORT")
               }
             >
-              âœ… Resolver reporte
+              ✅ Resolver reporte
             </button>
 
             <button
@@ -1612,7 +1552,7 @@ function ModerationModal({
                 onAction(report, "DISMISS_REPORT")
               }
             >
-              âŒ Descartar
+              ❌ Descartar
             </button>
           </div>
         </div>
