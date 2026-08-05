@@ -709,8 +709,8 @@ function ModerationDashboard() {
     if (!id) return;
 
     const routes = {
-      PRODUCT: `/admin/moderation/products/${id}`,
-      USER: `/admin/users/${id}`,
+      PRODUCT: `/admin/moderation/product/${id}`,
+      USER: `/admin/moderation/user/${id}`,
       MESSAGE: `/admin/messages/${id}`,
       DISPUTE: `/admin/disputes/${id}`,
       VERIFICATION: `/admin/verification/${id}`

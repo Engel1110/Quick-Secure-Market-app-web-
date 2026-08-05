@@ -641,7 +641,25 @@ function App() {
             RUTAS ADMINISTRATIVAS TODAVÍA NO CREADAS
         ====================================================== */}
 
+                {/* QSM_ADMIN_MODERATION_RELATED_VIEWS */}
         <Route
+          path="/admin/moderation/product/:id"
+          element={
+            <AdminLayout>
+              <ProductDetails />
+            </AdminLayout>
+          }
+        />
+
+        <Route
+          path="/admin/moderation/user/:id"
+          element={
+            <AdminLayout>
+              <PublicProfile />
+            </AdminLayout>
+          }
+        />
+<Route
           path="/admin/*"
           element={
             <Navigate
