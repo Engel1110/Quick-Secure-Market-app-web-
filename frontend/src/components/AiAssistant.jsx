@@ -36,12 +36,36 @@ const DEFAULT_CORE = {
 
 /* QSM_FASE11_BLOCK1_HERO_ANCHORED_LUNA */
 
+/* QSM_FASE11_BLOCK2_REAL_CHAT */
+
+const LUNA_DIALOGUE_ENDPOINT =
+  "/ai/memory/message";
+
 function AiAssistant({ pageContext }) {
   const location = useLocation();
 
   const [open, setOpen] = useState(false);
   const [activeGuide, setActiveGuide] = useState(null);
   const [core, setCore] = useState(DEFAULT_CORE);
+
+  const [chatMessages, setChatMessages] =
+    useState([
+      {
+        id: "LUNA-WELCOME",
+        role: "assistant",
+        text:
+          "Hola. Soy LUNA. Pregúntame sobre tus productos, compras, ventas, mensajes, disputas o seguridad."
+      }
+    ]);
+
+  const [chatQuestion, setChatQuestion] =
+    useState("");
+
+  const [chatSending, setChatSending] =
+    useState(false);
+
+  const [chatError, setChatError] =
+    useState("");
 
   const currentPath =
     pageContext || location.pathname;
@@ -218,6 +242,155 @@ function AiAssistant({ pageContext }) {
     setActiveGuide(
       guides[key] ||
       guides.dashboard
+    );
+  };
+
+  const extractLunaResponse = (data) => {
+    const candidates = [
+      data?.response,
+      data?.reply,
+      data?.answer,
+      data?.result?.response,
+      data?.result?.reply,
+      data?.result?.answer,
+      data?.result?.message,
+      data?.message,
+      data?.result?.response?.message,
+      data?.result?.response?.text
+    ];
+
+    const response =
+      candidates.find(
+        (value) =>
+          typeof value === "string" &&
+          value.trim()
+      );
+
+    return (
+      response?.trim() ||
+      "Procesé tu solicitud, pero no recibí una respuesta textual."
+    );
+  };
+
+  const sendLunaQuestion = async (
+    event,
+    forcedQuestion = ""
+  ) => {
+    event?.preventDefault?.();
+
+    const question =
+      String(
+        forcedQuestion ||
+        chatQuestion
+      ).trim();
+
+    if (
+      !question ||
+      chatSending
+    ) {
+      return;
+    }
+
+    const userMessage = {
+      id: `USER-${Date.now()}`,
+      role: "user",
+      text: question
+    };
+
+    setChatMessages((current) => [
+      ...current,
+      userMessage
+    ]);
+
+    setChatQuestion("");
+    setChatError("");
+    setChatSending(true);
+
+    try {
+      const sessionId =
+        window.sessionStorage.getItem(
+          "qsm_luna_session"
+        ) ||
+        `LUNA-${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2, 9)}`;
+
+      window.sessionStorage.setItem(
+        "qsm_luna_session",
+        sessionId
+      );
+
+      const response =
+        await api.post(
+          LUNA_DIALOGUE_ENDPOINT,
+          {
+            message: question,
+            sessionId,
+            context: {
+              path: currentPath,
+              pageContext:
+                getContextInfo(
+                  currentPath
+                ),
+              audience:
+                core.audience,
+              accessLevel:
+                core.accessLevel
+            }
+          }
+        );
+
+      const lunaMessage = {
+        id: `LUNA-${Date.now()}`,
+        role: "assistant",
+        text:
+          extractLunaResponse(
+            response.data
+          )
+      };
+
+      setChatMessages((current) => [
+        ...current,
+        lunaMessage
+      ]);
+    } catch (error) {
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        "No fue posible comunicarse con LUNA.";
+
+      setChatError(message);
+
+      setChatMessages((current) => [
+        ...current,
+        {
+          id: `LUNA-ERROR-${Date.now()}`,
+          role: "assistant",
+          error: true,
+          text:
+            "No pude completar la consulta. Inténtalo nuevamente."
+        }
+      ]);
+    } finally {
+      setChatSending(false);
+    }
+  };
+
+  const clearLunaChat = () => {
+    setChatMessages([
+      {
+        id: `LUNA-WELCOME-${Date.now()}`,
+        role: "assistant",
+        text:
+          "Conversación reiniciada. ¿En qué puedo ayudarte?"
+      }
+    ]);
+
+    setChatQuestion("");
+    setChatError("");
+
+    window.sessionStorage.removeItem(
+      "qsm_luna_session"
     );
   };
 
@@ -615,6 +788,136 @@ function AiAssistant({ pageContext }) {
               />
             )}
           </div>
+
+          <section className="qsm-ai-chat">
+            <header className="qsm-ai-chat__header">
+              <div>
+                <span className="qsm-ai-guide__label">
+                  CONVERSACIÓN CON LUNA
+                </span>
+
+                <strong>
+                  Pregúntame sobre tu plataforma
+                </strong>
+              </div>
+
+              <button
+                type="button"
+                className="qsm-ai-chat__clear"
+                onClick={clearLunaChat}
+                disabled={chatSending}
+              >
+                Limpiar
+              </button>
+            </header>
+
+            <div className="qsm-ai-chat__quick">
+              {[
+                "Dame un resumen de mi actividad",
+                "¿Tengo riesgos pendientes?",
+                "Revisa mis productos",
+                "¿Cómo van mis ventas?"
+              ].map((question) => (
+                <button
+                  key={question}
+                  type="button"
+                  onClick={() =>
+                    sendLunaQuestion(
+                      null,
+                      question
+                    )
+                  }
+                  disabled={chatSending}
+                >
+                  {question}
+                </button>
+              ))}
+            </div>
+
+            <div
+              className="qsm-ai-chat__messages"
+              aria-live="polite"
+            >
+              {chatMessages.map(
+                (message) => (
+                  <article
+                    key={message.id}
+                    className={
+                      `qsm-ai-chat__message qsm-ai-chat__message--${message.role}${
+                        message.error
+                          ? " is-error"
+                          : ""
+                      }`
+                    }
+                  >
+                    <span>
+                      {message.role ===
+                      "assistant"
+                        ? "LUNA"
+                        : "TÚ"}
+                    </span>
+
+                    <p>{message.text}</p>
+                  </article>
+                )
+              )}
+
+              {chatSending && (
+                <article className="qsm-ai-chat__message qsm-ai-chat__message--assistant">
+                  <span>LUNA</span>
+
+                  <div className="qsm-ai-chat__typing">
+                    <i />
+                    <i />
+                    <i />
+                  </div>
+                </article>
+              )}
+            </div>
+
+            {chatError && (
+              <div className="qsm-ai-chat__error">
+                {chatError}
+              </div>
+            )}
+
+            <form
+              className="qsm-ai-chat__form"
+              onSubmit={sendLunaQuestion}
+            >
+              <input
+                type="text"
+                value={chatQuestion}
+                onChange={(event) =>
+                  setChatQuestion(
+                    event.target.value
+                      .slice(0, 500)
+                  )
+                }
+                placeholder="Pregúntame cualquier cosa sobre tu plataforma..."
+                maxLength={500}
+                disabled={chatSending}
+                autoComplete="off"
+              />
+
+              <button
+                type="submit"
+                disabled={
+                  chatSending ||
+                  !chatQuestion.trim()
+                }
+                aria-label="Enviar pregunta a LUNA"
+              >
+                {chatSending
+                  ? "•••"
+                  : "➜"}
+              </button>
+            </form>
+
+            <small className="qsm-ai-chat__privacy">
+              LUNA utiliza únicamente el contexto permitido de QSM.
+            </small>
+          </section>
 
           <footer className="qsm-ai-panel__footer">
             <span>
