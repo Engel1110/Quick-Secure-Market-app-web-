@@ -12,14 +12,23 @@ import {
 import api from "../api/axios";
 import "./AiAssistant.css";
 
+/* QSM_FASE10_BLOCK1_VISUAL_CORE */
+
 const DEFAULT_CORE = {
   status: "CONNECTING",
   version: "1.0.0",
   mode: "RULE_BASED",
   provider: "INTERNAL",
+  authenticated: false,
+  audience: "VISITOR",
+  accessLevel: "PUBLIC",
+  allowedTopics: [],
   capabilities: [],
   modules: [],
-  decisions: []};
+  decisions: [],
+  loading: true,
+  error: ""
+};
 
 function AiAssistant({ pageContext }) {
   const location = useLocation();
@@ -41,64 +50,141 @@ function AiAssistant({ pageContext }) {
   useEffect(() => {
     let mounted = true;
 
-    const loadStatus = async () => {
+    const loadCore = async () => {
+      if (mounted) {
+        setCore((current) => ({
+          ...current,
+          loading: true,
+          error: ""
+        }));
+      }
+
       try {
-        const response =
+        const publicResponse =
           await api.get("/ai/status");
+
+        let accessData = null;
+
+        try {
+          const accessResponse =
+            await api.get(
+              "/ai/access/context"
+            );
+
+          accessData =
+            accessResponse.data || null;
+        } catch {
+          accessData = null;
+        }
 
         if (!mounted) {
           return;
         }
 
+        const publicData =
+          publicResponse.data || {};
+
+        const authenticated =
+          accessData?.authenticated === true;
+
+        const allowedTopics =
+          Array.isArray(
+            accessData?.allowedTopics
+          )
+            ? accessData.allowedTopics
+            : Array.isArray(
+                publicData.allowedTopics
+              )
+              ? publicData.allowedTopics
+              : [];
+
+        const modules =
+          buildLunaModules({
+            authenticated,
+            accessLevel:
+              accessData?.accessLevel ||
+              publicData.accessLevel ||
+              "PUBLIC",
+            allowedTopics
+          });
+
+        const capabilities =
+          buildLunaCapabilities({
+            authenticated,
+            allowedTopics,
+            modules
+          });
+
         setCore({
           status:
-            response.data?.status ||
+            publicData.status ||
             "ACTIVE",
+
           version:
-            response.data?.engine?.version ||
-            "1.0.0",
+            publicData.engine?.version ||
+            "10.1.0",
+
           mode:
-            response.data?.engine?.mode ||
+            publicData.engine?.mode ||
             "RULE_BASED",
+
           provider:
-            response.data?.engine?.provider ||
+            publicData.engine?.provider ||
             "INTERNAL",
-          capabilities:
-            Array.isArray(
-              response.data?.capabilities
-            )
-              ? response.data.capabilities
-              : [],
-          modules:
-            Array.isArray(
-              response.data?.modules
-            )
-              ? response.data.modules
-              : [],
+
+          authenticated,
+
+          audience:
+            accessData?.audience ||
+            publicData.audience ||
+            "VISITOR",
+
+          accessLevel:
+            accessData?.accessLevel ||
+            publicData.accessLevel ||
+            "PUBLIC",
+
+          user:
+            accessData?.user || null,
+
+          allowedTopics,
+
+          modules,
+
+          capabilities,
+
           decisions:
             Array.isArray(
-              response.data?.decisions
+              publicData.decisions
             )
-              ? response.data.decisions
-              : []
+              ? publicData.decisions
+              : [],
+
+          loading: false,
+          error: ""
         });
-      } catch {
+      } catch (error) {
         if (!mounted) {
           return;
         }
 
         setCore({
           ...DEFAULT_CORE,
-          status: "OFFLINE"
+          status: "OFFLINE",
+          loading: false,
+          error:
+            error?.response?.data?.message ||
+            error?.message ||
+            "No fue posible conectar con LUNA."
         });
       }
     };
 
-    loadStatus();
+    loadCore();
 
     const timer =
       window.setInterval(
-        loadStatus,
+        loadCore,
         60000
       );
 
@@ -119,7 +205,7 @@ function AiAssistant({ pageContext }) {
     core.capabilities.filter(
       (item) =>
         item?.status === "ACTIVE" ||
-        item?.status === "ADAPTER_READY"
+        item?.status === "READY"
     ).length;
 
   const openGuide = (key) => {
@@ -272,6 +358,61 @@ function AiAssistant({ pageContext }) {
                   </span>
                 </section>
 
+                <section className="qsm-ai-live-summary">
+                  <div className="qsm-ai-live-summary__identity">
+                    <span className="qsm-ai-guide__label">
+                      SESIÓN ACTUAL
+                    </span>
+
+                    <strong>
+                      {core.authenticated
+                        ? (
+                            core.user?.firstName
+                              ? `Hola, ${core.user.firstName}`
+                              : "Usuario autenticado"
+                          )
+                        : "Modo visitante"}
+                    </strong>
+
+                    <small>
+                      {core.authenticated
+                        ? "LUNA puede utilizar tu contexto privado."
+                        : "Inicia sesión para habilitar funciones personalizadas."}
+                    </small>
+                  </div>
+
+                  <div className="qsm-ai-live-summary__metrics">
+                    <article>
+                      <span>Acceso</span>
+                      <strong>
+                        {formatAccessLevel(
+                          core.accessLevel
+                        )}
+                      </strong>
+                    </article>
+
+                    <article>
+                      <span>Módulos</span>
+                      <strong>
+                        {core.modules.length}
+                      </strong>
+                    </article>
+
+                    <article>
+                      <span>Temas</span>
+                      <strong>
+                        {core.allowedTopics.length}
+                      </strong>
+                    </article>
+                  </div>
+
+                  {core.error && (
+                    <div className="qsm-ai-live-summary__error">
+                      {core.error}
+                    </div>
+                  )}
+                </section>
+
                 <div className="qsm-ai-officer-actions">
                   {[
                     [
@@ -335,9 +476,11 @@ function AiAssistant({ pageContext }) {
                     </span>
 
                     <strong>
-                      {core.status === "ACTIVE"
-                        ? "QSM AI conectado"
-                        : "Conexión pendiente"}
+                      {core.loading
+                        ? "Sincronizando..."
+                        : core.status === "ACTIVE"
+                          ? "QSM AI conectado"
+                          : "Conexión pendiente"}
                     </strong>
                   </div>
 
@@ -357,7 +500,9 @@ function AiAssistant({ pageContext }) {
                     </span>
 
                     <strong>
-                      {getContextInfo(currentPath)}
+                      {core.authenticated
+                        ? getContextInfo(currentPath)
+                        : "Público"}
                     </strong>
                   </div>
                 </section>
@@ -380,15 +525,27 @@ function AiAssistant({ pageContext }) {
                   </div>
 
                   <div className="qsm-ai-phase23__modules">
-                    {core.modules.length > 0 ? (
+                    {core.loading ? (
+                      <span className="qsm-ai-module-loading">
+                        Sincronizando módulos...
+                      </span>
+                    ) : core.modules.length > 0 ? (
                       core.modules.map((module) => (
-                        <span key={module}>
-                          {module}
+                        <span
+                          key={module.code}
+                          className={
+                            module.status === "ACTIVE"
+                              ? "active"
+                              : "limited"
+                          }
+                        >
+                          <i />
+                          {module.label}
                         </span>
                       ))
                     ) : (
-                      <span>
-                        Cargando módulos...
+                      <span className="qsm-ai-module-loading">
+                        No hay módulos disponibles.
                       </span>
                     )}
                   </div>
@@ -694,6 +851,240 @@ function LunaPortrait() {
         filter="url(#lunaGlow)"
       />
     </svg>
+  );
+}
+
+function buildLunaModules({
+  authenticated,
+  accessLevel,
+  allowedTopics
+}) {
+  const topics =
+    new Set(
+      Array.isArray(allowedTopics)
+        ? allowedTopics
+        : []
+    );
+
+  const modules = [
+    {
+      code: "CORE_ENGINE",
+      label: "Core Engine",
+      public: true
+    },
+    {
+      code: "PUBLIC_GUIDANCE",
+      label: "Guía pública",
+      public: true
+    },
+    {
+      code: "BUYER_PROFILE",
+      label: "Buyer Profile",
+      topics: [
+        "MY_PROFILE",
+        "MY_ORDERS",
+        "PRODUCT_RECOMMENDATIONS"
+      ]
+    },
+    {
+      code: "SELLER_PROFILE",
+      label: "Seller Profile",
+      topics: [
+        "MY_PRODUCTS",
+        "MY_SALES"
+      ]
+    },
+    {
+      code: "MARKETPLACE_INTELLIGENCE",
+      label: "Marketplace Intelligence",
+      topics: [
+        "HOW_TO_BUY",
+        "HOW_TO_SELL",
+        "PRODUCT_RECOMMENDATIONS"
+      ]
+    },
+    {
+      code: "TRANSACTION_SECURITY",
+      label: "Transaction Security",
+      topics: [
+        "PUBLIC_SECURITY",
+        "SECURITY_ANALYSIS",
+        "FRAUD_ALERTS"
+      ]
+    },
+    {
+      code: "CONVERSATION_MEMORY",
+      label: "Conversation Memory",
+      topics: [
+        "MY_MESSAGES"
+      ]
+    },
+    {
+      code: "OPERATIONAL_INTELLIGENCE",
+      label: "Operational Intelligence",
+      privateOnly: true
+    },
+    {
+      code: "PREDICTIVE_INTELLIGENCE",
+      label: "Predictive Intelligence",
+      privateOnly: true
+    },
+    {
+      code: "LUNA_PREMIUM",
+      label: "LUNA Premium",
+      privateOnly: true
+    },
+    {
+      code: "BACKOFFICE_INTELLIGENCE",
+      label: "BackOffice Intelligence",
+      backofficeOnly: true
+    },
+    {
+      code: "AUDIT_TRACEABILITY",
+      label: "Audit & Traceability",
+      topics: [
+        "AUDIT",
+        "READ_ONLY_REPORTS",
+        "DISPUTES"
+      ]
+    }
+  ];
+
+  return modules
+    .filter((module) => {
+      if (module.public) {
+        return true;
+      }
+
+      if (
+        module.backofficeOnly
+      ) {
+        return (
+          accessLevel === "BACKOFFICE"
+        );
+      }
+
+      if (
+        module.privateOnly
+      ) {
+        return authenticated;
+      }
+
+      return (
+        authenticated ||
+        module.topics?.some(
+          (topic) =>
+            topics.has(topic)
+        )
+      );
+    })
+    .map((module) => ({
+      ...module,
+      status:
+        authenticated ||
+        module.public
+          ? "ACTIVE"
+          : "LIMITED"
+    }));
+}
+
+function buildLunaCapabilities({
+  authenticated,
+  allowedTopics,
+  modules
+}) {
+  const topics =
+    new Set(
+      Array.isArray(allowedTopics)
+        ? allowedTopics
+        : []
+    );
+
+  return [
+    {
+      code: "SECURE_GUIDANCE",
+      description:
+        "Orientación segura dentro de QSM.",
+      status: "ACTIVE"
+    },
+    {
+      code: "CONTEXT_AWARENESS",
+      description:
+        "Comprende la sección actual de la plataforma.",
+      status:
+        authenticated
+          ? "ACTIVE"
+          : "READY"
+    },
+    {
+      code: "USER_PROFILE",
+      description:
+        "Utiliza el perfil privado del usuario.",
+      status:
+        authenticated
+          ? "ACTIVE"
+          : "LIMITED"
+    },
+    {
+      code: "MARKETPLACE_ANALYSIS",
+      description:
+        "Analiza productos, vendedores y precios.",
+      status:
+        topics.has(
+          "PRODUCT_RECOMMENDATIONS"
+        ) ||
+        authenticated
+          ? "ACTIVE"
+          : "READY"
+    },
+    {
+      code: "FRAUD_PREVENTION",
+      description:
+        "Detecta señales y patrones de riesgo.",
+      status: "ACTIVE"
+    },
+    {
+      code: "PREDICTIVE_ENGINE",
+      description:
+        "Genera indicadores y escenarios predictivos.",
+      status:
+        authenticated
+          ? "ACTIVE"
+          : "LIMITED"
+    },
+    {
+      code: "MEMORY",
+      description:
+        "Mantiene contexto entre conversaciones.",
+      status:
+        authenticated
+          ? "ACTIVE"
+          : "LIMITED"
+    },
+    {
+      code: "MODULE_ORCHESTRATION",
+      description:
+        `${modules.length} módulos coordinados por LUNA.`,
+      status: "ACTIVE"
+    }
+  ];
+}
+
+function formatAccessLevel(value) {
+  const levels = {
+    PUBLIC: "Público",
+    REGISTERED_USER: "Usuario",
+    BACKOFFICE: "BackOffice",
+    ADMIN: "Administrador"
+  };
+
+  return (
+    levels[
+      String(value || "")
+        .toUpperCase()
+    ] ||
+    value ||
+    "Público"
   );
 }
 
