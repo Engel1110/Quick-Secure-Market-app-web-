@@ -15,7 +15,7 @@ function MarketingCenter() {
   const logout = () => {
     localStorage.removeItem("qsm_user");
     localStorage.removeItem("qsm_token");
-    navigate("/login");
+    navigate("/");
   };
 
   return (

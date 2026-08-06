@@ -604,12 +604,9 @@ function Settings() {
           () => {
             logout();
 
-            navigate(
-              "/login",
-              {
-                replace: true
-              }
-            );
+            navigate("/", {
+      replace: true
+    });
           },
           1800
         );
@@ -706,12 +703,9 @@ function Settings() {
     () => {
       logout();
 
-      navigate(
-        "/login",
-        {
-          replace: true
-        }
-      );
+      navigate("/", {
+      replace: true
+    });
     };
 
   return (

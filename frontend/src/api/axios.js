@@ -537,11 +537,39 @@ api.interceptors.response.use(
           "/admin/login"
         );
       } else {
-        clearNormalSession();
+        const currentNormalPath =
+          typeof window !== "undefined"
+            ? window.location.pathname
+            : "";
 
-        redirectToLogin(
-          "/login"
-        );
+        const publicNormalPaths = [
+          "/",
+          "/login",
+          "/register",
+          "/forgot-password",
+          "/reset-password",
+          "/verify-recovery-email"
+        ];
+
+        const isPublicNormalPath =
+          publicNormalPaths.some(
+            (publicPath) =>
+              currentNormalPath === publicPath ||
+              (
+                publicPath !== "/" &&
+                currentNormalPath.startsWith(
+                  publicPath + "/"
+                )
+              )
+          );
+
+        if (!isPublicNormalPath) {
+          clearNormalSession();
+
+          redirectToLogin(
+            "/"
+          );
+        }
       }
     }
 

@@ -696,12 +696,9 @@ function Topbar() {
       logout();
     }
 
-    navigate(
-      "/login",
-      {
-        replace: true
-      }
-    );
+    navigate("/", {
+      replace: true
+    });
   };
 
   /*

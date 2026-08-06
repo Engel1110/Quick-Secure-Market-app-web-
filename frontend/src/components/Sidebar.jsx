@@ -250,12 +250,9 @@ function Sidebar({
       logout();
     }
 
-    navigate(
-      "/login",
-      {
-        replace: true
-      }
-    );
+    navigate("/", {
+      replace: true
+    });
   };
 
   useEffect(() => {
