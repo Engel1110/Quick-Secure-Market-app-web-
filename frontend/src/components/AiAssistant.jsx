@@ -44,6 +44,8 @@ const LUNA_DIALOGUE_FIELD =
 
 /* QSM_FASE12_BLOCK1_REAL_DIALOGUE_FIX */
 
+/* QSM_FASE12_BLOCK2_COLLAPSIBLE_CHAT_FIX */
+
 function AiAssistant({ pageContext }) {
   const location = useLocation();
 
@@ -65,6 +67,9 @@ function AiAssistant({ pageContext }) {
     useState("");
 
   const [chatSending, setChatSending] =
+    useState(false);
+
+  const [chatOpen, setChatOpen] =
     useState(false);
 
   const [chatError, setChatError] =
@@ -496,6 +501,44 @@ function AiAssistant({ pageContext }) {
     );
   };
 
+  const startLunaChat = () => {
+    window.sessionStorage.removeItem(
+      "qsm_luna_session"
+    );
+
+    setChatMessages([
+      {
+        id: `LUNA-START-${Date.now()}`,
+        role: "assistant",
+        text:
+          "Hola. Soy LUNA. ¿En qué puedo ayudarte dentro de QSM?"
+      }
+    ]);
+
+    setChatQuestion("");
+    setChatError("");
+    setChatOpen(true);
+  };
+
+  const closeLunaChat = () => {
+    window.sessionStorage.removeItem(
+      "qsm_luna_session"
+    );
+
+    setChatMessages([
+      {
+        id: `LUNA-CLOSE-${Date.now()}`,
+        role: "assistant",
+        text:
+          "Hola. Soy LUNA. ¿En qué puedo ayudarte dentro de QSM?"
+      }
+    ]);
+
+    setChatQuestion("");
+    setChatError("");
+    setChatOpen(false);
+  };
+
   return (
     <>
       <button
@@ -576,7 +619,15 @@ function AiAssistant({ pageContext }) {
             </b>
           </div>
 
-          <div className="qsm-ai-panel__body">
+          <div
+            className={
+              `qsm-ai-panel__body${
+                chatOpen
+                  ? " is-chat-open"
+                  : ""
+              }`
+            }
+          >
             {!activeGuide ? (
               <>
                 <section className="qsm-ai-officer-intro qsm-ai-luna-hero">
@@ -891,7 +942,67 @@ function AiAssistant({ pageContext }) {
             )}
           </div>
 
-          <section className="qsm-ai-chat">
+
+          {!chatOpen && (
+            <button
+              type="button"
+              className="qsm-ai-live-chat-launcher"
+              onClick={startLunaChat}
+            >
+              <span className="qsm-ai-live-chat-launcher__icon">
+                💬
+              </span>
+
+              <span className="qsm-ai-live-chat-launcher__copy">
+                <strong>
+                  Chat en vivo con LUNA
+                </strong>
+
+                <small>
+                  Productos, compras, ventas y seguridad
+                </small>
+              </span>
+
+              <span className="qsm-ai-live-chat-launcher__arrow">
+                ›
+              </span>
+            </button>
+          )}
+
+          {chatOpen && (
+            <div className="qsm-ai-chat-overlay">
+              <header className="qsm-ai-chat-overlay__top">
+                <div>
+                  <span className="qsm-ai-guide__label">
+                    CHAT EN VIVO
+                  </span>
+
+                  <strong>
+                    Conversación con LUNA
+                  </strong>
+                </div>
+
+                <div className="qsm-ai-chat-overlay__controls">
+                  <button
+                    type="button"
+                    onClick={clearLunaChat}
+                    disabled={chatSending}
+                  >
+                    Limpiar
+                  </button>
+
+                  <button
+                    type="button"
+                    className="qsm-ai-chat-overlay__close"
+                    onClick={closeLunaChat}
+                    aria-label="Cerrar chat"
+                  >
+                    ×
+                  </button>
+                </div>
+              </header>
+
+<section className="qsm-ai-chat qsm-ai-chat--expanded">
             <header className="qsm-ai-chat__header">
               <div>
                 <span className="qsm-ai-guide__label">
@@ -1034,6 +1145,10 @@ function AiAssistant({ pageContext }) {
               LUNA utiliza únicamente el contexto permitido de QSM.
             </small>
           </section>
+
+            </div>
+          )}
+
 
           <footer className="qsm-ai-panel__footer">
             <span>
