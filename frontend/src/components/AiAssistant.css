@@ -2631,3 +2631,93 @@
     padding: 10px !important;
   }
 }
+
+
+/* QSM_FASE12_BLOCK3_FINAL_CHAT_FIX */
+
+/* Oculta el encabezado repetido del chat interno. */
+.qsm-ai-chat--expanded
+> .qsm-ai-chat__header {
+  display: none !important;
+}
+
+/* El overlay ocupa solamente el interior de LUNA. */
+.qsm-ai-chat-overlay {
+  top: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+}
+
+/* El historial es el único elemento que crece. */
+.qsm-ai-chat--expanded {
+  overflow: hidden !important;
+}
+
+.qsm-ai-chat--expanded
+.qsm-ai-chat__messages {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  scroll-behavior: smooth;
+}
+
+/* Barra de escritura fija abajo. */
+.qsm-ai-chat--expanded
+.qsm-ai-chat__form {
+  position: relative !important;
+  bottom: auto !important;
+  z-index: 40;
+  flex: 0 0 auto;
+  margin-top: 8px;
+}
+
+/* Evita botones o guías bloqueados. */
+.qsm-ai-guide,
+.qsm-ai-guide button,
+.qsm-ai-guide__back,
+.qsm-ai-guide__back-button {
+  position: relative;
+  z-index: 50;
+  pointer-events: auto !important;
+}
+
+/* No muestra dos mensajes de error iguales. */
+.qsm-ai-chat__message.is-error
++ .qsm-ai-chat__error {
+  display: none;
+}
+
+.qsm-ai-chat-overlay__controls
+button:disabled,
+.qsm-ai-chat__form
+button:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
+
+/* Indicador más claro al esperar. */
+.qsm-ai-chat__typing::after {
+  content: "LUNA está escribiendo...";
+  margin-left: 7px;
+  color: #8fa4c1;
+  font-size: 8px;
+}
+
+/* El dashboard siempre permanece visible. */
+.qsm-ai-panel--officer {
+  max-width:
+    min(430px, calc(100vw - 20px));
+}
+
+@media (max-width: 560px) {
+  .qsm-ai-chat-overlay__top {
+    min-height: 60px;
+  }
+
+  .qsm-ai-chat--expanded
+  .qsm-ai-chat__messages {
+    padding-bottom: 12px !important;
+  }
+}

@@ -35,7 +35,7 @@ const DEFAULT_CORE = {
 /* QSM_FASE11_BLOCK2_REAL_CHAT */
 
 const LUNA_DIALOGUE_ENDPOINT =
-  "/ai/memory/message";
+  "/ai/dialogue/contextual";
 
 const LUNA_DIALOGUE_FIELD =
   "message";
@@ -45,6 +45,8 @@ const LUNA_DIALOGUE_FIELD =
 /* QSM_FASE12_BLOCK1_REAL_DIALOGUE_FIX */
 
 /* QSM_FASE12_BLOCK2_COLLAPSIBLE_CHAT_FIX */
+
+/* QSM_FASE12_BLOCK3_FINAL_CHAT_FIX */
 
 function AiAssistant({ pageContext }) {
   const location = useLocation();
@@ -76,6 +78,20 @@ function AiAssistant({ pageContext }) {
     useState("");
 
   const chatEndRef = useRef(null);
+
+  /* QSM_FIX_INVALID_HOOK_CHAT_SCROLL */
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest"
+    });
+  }, [
+    chatMessages,
+    chatSending
+  ]);
+
+  const chatRequestLockRef =
+    useRef(false);
 
   const currentPath =
     pageContext || location.pathname;
@@ -306,15 +322,7 @@ function AiAssistant({ pageContext }) {
               "string"
           )
       );
-
-    useEffect(() => {
-    chatEndRef.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "nearest"
-    });
-  }, [chatMessages, chatSending]);
-
-  return (
+return (
       response?.trim() ||
       objectResponse?.message?.trim?.() ||
       objectResponse?.text?.trim?.() ||
@@ -327,23 +335,41 @@ function AiAssistant({ pageContext }) {
     forcedQuestion = ""
   ) => {
     event?.preventDefault?.();
+    event?.stopPropagation?.();
+
+    const forced =
+      typeof forcedQuestion === "string"
+        ? forcedQuestion.trim()
+        : "";
 
     const question =
-      typeof forcedQuestion === "string" &&
-      forcedQuestion.trim()
-        ? forcedQuestion.trim()
-        : String(chatQuestion || "")
-            .trim();
+      forced ||
+      String(chatQuestion || "").trim();
+
+    if (!question) {
+      setChatError(
+        "Escribe una pregunta antes de enviarla."
+      );
+
+      return;
+    }
 
     if (
-      !question ||
-      chatSending
+      chatSending ||
+      chatRequestLockRef.current
     ) {
       return;
     }
 
+    chatRequestLockRef.current = true;
+    setChatSending(true);
+    setChatError("");
+
     const userMessage = {
-      id: `USER-${Date.now()}`,
+      id:
+        `USER-${Date.now()}-${Math.random()
+          .toString(36)
+          .slice(2, 7)}`,
       role: "user",
       text: question
     };
@@ -354,8 +380,6 @@ function AiAssistant({ pageContext }) {
     ]);
 
     setChatQuestion("");
-    setChatError("");
-    setChatSending(true);
 
     try {
       const sessionId =
@@ -375,45 +399,20 @@ function AiAssistant({ pageContext }) {
         await api.post(
           LUNA_DIALOGUE_ENDPOINT,
           {
-            /*
-              Se envían los alias compatibles para
-              los distintos motores instalados de LUNA.
-            */
-            [LUNA_DIALOGUE_FIELD]:
-              question,
-
-            message:
-              question,
-
-            text:
-              question,
-
-            prompt:
-              question,
-
-            question:
-              question,
-
-            content:
-              question,
-
-            query:
-              question,
+            message: question,
+            text: question,
+            input: question,
+            prompt: question,
+            question,
+            content: question,
+            query: question,
 
             sessionId,
-
-            conversationId:
-              sessionId,
-
-            authenticated:
-              core.authenticated,
+            conversationId: sessionId,
 
             context: {
-              path:
-                currentPath,
-
-              page:
-                currentPath,
+              path: currentPath,
+              page: currentPath,
 
               pageContext:
                 getContextInfo(
@@ -426,64 +425,58 @@ function AiAssistant({ pageContext }) {
               accessLevel:
                 core.accessLevel,
 
-              user:
-                core.user
-                  ? {
-                      id:
-                        core.user.id ||
-                        core.user.userId ||
-                        null,
-
-                      firstName:
-                        core.user.firstName ||
-                        "",
-
-                      role:
-                        core.user.role ||
-                        ""
-                    }
-                  : null
+              authenticated:
+                Boolean(
+                  core.authenticated
+                )
             }
           }
         );
 
-      const lunaMessage = {
-        id: `LUNA-${Date.now()}`,
-        role: "assistant",
-        text:
-          extractLunaResponse(
-            response.data
-          )
-      };
-
-      setChatMessages((current) => [
-        ...current,
-        lunaMessage
-      ]);
-    } catch (error) {
-      const message =
-        error?.response?.data?.message ||
-        error?.message ||
-        "No fue posible comunicarse con LUNA.";
-
-      setChatError(message);
+      const answer =
+        extractLunaResponse(
+          response?.data || {}
+        );
 
       setChatMessages((current) => [
         ...current,
         {
-          id: `LUNA-ERROR-${Date.now()}`,
+          id:
+            `LUNA-${Date.now()}-${Math.random()
+              .toString(36)
+              .slice(2, 7)}`,
+          role: "assistant",
+          text: answer
+        }
+      ]);
+    } catch (error) {
+      const backendMessage =
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        error?.response?.data?.details ||
+        error?.message ||
+        "No fue posible comunicarse con LUNA.";
+
+      setChatError(backendMessage);
+
+      setChatMessages((current) => [
+        ...current,
+        {
+          id:
+            `LUNA-ERROR-${Date.now()}`,
           role: "assistant",
           error: true,
-          text:
-            message
+          text: backendMessage
         }
       ]);
     } finally {
+      chatRequestLockRef.current = false;
       setChatSending(false);
     }
   };
 
   const clearLunaChat = () => {
+    chatRequestLockRef.current = false;
     setChatMessages([
       {
         id: `LUNA-WELCOME-${Date.now()}`,
@@ -502,6 +495,7 @@ function AiAssistant({ pageContext }) {
   };
 
   const startLunaChat = () => {
+    chatRequestLockRef.current = false;
     window.sessionStorage.removeItem(
       "qsm_luna_session"
     );
@@ -521,6 +515,7 @@ function AiAssistant({ pageContext }) {
   };
 
   const closeLunaChat = () => {
+    chatRequestLockRef.current = false;
     window.sessionStorage.removeItem(
       "qsm_luna_session"
     );
@@ -1122,7 +1117,11 @@ function AiAssistant({ pageContext }) {
                     !event.shiftKey
                   ) {
                     event.preventDefault();
-                    sendLunaQuestion(event);
+                    event.stopPropagation();
+
+                    sendLunaQuestion(
+                      null
+                    );
                   }
                 }}
               />
@@ -1175,7 +1174,16 @@ function GuideView({
       <button
         type="button"
         className="qsm-ai-guide__back"
-        onClick={onBack}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+
+          if (
+            typeof onBack === "function"
+          ) {
+            onBack();
+          }
+        }}
       >
         ← Volver
       </button>
