@@ -1,7 +1,13 @@
 import {
+  useEffect,
   useMemo,
+  useRef,
   useState
 } from "react";
+
+import {
+  createPortal
+} from "react-dom";
 
 import AttachmentMessage from "../media/AttachmentMessage";
 
@@ -19,6 +25,8 @@ const REACTIONS = [
   "👏"
 ];
 
+/* QSM_FASE14_BLOCK1_SINGLE_FLOATING_MESSAGE_MENU */
+
 export default function MessageBubble({
   message,
   mine = false,
@@ -31,15 +39,171 @@ export default function MessageBubble({
   onReact,
   onOpenImage,
   onReport,
-  busy = false
+  busy = false,
+  menuOpen = false,
+  onToggleMenu,
+  onCloseMenu
 }) {
-  const [menuOpen, setMenuOpen] =
-    useState(false);
-
   const [
     reactionOpen,
     setReactionOpen
   ] = useState(false);
+
+  /* QSM_FASE14_BLOCK1_SINGLE_FLOATING_MESSAGE_MENU */
+  const menuButtonRef = useRef(null);
+  const menuRef = useRef(null);
+
+  const [
+    menuPosition,
+    setMenuPosition
+  ] = useState({
+    top: 0,
+    left: 0,
+    placement: "right"
+  });
+
+  const updateMenuPosition = () => {
+    const button =
+      menuButtonRef.current;
+
+    if (!button) {
+      return;
+    }
+
+    const rect =
+      button.getBoundingClientRect();
+
+    const menuWidth = 190;
+    const menuHeight =
+      reactionOpen ? 330 : 250;
+
+    const gap = 10;
+    const safe = 12;
+
+    const spaceRight =
+      window.innerWidth -
+      rect.right;
+
+    const spaceLeft =
+      rect.left;
+
+    const openRight =
+      spaceRight >=
+        menuWidth + gap ||
+      spaceRight >= spaceLeft;
+
+    let left =
+      openRight
+        ? rect.right + gap
+        : rect.left -
+          menuWidth -
+          gap;
+
+    let top =
+      rect.top - 10;
+
+    if (
+      top + menuHeight >
+      window.innerHeight - safe
+    ) {
+      top =
+        window.innerHeight -
+        menuHeight -
+        safe;
+    }
+
+    if (top < safe) {
+      top = safe;
+    }
+
+    left = Math.max(
+      safe,
+      Math.min(
+        left,
+        window.innerWidth -
+          menuWidth -
+          safe
+      )
+    );
+
+    setMenuPosition({
+      top,
+      left,
+      placement:
+        openRight
+          ? "right"
+          : "left"
+    });
+  };
+
+  useEffect(() => {
+    if (!menuOpen) {
+      setReactionOpen(false);
+      return undefined;
+    }
+
+    updateMenuPosition();
+
+    const handleOutside = (event) => {
+      const target = event.target;
+
+      if (
+        menuRef.current?.contains(
+          target
+        ) ||
+        menuButtonRef.current?.contains(
+          target
+        )
+      ) {
+        return;
+      }
+
+      onCloseMenu?.();
+    };
+
+    const handleViewportChange = () => {
+      updateMenuPosition();
+    };
+
+    document.addEventListener(
+      "pointerdown",
+      handleOutside,
+      true
+    );
+
+    window.addEventListener(
+      "resize",
+      handleViewportChange
+    );
+
+    window.addEventListener(
+      "scroll",
+      handleViewportChange,
+      true
+    );
+
+    return () => {
+      document.removeEventListener(
+        "pointerdown",
+        handleOutside,
+        true
+      );
+
+      window.removeEventListener(
+        "resize",
+        handleViewportChange
+      );
+
+      window.removeEventListener(
+        "scroll",
+        handleViewportChange,
+        true
+      );
+    };
+  }, [
+    menuOpen,
+    reactionOpen
+  ]);
 
   const text = getMessageText(message);
 
@@ -138,8 +302,8 @@ export default function MessageBubble({
       : "Enviado";
 
   const closeMenu = () => {
-    setMenuOpen(false);
     setReactionOpen(false);
+    onCloseMenu?.();
   };
 
   return (
@@ -321,17 +485,14 @@ export default function MessageBubble({
 
         {!deleted && (
           <button
+            ref={menuButtonRef}
             type="button"
             className="qsm-message-menu-button"
-            onClick={() => {
-              setMenuOpen(
-                (current) =>
-                  !current
-              );
+            onClick={(event) => {
+              event.stopPropagation();
 
-              setReactionOpen(
-                false
-              );
+              setReactionOpen(false);
+              onToggleMenu?.();
             }}
             aria-label="Acciones del mensaje"
             aria-expanded={
@@ -342,8 +503,22 @@ export default function MessageBubble({
           </button>
         )}
 
-        {menuOpen && !deleted && (
-          <div className="qsm-message-menu">
+        {menuOpen &&
+          !deleted &&
+          typeof document !== "undefined" &&
+          createPortal(
+            <div
+              ref={menuRef}
+              className={`qsm-message-menu qsm-message-menu--floating is-${menuPosition.placement}`}
+              style={{
+                top:
+                  menuPosition.top,
+                left:
+                  menuPosition.left
+              }}
+              role="menu"
+              aria-label="Acciones del mensaje"
+            >
             <button
               type="button"
               onClick={() => {
@@ -472,8 +647,9 @@ export default function MessageBubble({
                 )}
               </div>
             )}
-          </div>
-        )}
+            </div>,
+            document.body
+          )}
       </article>
     </div>
   );

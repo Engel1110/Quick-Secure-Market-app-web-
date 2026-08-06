@@ -20,6 +20,8 @@ import NewConversationModal from "../components/messages/conversation/NewConvers
 
 import "../styles/messages.css";
 
+/* QSM_FASE14_BLOCK3_RESPONSIVE_MESSAGES */
+
 export default function Messages({
   adminMode = false
 }) {
@@ -37,6 +39,55 @@ export default function Messages({
     detailsOpen,
     setDetailsOpen
   ] = useState(true);
+
+  /* QSM_FASE14_BLOCK3_RESPONSIVE_MESSAGES */
+  const [
+    mobileView,
+    setMobileView
+  ] = useState("CONVERSATIONS");
+
+  const [
+    viewportWidth,
+    setViewportWidth
+  ] = useState(
+    () =>
+      typeof window !== "undefined"
+        ? window.innerWidth
+        : 1440
+  );
+
+  const compactMessages =
+    viewportWidth <= 920;
+
+  useEffect(() => {
+    const syncViewport = () => {
+      setViewportWidth(
+        window.innerWidth
+      );
+    };
+
+    syncViewport();
+
+    window.addEventListener(
+      "resize",
+      syncViewport
+    );
+
+    return () => {
+      window.removeEventListener(
+        "resize",
+        syncViewport
+      );
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!compactMessages) {
+      setMobileView(
+        "CONVERSATIONS"
+      );
+    }
+  }, [compactMessages]);
 
   const [
     newConversationOpen,
@@ -270,8 +321,39 @@ export default function Messages({
               chat.activeConversation
                 ? "has-details"
                 : ""
+            } ${
+              compactMessages
+                ? `is-compact view-${mobileView.toLowerCase()}`
+                : ""
             }`}
           >
+            {compactMessages &&
+              chat.activeConversation &&
+              mobileView !== "CONVERSATIONS" && (
+                <div className="qsm-mobile-chat-navigation">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMobileView(
+                        "CONVERSATIONS"
+                      );
+
+                      setDetailsOpen(
+                        false
+                      );
+                    }}
+                  >
+                    ← Conversaciones
+                  </button>
+
+                  <strong>
+                    {mobileView === "DETAILS"
+                      ? "Información"
+                      : "Conversación"}
+                  </strong>
+                </div>
+              )}
+
             <ConversationList
               conversations={
                 chat.filteredConversations ||
@@ -303,9 +385,16 @@ export default function Messages({
               setSearch={
                 chat.setSearch
               }
-              onSelect={
-                chat.selectConversation
-              }
+              onSelect={(conversation) => {
+                chat.selectConversation?.(
+                  conversation
+                );
+
+                if (compactMessages) {
+                  setDetailsOpen(false);
+                  setMobileView("CHAT");
+                }
+              }}
               onRefresh={
                 chat.loadConversations
               }
@@ -412,12 +501,18 @@ export default function Messages({
                 chat.setReportedMessage ||
                 chat.reportMessage
               }
-              onToggleDetails={() =>
+              onToggleDetails={() => {
+                if (compactMessages) {
+                  setDetailsOpen(true);
+                  setMobileView("DETAILS");
+                  return;
+                }
+
                 setDetailsOpen(
                   (current) =>
                     !current
-                )
-              }
+                );
+              }}
             />
 
             <ConversationDetails
@@ -437,11 +532,13 @@ export default function Messages({
               actionLoading={
                 chat.actionLoading
               }
-              onClose={() =>
-                setDetailsOpen(
-                  false
-                )
-              }
+              onClose={() => {
+                setDetailsOpen(false);
+
+                if (compactMessages) {
+                  setMobileView("CHAT");
+                }
+              }}
               onAction={
                 chat.runConversationAction
               }

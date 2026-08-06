@@ -130,6 +130,8 @@ function getConversationState(
   );
 }
 
+/* QSM_FASE14_BLOCK4_PROFESSIONAL_HEADER_DETAILS */
+
 export default function ConversationDetails({
   open,
   conversation,
@@ -180,6 +182,70 @@ export default function ConversationDetails({
   const productId =
     product?._id ||
     product?.id;
+
+  /* QSM_FASE14_BLOCK4_PROFESSIONAL_HEADER_DETAILS */
+
+  const productImage =
+    product?.imageUrl ||
+    product?.images?.[0] ||
+    product?.image ||
+    product?.thumbnail ||
+    "";
+
+  const productPrice =
+    Number(
+      product?.price ||
+      product?.amount ||
+      0
+    );
+
+  const verified =
+    Boolean(
+      otherUser?.isVerified ||
+      otherUser?.verified ||
+      otherUser?.status === "VERIFIED"
+    );
+
+  const trustScore =
+    Math.max(
+      0,
+      Math.min(
+        100,
+        Number(
+          otherUser?.trustScore ||
+          otherUser?.confidenceScore ||
+          50
+        )
+      )
+    );
+
+  const orderStatus =
+    typeof order === "object"
+      ? String(
+          order?.status ||
+          order?.orderStatus ||
+          "PENDIENTE"
+        ).toUpperCase()
+      : "";
+
+  const paymentStatus =
+    typeof order === "object"
+      ? String(
+          order?.paymentStatus ||
+          order?.payment?.status ||
+          ""
+        ).toUpperCase()
+      : "";
+
+  const deliveryStatus =
+    typeof order === "object"
+      ? String(
+          order?.deliveryStatus ||
+          order?.shippingStatus ||
+          order?.delivery?.status ||
+          ""
+        ).toUpperCase()
+      : "";
 
   const orderCode =
     typeof order === "object"
@@ -262,34 +328,54 @@ export default function ConversationDetails({
         </button>
       </div>
 
-      <div className="qsm-details-user">
-        <div className="qsm-avatar qsm-avatar--details">
-          {avatar ? (
-            <img
-              src={avatar}
-              alt={name}
-            />
-          ) : (
+      <div className="qsm-details-user qsm-details-user--professional">
+        <div className="qsm-details-user__identity">
+          <div className="qsm-avatar qsm-avatar--details">
+            {avatar ? (
+              <img
+                src={avatar}
+                alt={name}
+              />
+            ) : (
+              <span>
+                {getInitials(name)}
+              </span>
+            )}
+          </div>
+
+          <div>
+            <strong>
+              {name}
+            </strong>
+
             <span>
-              {getInitials(name)}
+              {verified
+                ? "Usuario verificado"
+                : "Usuario QSM"}
             </span>
-          )}
+          </div>
         </div>
 
-        <strong>
-          {name}
-        </strong>
+        <div className="qsm-details-trust">
+          <div>
+            <span>
+              Confianza QSM
+            </span>
 
-        <span>
-          {otherUser?.isVerified
-            ? "Usuario verificado"
-            : `Confianza ${
-                Number(
-                  otherUser?.trustScore ||
-                    50
-                )
-              }/100`}
-        </span>
+            <strong>
+              {trustScore}/100
+            </strong>
+          </div>
+
+          <div className="qsm-details-trust__bar">
+            <i
+              style={{
+                width:
+                  `${trustScore}%`
+              }}
+            />
+          </div>
+        </div>
 
         {publicUserId && (
           <Link
@@ -303,49 +389,99 @@ export default function ConversationDetails({
 
       <section className="qsm-details-section">
         <h4>
-          Sobre esta conversación
+          Operación vinculada
         </h4>
 
         {productId && (
           <Link
             to={`/product/${productId}`}
-            className="qsm-details-link"
+            className="qsm-details-product-card"
           >
-            <span aria-hidden="true">
-              📦
-            </span>
+            <div className="qsm-details-product-card__media">
+              {productImage ? (
+                <img
+                  src={productImage}
+                  alt={
+                    product?.title ||
+                    "Producto QSM"
+                  }
+                  loading="lazy"
+                />
+              ) : (
+                <span aria-hidden="true">
+                  📦
+                </span>
+              )}
+            </div>
 
             <div>
-              <strong>
+              <span>
                 Producto
-              </strong>
+              </span>
 
-              <small>
+              <strong>
                 {product?.title ||
                   product?.name ||
                   "Producto QSM"}
-              </small>
+              </strong>
+
+              {productPrice > 0 && (
+                <small>
+                  RD$
+                  {productPrice.toLocaleString(
+                    "es-DO"
+                  )}
+                </small>
+              )}
             </div>
+
+            <i aria-hidden="true">
+              →
+            </i>
           </Link>
         )}
 
         {orderId && (
           <Link
             to={`/orders/${orderId}`}
-            className="qsm-details-link"
+            className="qsm-details-order-card"
           >
-            <span aria-hidden="true">
-              🧾
-            </span>
+            <div className="qsm-details-order-card__top">
+              <div>
+                <span>
+                  Orden vinculada
+                </span>
 
-            <div>
-              <strong>
-                Orden
-              </strong>
+                <strong>
+                  {orderCode}
+                </strong>
+              </div>
 
-              <small>
-                {orderCode}
-              </small>
+              {orderStatus && (
+                <b
+                  className={`qsm-order-status is-${orderStatus.toLowerCase()}`}
+                >
+                  {orderStatus}
+                </b>
+              )}
+            </div>
+
+            <div className="qsm-details-order-card__states">
+              <span>
+                Pago
+                <strong>
+                  {paymentStatus ||
+                    "PENDIENTE"}
+                </strong>
+              </span>
+
+              <span>
+                Entrega
+                <strong>
+                  {deliveryStatus ||
+                    "PENDIENTE"}
+                </strong>
+              </span>
             </div>
           </Link>
         )}
@@ -386,6 +522,8 @@ export default function ConversationDetails({
         <h4>
           Acciones rápidas
         </h4>
+
+        <div className="qsm-details-actions-grid">
 
         <button
           type="button"
@@ -486,6 +624,7 @@ export default function ConversationDetails({
             ? "✓ Desbloquear usuario"
             : "⊘ Bloquear usuario"}
         </button>
+        </div>
       </section>
 
       <div className="qsm-details-security">

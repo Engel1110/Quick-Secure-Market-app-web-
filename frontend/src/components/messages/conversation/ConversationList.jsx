@@ -43,6 +43,86 @@ const getLastMessageText = (
   );
 };
 
+/* QSM_FASE14_BLOCK2_UNIFORM_CONVERSATION_LIST */
+
+const getConversationVisualState = (
+  conversation,
+  unread
+) => {
+  const channelType =
+    String(
+      conversation?.channelType ||
+      ""
+    ).toUpperCase();
+
+  const status =
+    String(
+      conversation?.status ||
+      conversation?.conversationStatus ||
+      ""
+    ).toUpperCase();
+
+  const hasDispute =
+    Boolean(
+      conversation?.dispute ||
+      conversation?.disputeId ||
+      conversation?.hasDispute
+    ) ||
+    status.includes("DISPUT");
+
+  const archived =
+    Boolean(
+      conversation?.archived ||
+      conversation?.isArchived
+    ) ||
+    status === "ARCHIVED";
+
+  const favorite =
+    Boolean(
+      conversation?.favorite ||
+      conversation?.isFavorite
+    );
+
+  return {
+    channelType,
+    hasDispute,
+    archived,
+    favorite,
+    unread: Number(unread || 0) > 0
+  };
+};
+
+const getConversationContextLabel = (
+  conversation,
+  visualState
+) => {
+  if (visualState.hasDispute) {
+    return "DISPUTA";
+  }
+
+  if (
+    visualState.channelType ===
+    "INTERNAL"
+  ) {
+    return "INTERNO";
+  }
+
+  if (
+    conversation?.order ||
+    conversation?.orderId
+  ) {
+    return "ORDEN";
+  }
+
+  if (conversation?.product) {
+    return "PRODUCTO";
+  }
+
+  return "QSM";
+};
+
+/* QSM_FASE14_BLOCK2_UNIFORM_CONVERSATION_LIST */
+
 export default function ConversationList({
   conversations = [],
   activeConversation,
@@ -195,6 +275,18 @@ export default function ConversationList({
                   currentUserId
                 );
 
+              const visualState =
+                getConversationVisualState(
+                  conversation,
+                  unread
+                );
+
+              const contextLabel =
+                getConversationContextLabel(
+                  conversation,
+                  visualState
+                );
+
               const active =
                 String(activeId) ===
                 String(
@@ -220,6 +312,22 @@ export default function ConversationList({
                     active
                       ? "is-active"
                       : ""
+                  } ${
+                    visualState.unread
+                      ? "has-unread"
+                      : ""
+                  } ${
+                    visualState.favorite
+                      ? "is-favorite"
+                      : ""
+                  } ${
+                    visualState.archived
+                      ? "is-archived"
+                      : ""
+                  } ${
+                    visualState.hasDispute
+                      ? "has-dispute"
+                      : ""
                   }`}
                   onClick={() =>
                     onSelect?.(
@@ -228,6 +336,14 @@ export default function ConversationList({
                   }
                   aria-pressed={
                     active
+                  }
+                  aria-label={
+                    `Abrir conversación con ${name}`
+                  }
+                  title={
+                    `${name} · ${getLastMessageText(
+                      conversation
+                    )}`
                   }
                 >
                   <div className="qsm-avatar qsm-avatar--conversation">
@@ -252,9 +368,21 @@ export default function ConversationList({
 
                   <div className="qsm-conversation-item__content">
                     <div className="qsm-conversation-item__top">
-                      <strong>
-                        {name}
-                      </strong>
+                      <div className="qsm-conversation-name-line">
+                        <strong>
+                          {name}
+                        </strong>
+
+                        {visualState.favorite && (
+                          <span
+                            className="qsm-conversation-favorite"
+                            title="Conversación favorita"
+                            aria-label="Conversación favorita"
+                          >
+                            ★
+                          </span>
+                        )}
+                      </div>
 
                       <time>
                         {formatTime(
@@ -264,6 +392,12 @@ export default function ConversationList({
                     </div>
 
                     <span className="qsm-conversation-product">
+                      <b
+                        className={`qsm-conversation-context-pill is-${contextLabel.toLowerCase()}`}
+                      >
+                        {contextLabel}
+                      </b>
+
                       {adminMode && (
                         <b
                           className={
@@ -294,20 +428,43 @@ export default function ConversationList({
                         )}
                     </span>
 
-                    <p>
-                      {getLastMessageText(
-                        conversation
+                    <div className="qsm-conversation-preview-line">
+                      <p>
+                        {getLastMessageText(
+                          conversation
+                        )}
+                      </p>
+
+                      {visualState.hasDispute && (
+                        <span
+                          className="qsm-conversation-risk-dot"
+                          title="Conversación vinculada a una disputa"
+                          aria-label="Conversación vinculada a una disputa"
+                        />
                       )}
-                    </p>
+                    </div>
                   </div>
 
-                  {unread > 0 && (
-                    <span className="qsm-unread-badge">
-                      {unread > 99
-                        ? "99+"
-                        : unread}
-                    </span>
-                  )}
+                  <div className="qsm-conversation-item__aside">
+                    {unread > 0 && (
+                      <span className="qsm-unread-badge">
+                        {unread > 99
+                          ? "99+"
+                          : unread}
+                      </span>
+                    )}
+
+                    {!unread &&
+                      visualState.archived && (
+                        <span
+                          className="qsm-conversation-archived-icon"
+                          title="Conversación archivada"
+                          aria-label="Conversación archivada"
+                        >
+                          ◇
+                        </span>
+                      )}
+                  </div>
                 </button>
               );
             }

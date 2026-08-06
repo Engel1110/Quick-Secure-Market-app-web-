@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import ChatHeader from "./ChatHeader";
 import Composer from "./Composer";
@@ -28,6 +28,8 @@ const getSenderId = (message) =>
   message?.senderId ??
   message?.sender ??
   "";
+
+/* QSM_FASE14_BLOCK1_SINGLE_FLOATING_MESSAGE_MENU */
 
 export default function ChatWindow({
   conversation,
@@ -68,6 +70,43 @@ export default function ChatWindow({
 
   const [messageSearch, setMessageSearch] =
     useState("");
+
+  /* QSM_FASE14_BLOCK1_SINGLE_FLOATING_MESSAGE_MENU */
+  const [
+    openMessageMenuId,
+    setOpenMessageMenuId
+  ] = useState("");
+
+  const closeMessageMenu = () => {
+    setOpenMessageMenuId("");
+  };
+
+  useEffect(() => {
+    closeMessageMenu();
+  }, [
+    conversation?._id,
+    conversation?.id
+  ]);
+
+  useEffect(() => {
+    const closeOnEscape = (event) => {
+      if (event.key === "Escape") {
+        closeMessageMenu();
+      }
+    };
+
+    window.addEventListener(
+      "keydown",
+      closeOnEscape
+    );
+
+    return () => {
+      window.removeEventListener(
+        "keydown",
+        closeOnEscape
+      );
+    };
+  }, []);
 
   const safeMessages = useMemo(
     () =>
@@ -277,7 +316,10 @@ export default function ChatWindow({
         onOpen={openPinnedMessage}
       />
 
-      <div className="qsm-message-list">
+      <div
+        className="qsm-message-list"
+        onScroll={closeMessageMenu}
+      >
         {loading && (
           <MessageSkeleton />
         )}
@@ -383,6 +425,24 @@ export default function ChatWindow({
                     busy={Boolean(
                       actionLoading
                     )}
+                    menuOpen={
+                      String(
+                        openMessageMenuId
+                      ) ===
+                      String(messageId)
+                    }
+                    onToggleMenu={() => {
+                      setOpenMessageMenuId(
+                        (current) =>
+                          String(current) ===
+                          String(messageId)
+                            ? ""
+                            : messageId
+                      );
+                    }}
+                    onCloseMenu={
+                      closeMessageMenu
+                    }
                   />
                 </div>
               );

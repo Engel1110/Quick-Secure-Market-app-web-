@@ -7,6 +7,8 @@ import {
   resolveMediaUrl
 } from "../../../utils/message.utils";
 
+/* QSM_FASE14_BLOCK4_PROFESSIONAL_HEADER_DETAILS */
+
 export default function ChatHeader({
   conversation,
   otherUser,
@@ -77,6 +79,47 @@ export default function ChatHeader({
     product?.thumbnail ||
     "";
 
+  /* QSM_FASE14_BLOCK4_PROFESSIONAL_HEADER_DETAILS */
+
+  const verified =
+    Boolean(
+      otherUser?.isVerified ||
+      otherUser?.verified ||
+      otherUser?.status === "VERIFIED"
+    );
+
+  const trustScore =
+    Math.max(
+      0,
+      Math.min(
+        100,
+        Number(
+          otherUser?.trustScore ||
+          otherUser?.confidenceScore ||
+          50
+        )
+      )
+    );
+
+  const online =
+    otherUser?.isOnline !== false;
+
+  const orderStatus =
+    typeof order === "object"
+      ? String(
+          order?.status ||
+          order?.orderStatus ||
+          ""
+        ).toUpperCase()
+      : "";
+
+  const productPrice =
+    Number(
+      product?.price ||
+      product?.amount ||
+      0
+    );
+
   const orderCode =
     typeof order === "object"
       ? order?.orderCode ||
@@ -127,13 +170,39 @@ export default function ChatHeader({
           )}
         </div>
 
-        <p>
-          {internalChannel
-            ? `Chat interno · ${departmentLabel}`
-            : official
-              ? `${departmentLabel} · Personal autorizado`
-              : "Ver perfil y reputación"}
-        </p>
+        <div className="qsm-chat-header-meta">
+          <span
+            className={`qsm-chat-presence ${
+              online
+                ? "is-online"
+                : "is-offline"
+            }`}
+          >
+            <i aria-hidden="true" />
+
+            {online
+              ? "En línea"
+              : "Desconectado"}
+          </span>
+
+          {verified && (
+            <span className="qsm-chat-verified">
+              ✓ Verificado
+            </span>
+          )}
+
+          {!official && (
+            <span className="qsm-chat-trust">
+              Confianza {trustScore}/100
+            </span>
+          )}
+
+          {internalChannel && (
+            <span className="qsm-chat-department">
+              {departmentLabel}
+            </span>
+          )}
+        </div>
       </div>
     </>
   );
@@ -157,32 +226,62 @@ export default function ChatHeader({
       </div>
 
       {(product || orderId) && (
-        <div className="qsm-chat-context">
-          {productImage && (
-            <img
-              src={
-                resolveMediaUrl(
-                  productImage
-                )
-              }
-              alt={
-                product?.title ||
-                "Producto QSM"
-              } loading="lazy" decoding="async" />
-          )}
-
-          <div>
-            <strong>
-              {product?.title ||
-                product?.name ||
-                "Orden QSM"}
-            </strong>
-
-            {orderCode && (
-              <span>
-                {orderCode}
+        <div className="qsm-chat-context qsm-chat-context--professional">
+          <div className="qsm-chat-context__media">
+            {productImage ? (
+              <img
+                src={
+                  resolveMediaUrl(
+                    productImage
+                  )
+                }
+                alt={
+                  product?.title ||
+                  "Producto QSM"
+                }
+                loading="lazy"
+                decoding="async"
+              />
+            ) : (
+              <span aria-hidden="true">
+                📦
               </span>
             )}
+          </div>
+
+          <div className="qsm-chat-context__content">
+            <div className="qsm-chat-context__top">
+              <strong>
+                {product?.title ||
+                  product?.name ||
+                  "Orden QSM"}
+              </strong>
+
+              {orderStatus && (
+                <span
+                  className={`qsm-order-status is-${orderStatus.toLowerCase()}`}
+                >
+                  {orderStatus}
+                </span>
+              )}
+            </div>
+
+            <div className="qsm-chat-context__meta">
+              {orderCode && (
+                <span>
+                  {orderCode}
+                </span>
+              )}
+
+              {productPrice > 0 && (
+                <span>
+                  RD$
+                  {productPrice.toLocaleString(
+                    "es-DO"
+                  )}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -199,7 +298,9 @@ export default function ChatHeader({
           title="Buscar en la conversación"
           aria-label="Buscar en la conversación"
         >
-          ⌕
+          <span aria-hidden="true">
+            ⌕
+          </span>
         </button>
 
         {publicProfilePath && (
@@ -207,6 +308,10 @@ export default function ChatHeader({
             to={publicProfilePath}
             className="qsm-header-action"
           >
+            <span aria-hidden="true">
+              ◉
+            </span>
+
             Perfil
           </Link>
         )}
@@ -216,6 +321,10 @@ export default function ChatHeader({
             to={`/product/${productId}`}
             className="qsm-header-action"
           >
+            <span aria-hidden="true">
+              ▣
+            </span>
+
             Producto
           </Link>
         )}
@@ -225,6 +334,10 @@ export default function ChatHeader({
             to={`/orders/${orderId}`}
             className="qsm-header-action"
           >
+            <span aria-hidden="true">
+              ◫
+            </span>
+
             Orden
           </Link>
         )}
