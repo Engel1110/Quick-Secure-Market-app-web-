@@ -59,7 +59,195 @@ const TERMINAL_ORDER_STATUSES = [
   "REFUNDED"
 ];
 
+/* QSM_FASE15_BLOCK1_EXECUTIVE_HEADER_STATS */
+
 function Dashboard() {
+  /*
+    QSM_FASE15_BLOCK6_FIX3_DYNAMIC_SIDEBAR_CONNECTION
+
+    Detecta el borde derecho real del Sidebar.
+    Funciona abierto, cerrado y durante su transición.
+  */
+  useEffect(() => {
+    let frameId = null;
+    let resizeObserver = null;
+    let mutationObserver = null;
+    let observedSidebar = null;
+
+    const findMainSidebar = () => {
+      const selectors = [
+        ".qsm-sidebar",
+        ".sidebar",
+        "[class*='sidebar']",
+        "aside"
+      ];
+
+      const candidates = [
+        ...new Set(
+          selectors.flatMap(
+            (selector) =>
+              Array.from(
+                document.querySelectorAll(
+                  selector
+                )
+              )
+          )
+        )
+      ];
+
+      return (
+        candidates.find(
+          (element) => {
+            const rect =
+              element.getBoundingClientRect();
+
+            const style =
+              window.getComputedStyle(
+                element
+              );
+
+            const isVisible =
+              style.display !== "none" &&
+              style.visibility !== "hidden" &&
+              Number(style.opacity || 1) > 0;
+
+            const isAtLeft =
+              rect.left <= 4;
+
+            const isTall =
+              rect.height >=
+              window.innerHeight * 0.65;
+
+            const hasUsefulWidth =
+              rect.width >= 48;
+
+            return (
+              isVisible &&
+              isAtLeft &&
+              isTall &&
+              hasUsefulWidth
+            );
+          }
+        ) || null
+      );
+    };
+
+    const applySidebarPosition = () => {
+      frameId =
+        window.requestAnimationFrame(
+          () => {
+            const isMobile =
+              window.innerWidth <= 700;
+
+            if (isMobile) {
+              document.documentElement.style.setProperty(
+                "--qsm-live-sidebar-right",
+                "0px"
+              );
+
+              return;
+            }
+
+            const sidebar =
+              findMainSidebar();
+
+            if (!sidebar) {
+              document.documentElement.style.setProperty(
+                "--qsm-live-sidebar-right",
+                "80px"
+              );
+
+              return;
+            }
+
+            const rect =
+              sidebar.getBoundingClientRect();
+
+            const rightEdge =
+              Math.max(
+                0,
+                Math.round(
+                  rect.right
+                )
+              );
+
+            document.documentElement.style.setProperty(
+              "--qsm-live-sidebar-right",
+              `${rightEdge}px`
+            );
+
+            if (
+              observedSidebar !==
+              sidebar
+            ) {
+              resizeObserver?.disconnect();
+
+              observedSidebar =
+                sidebar;
+
+              resizeObserver =
+                new ResizeObserver(
+                  applySidebarPosition
+                );
+
+              resizeObserver.observe(
+                sidebar
+              );
+            }
+          }
+        );
+    };
+
+    applySidebarPosition();
+
+    window.addEventListener(
+      "resize",
+      applySidebarPosition
+    );
+
+    /*
+      Detecta cambios de clase al abrir o cerrar el Sidebar.
+    */
+    mutationObserver =
+      new MutationObserver(
+        applySidebarPosition
+      );
+
+    mutationObserver.observe(
+      document.body,
+      {
+        attributes: true,
+        childList: true,
+        subtree: true,
+        attributeFilter: [
+          "class",
+          "style",
+          "aria-expanded"
+        ]
+      }
+    );
+
+    return () => {
+      if (frameId) {
+        window.cancelAnimationFrame(
+          frameId
+        );
+      }
+
+      resizeObserver?.disconnect();
+      mutationObserver?.disconnect();
+
+      window.removeEventListener(
+        "resize",
+        applySidebarPosition
+      );
+
+      document.documentElement.style.removeProperty(
+        "--qsm-live-sidebar-right"
+      );
+    };
+  }, []);
+
   const navigate =
     useNavigate();
 
@@ -144,6 +332,23 @@ function Dashboard() {
     setRecentDisputes
   ] = useState([]);
 
+  /* QSM_FASE15_BLOCK2_PROFESSIONAL_ACTIVITY_CHART */
+
+  const [
+    activityPurchases,
+    setActivityPurchases
+  ] = useState([]);
+
+  const [
+    activitySales,
+    setActivitySales
+  ] = useState([]);
+
+  const [
+    activityDisputes,
+    setActivityDisputes
+  ] = useState([]);
+
   const [
     loading,
     setLoading
@@ -163,6 +368,18 @@ function Dashboard() {
     warnings,
     setWarnings
   ] = useState([]);
+
+  /* QSM_FASE15_BLOCK1_EXECUTIVE_HEADER_STATS */
+
+  const [
+    dashboardPeriod,
+    setDashboardPeriod
+  ] = useState("30");
+
+  const [
+    lastUpdatedAt,
+    setLastUpdatedAt
+  ] = useState(null);
 
   /*
   |--------------------------------------------------------------------------
@@ -581,6 +798,14 @@ function Dashboard() {
             )
           );
 
+          setActivityPurchases(
+            purchases
+          );
+
+          setActivitySales(
+            sales
+          );
+
           const protectedAmount =
             safeOrders.reduce(
               (
@@ -649,8 +874,16 @@ function Dashboard() {
                 4
               )
             );
+
+            setActivityDisputes(
+              safeDisputes
+            );
           } else {
             setRecentDisputes(
+              []
+            );
+
+            setActivityDisputes(
               []
             );
 
@@ -743,6 +976,10 @@ function Dashboard() {
               )
             ]
           );
+
+          setLastUpdatedAt(
+            new Date()
+          );
         } catch (requestError) {
           console.error(
             "Error cargando Dashboard:",
@@ -786,7 +1023,46 @@ function Dashboard() {
   |--------------------------------------------------------------------------
   */
 
-  const handleSearch = (
+  const dashboardHealth =
+    error
+      ? {
+          label:
+            "Requiere atención",
+          className:
+            "is-critical"
+        }
+      : warnings.length > 0
+        ? {
+            label:
+              "Información parcial",
+            className:
+              "is-warning"
+          }
+        : {
+            label:
+              "Estable",
+            className:
+              "is-stable"
+          };
+
+  const lastUpdatedLabel =
+    lastUpdatedAt
+      ? new Intl.DateTimeFormat(
+          "es-DO",
+          {
+            hour:
+              "numeric",
+            minute:
+              "2-digit",
+            hour12:
+              true
+          }
+        ).format(
+          lastUpdatedAt
+        )
+      : "Pendiente";
+
+    const handleSearch = (
     event
   ) => {
     event.preventDefault();
@@ -831,29 +1107,115 @@ function Dashboard() {
           <Topbar />
 
           <div className="qsm-dashboard-v3-shell">
-            <header className="qsm-dashboard-v3-header">
+            <header className="qsm-dashboard-v3-header qsm-dashboard-v3-header--executive">
               <div className="qsm-dashboard-v3-title-block">
                 <h1>
                   Hola, {displayFirstName}
-                  <span aria-hidden="true"> 👋</span>
+                  <span aria-hidden="true">
+                    {" "}👋
+                  </span>
                 </h1>
 
-                <strong>Resumen de actividades</strong>
+                <strong>
+                  Aquí tienes el estado de tu cuenta hoy.
+                </strong>
 
                 <p>
-                  Consulta tu perfil, operaciones de venta, compras,
-                  productos, seguridad y estadísticas desde un solo lugar.
+                  Consulta tus operaciones, seguridad,
+                  productos y actividad desde un solo lugar.
                 </p>
               </div>
 
-              <button
-                type="button"
-                className="qsm-dashboard-v3-refresh"
-                onClick={() => loadDashboard(false)}
-                disabled={loading || refreshing}
-              >
-                {refreshing ? "Actualizando..." : "↻ Actualizar datos"}
-              </button>
+              <div className="qsm-dashboard-v3-header-status">
+                <span>
+                  <i
+                    className="qsm-dashboard-v3-status-dot"
+                    aria-hidden="true"
+                  />
+
+                  Última actualización:
+                  <strong>
+                    {lastUpdatedLabel}
+                  </strong>
+                </span>
+
+                <span>
+                  <i
+                    className={`qsm-dashboard-v3-health-dot ${dashboardHealth.className}`}
+                    aria-hidden="true"
+                  />
+
+                  Estado general:
+                  <strong
+                    className={
+                      dashboardHealth.className
+                    }
+                  >
+                    {dashboardHealth.label}
+                  </strong>
+                </span>
+              </div>
+
+              <div className="qsm-dashboard-v3-header-actions">
+                <button
+                  type="button"
+                  className="qsm-dashboard-v3-refresh"
+                  onClick={() =>
+                    loadDashboard(false)
+                  }
+                  disabled={
+                    loading ||
+                    refreshing
+                  }
+                >
+                  {refreshing
+                    ? "Actualizando..."
+                    : "↻ Actualizar"}
+                </button>
+
+                <label className="qsm-dashboard-v3-period-control">
+                  <span aria-hidden="true">
+                    ▣
+                  </span>
+
+                  <select
+                    value={
+                      dashboardPeriod
+                    }
+                    onChange={(event) =>
+                      setDashboardPeriod(
+                        event.target.value
+                      )
+                    }
+                    aria-label="Período del Dashboard"
+                  >
+                    <option value="7">
+                      Últimos 7 días
+                    </option>
+
+                    <option value="30">
+                      Últimos 30 días
+                    </option>
+
+                    <option value="90">
+                      Últimos 90 días
+                    </option>
+                  </select>
+                </label>
+
+                <button
+                  type="button"
+                  className="qsm-dashboard-v3-report-button"
+                  onClick={() =>
+                    navigate(
+                      "/dashboard"
+                    )
+                  }
+                  title="El reporte detallado se integrará en un bloque posterior"
+                >
+                  ▥ Ver reporte
+                </button>
+              </div>
             </header>
 
             {error && (
@@ -869,7 +1231,17 @@ function Dashboard() {
                 title="Productos"
                 value={stats.products}
                 text="Publicaciones activas"
-                tone="cyan"
+                tone="purple"
+                trendLabel="Período actual"
+                sparkline={[
+                  18,
+                  32,
+                  25,
+                  46,
+                  39,
+                  58,
+                  52
+                ]}
               />
 
               <QsmStatCard
@@ -878,6 +1250,16 @@ function Dashboard() {
                 value={stats.purchases}
                 text="Órdenes registradas"
                 tone="blue"
+                trendLabel="Período actual"
+                sparkline={[
+                  12,
+                  26,
+                  20,
+                  38,
+                  29,
+                  51,
+                  61
+                ]}
               />
 
               <QsmStatCard
@@ -885,7 +1267,17 @@ function Dashboard() {
                 title="Ventas"
                 value={stats.sales}
                 text="Órdenes como vendedor"
-                tone="purple"
+                tone="green"
+                trendLabel="Período actual"
+                sparkline={[
+                  14,
+                  19,
+                  16,
+                  34,
+                  28,
+                  43,
+                  55
+                ]}
               />
 
               <QsmStatCard
@@ -895,6 +1287,17 @@ function Dashboard() {
                 text="Operaciones activas QSM"
                 tone="orange"
                 compact
+                wide
+                trendLabel="Operaciones protegidas"
+                sparkline={[
+                  20,
+                  26,
+                  23,
+                  37,
+                  34,
+                  49,
+                  62
+                ]}
               />
             </section>
 
@@ -906,57 +1309,134 @@ function Dashboard() {
                     <p>Resumen de tus operaciones en los últimos 30 días.</p>
                   </div>
 
-                  <span>Últimos 30 días⌄</span>
+                  <span className="qsm-dashboard-v3-live-indicator">
+                    <i aria-hidden="true" />
+                    Datos actualizados
+                  </span>
                 </div>
 
                 <QsmActivityChart
-                  purchases={recentPurchases}
-                  sales={recentSales}
-                  disputes={recentDisputes}
+                  purchases={
+                    activityPurchases
+                  }
+                  sales={
+                    activitySales
+                  }
+                  disputes={
+                    activityDisputes
+                  }
+                  period={
+                    dashboardPeriod
+                  }
+                  onPeriodChange={
+                    setDashboardPeriod
+                  }
                 />
               </article>
 
-              <article className="qsm-dashboard-v3-card qsm-dashboard-v3-quick-card">
+              <article className="qsm-dashboard-v3-card qsm-dashboard-v3-quick-card qsm-dashboard-v3-quick-card--premium">
                 <div className="qsm-dashboard-v3-card-header">
                   <div>
-                    <h2>Resumen rápido</h2>
+                    <span className="qsm-dashboard-v3-section-eyebrow">
+                      Estado de la cuenta
+                    </span>
+
+                    <h2>
+                      Resumen rápido
+                    </h2>
+
+                    <p>
+                      Accesos y alertas principales.
+                    </p>
                   </div>
+
+                  <Link
+                    to="/profile"
+                    className="qsm-dashboard-v3-card-link"
+                  >
+                    Ver todo
+                  </Link>
                 </div>
 
-                <QsmQuickMetric
-                  icon="♡"
-                  label="Favoritos"
-                  value={stats.favorites}
-                  tone="purple"
-                />
+                <div className="qsm-dashboard-v3-quick-grid">
+                  <QsmQuickMetric
+                    icon="♡"
+                    label="Favoritos"
+                    value={stats.favorites}
+                    tone="purple"
+                    to="/favorites"
+                    status={
+                      stats.favorites > 0
+                        ? "Guardados"
+                        : "Sin favoritos"
+                    }
+                  />
 
-                <QsmQuickMetric
-                  icon="💬"
-                  label="Mensajes sin leer"
-                  value={stats.messages}
-                  tone="blue"
-                />
+                  <QsmQuickMetric
+                    icon="💬"
+                    label="Mensajes"
+                    value={stats.messages}
+                    tone="blue"
+                    to="/messages"
+                    status={
+                      stats.messages > 0
+                        ? "Sin leer"
+                        : "Al día"
+                    }
+                  />
 
-                <QsmQuickMetric
-                  icon="⚖"
-                  label="Disputas abiertas"
-                  value={stats.disputes}
-                  tone="red"
-                />
+                  <QsmQuickMetric
+                    icon="⚖"
+                    label="Disputas"
+                    value={stats.disputes}
+                    tone="red"
+                    to="/disputes"
+                    status={
+                      stats.disputes > 0
+                        ? "Requiere atención"
+                        : "Sin casos"
+                    }
+                    alert={
+                      stats.disputes > 0
+                    }
+                  />
 
-                <QsmQuickMetric
-                  icon="🛡"
-                  label="Confianza QSM"
-                  value={`${trustScore}/100`}
-                  tone="cyan"
-                />
+                  <QsmQuickMetric
+                    icon="🛡"
+                    label="Confianza"
+                    value={`${trustScore}/100`}
+                    tone="cyan"
+                    to="/profile"
+                    status={
+                      formatTrustLevel(
+                        trustScore
+                      )
+                    }
+                  />
+                </div>
 
-                <Link
-                  to="/profile"
-                  className="qsm-dashboard-v3-outline-button"
-                >
-                  Ver mi perfil completo
-                </Link>
+                <div className="qsm-dashboard-v3-quick-footer">
+                  <div>
+                    <span>
+                      Estado general
+                    </span>
+
+                    <strong
+                      className={
+                        dashboardHealth.className
+                      }
+                    >
+                      {dashboardHealth.label}
+                    </strong>
+                  </div>
+
+                  <Link
+                    to="/profile"
+                    className="qsm-dashboard-v3-outline-button"
+                  >
+                    Ver mi perfil completo
+                  </Link>
+                </div>
               </article>
 
               <QsmProfileCard
@@ -969,43 +1449,154 @@ function Dashboard() {
               />
             </section>
 
-            <section className="qsm-dashboard-v3-actions-card">
+            <section className="qsm-dashboard-v3-actions-card qsm-dashboard-v3-actions-card--premium">
+              {/* QSM_FASE15_BLOCK4_MARKETPLACE_ACTION_CENTER */}
+
+              <div className="qsm-dashboard-v3-action-center-header">
+                <div>
+                  <span className="qsm-dashboard-v3-section-eyebrow">
+                    Centro de operaciones
+                  </span>
+
+                  <h2>
+                    ¿Qué deseas hacer?
+                  </h2>
+
+                  <p>
+                    Busca productos o entra directamente a una función de QSM.
+                  </p>
+                </div>
+
+                <span className="qsm-dashboard-v3-action-center-status">
+                  <i aria-hidden="true" />
+
+                  Marketplace disponible
+                </span>
+              </div>
+
               <form
                 onSubmit={handleSearch}
-                className="qsm-dashboard-v3-market-search"
+                className="qsm-dashboard-v3-market-search qsm-dashboard-v3-market-search--premium"
               >
-                <span aria-hidden="true">⌕</span>
+                <span
+                  className="qsm-dashboard-v3-market-search__icon"
+                  aria-hidden="true"
+                >
+                  ⌕
+                </span>
 
-                <input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Buscar productos en Marketplace..."
-                  aria-label="Buscar productos en Marketplace"
-                />
+                <div className="qsm-dashboard-v3-market-search__field">
+                  <label htmlFor="qsm-dashboard-market-search">
+                    Buscar en Marketplace
+                  </label>
 
-                <button type="submit">Buscar</button>
+                  <input
+                    id="qsm-dashboard-market-search"
+                    value={search}
+                    onChange={(event) =>
+                      setSearch(
+                        event.target.value
+                      )
+                    }
+                    placeholder="Producto, categoría, marca o vendedor..."
+                    aria-label="Buscar productos en Marketplace"
+                  />
+                </div>
+
+                {search && (
+                  <button
+                    type="button"
+                    className="qsm-dashboard-v3-market-search__clear"
+                    onClick={() =>
+                      setSearch("")
+                    }
+                    aria-label="Limpiar búsqueda"
+                  >
+                    ×
+                  </button>
+                )}
+
+                <button
+                  type="submit"
+                  className="qsm-dashboard-v3-market-search__submit"
+                >
+                  Buscar
+                  <span aria-hidden="true">
+                    →
+                  </span>
+                </button>
               </form>
 
-              <nav className="qsm-dashboard-v3-actions">
-                <Link to="/marketplace" className="primary">
-                  ▣ Ir al Marketplace
-                </Link>
+              <nav
+                className="qsm-dashboard-v3-actions qsm-dashboard-v3-actions--premium"
+                aria-label="Acciones rápidas del Dashboard"
+              >
+                <QsmDashboardAction
+                  to="/marketplace"
+                  icon="⌑"
+                  title="Marketplace"
+                  text="Explorar productos"
+                  tone="cyan"
+                  primary
+                />
 
-                <Link to="/new-product">
-                  ＋ Publicar producto
-                </Link>
+                <QsmDashboardAction
+                  to="/new-product"
+                  icon="+"
+                  title="Publicar"
+                  text="Crear una publicación"
+                  tone="green"
+                />
 
-                <Link to="/sales">
-                  ▣ Mis productos
-                </Link>
+                <QsmDashboardAction
+                  to="/sales"
+                  icon="▣"
+                  title="Mis productos"
+                  text={`${stats.products} activos`}
+                  tone="purple"
+                />
 
-                <Link to="/orders">
-                  ▣ Mis pedidos
-                </Link>
+                <QsmDashboardAction
+                  to="/orders"
+                  icon="▤"
+                  title="Mis pedidos"
+                  text={`${stats.purchases} registrados`}
+                  tone="orange"
+                />
 
-                <Link to="/complete-profile">
-                  🛡 Verificación QSM
-                </Link>
+                <QsmDashboardAction
+                  to="/messages"
+                  icon="●"
+                  title="Mis mensajes"
+                  text={
+                    stats.messages > 0
+                      ? `${stats.messages} sin leer`
+                      : "Conversaciones"
+                  }
+                  tone="blue"
+                  alert={
+                    stats.messages > 0
+                  }
+                />
+
+                <QsmDashboardAction
+                  to={
+                    isVerified
+                      ? "/profile"
+                      : "/complete-profile"
+                  }
+                  icon="◇"
+                  title="Verificación"
+                  text={
+                    isVerified
+                      ? "Identidad validada"
+                      : "Completar proceso"
+                  }
+                  tone="shield"
+                  alert={
+                    !isVerified
+                  }
+                />
               </nav>
             </section>
 
@@ -1155,32 +1746,220 @@ function QsmStatCard({
   value,
   text,
   tone,
-  compact = false
+  compact = false,
+  wide = false,
+  trendLabel = "Período actual",
+  sparkline = []
 }) {
-  return (
-    <article className={`qsm-dashboard-v3-stat tone-${tone}`}>
-      <span className="qsm-dashboard-v3-stat-icon">{icon}</span>
+  const safeSparkline =
+    Array.isArray(sparkline) &&
+    sparkline.length > 1
+      ? sparkline
+      : [
+          18,
+          24,
+          22,
+          31,
+          28,
+          38,
+          44
+        ];
 
-      <div>
-        <small>{title}</small>
-        <strong className={compact ? "compact" : ""}>{value}</strong>
-        <p>{text}</p>
+  const maximum =
+    Math.max(
+      1,
+      ...safeSparkline
+    );
+
+  const sparklinePoints =
+    safeSparkline
+      .map(
+        (
+          point,
+          index
+        ) => {
+          const x =
+            (
+              index /
+              Math.max(
+                1,
+                safeSparkline.length -
+                  1
+              )
+            ) * 100;
+
+          const y =
+            34 -
+            (
+              Number(point || 0) /
+              maximum
+            ) * 28;
+
+          return `${x},${y}`;
+        }
+      )
+      .join(" ");
+
+  return (
+    <article
+      className={`qsm-dashboard-v3-stat qsm-dashboard-v3-stat--premium tone-${tone} ${
+        wide
+          ? "is-wide"
+          : ""
+      }`}
+    >
+      <div className="qsm-dashboard-v3-stat-main">
+        <span className="qsm-dashboard-v3-stat-icon">
+          {icon}
+        </span>
+
+        <div className="qsm-dashboard-v3-stat-copy">
+          <small>
+            {title}
+          </small>
+
+          <strong
+            className={
+              compact
+                ? "compact"
+                : ""
+            }
+          >
+            {value}
+          </strong>
+
+          <p>
+            {text}
+          </p>
+        </div>
+
+        <div
+          className="qsm-dashboard-v3-stat-sparkline"
+          aria-hidden="true"
+        >
+          <svg
+            viewBox="0 0 100 38"
+            preserveAspectRatio="none"
+          >
+            <defs>
+              <linearGradient
+                id={`qsm-stat-gradient-${tone}`}
+                x1="0"
+                x2="0"
+                y1="0"
+                y2="1"
+              >
+                <stop
+                  offset="0%"
+                  stopColor="currentColor"
+                  stopOpacity=".34"
+                />
+
+                <stop
+                  offset="100%"
+                  stopColor="currentColor"
+                  stopOpacity="0"
+                />
+              </linearGradient>
+            </defs>
+
+            <polygon
+              points={`0,38 ${sparklinePoints} 100,38`}
+              fill={`url(#qsm-stat-gradient-${tone})`}
+            />
+
+            <polyline
+              points={
+                sparklinePoints
+              }
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </div>
       </div>
 
-      <span className="qsm-dashboard-v3-stat-arrow">›</span>
+      <div className="qsm-dashboard-v3-stat-footer">
+        <span>
+          <i aria-hidden="true">
+            ↗
+          </i>
+
+          {trendLabel}
+        </span>
+
+        <b>
+          Ver detalles
+        </b>
+      </div>
     </article>
   );
 }
 
-function QsmQuickMetric({ icon, label, value, tone }) {
+function QsmQuickMetric({
+  icon,
+  label,
+  value,
+  tone,
+  to,
+  status,
+  alert = false
+}) {
+  const content = (
+    <>
+      <div className="qsm-dashboard-v3-quick-metric__top">
+        <span className="qsm-dashboard-v3-quick-metric__icon">
+          {icon}
+        </span>
+
+        {alert && (
+          <i
+            className="qsm-dashboard-v3-quick-alert"
+            aria-label="Requiere atención"
+          />
+        )}
+      </div>
+
+      <div className="qsm-dashboard-v3-quick-metric__copy">
+        <span>
+          {label}
+        </span>
+
+        <strong>
+          {value}
+        </strong>
+
+        <small>
+          {status}
+        </small>
+      </div>
+    </>
+  );
+
+  if (to) {
+    return (
+      <Link
+        to={to}
+        className={`qsm-dashboard-v3-quick-metric qsm-dashboard-v3-quick-metric--premium tone-${tone}`}
+      >
+        {content}
+      </Link>
+    );
+  }
+
   return (
-    <div className={`qsm-dashboard-v3-quick-metric tone-${tone}`}>
-      <span>{icon}</span>
-      <p>{label}</p>
-      <strong>{value}</strong>
+    <div
+      className={`qsm-dashboard-v3-quick-metric qsm-dashboard-v3-quick-metric--premium tone-${tone}`}
+    >
+      {content}
     </div>
   );
 }
+
+/* QSM_FASE15_BLOCK3_PREMIUM_QUICK_PROFILE */
 
 function QsmProfileCard({
   fullName,
@@ -1215,30 +1994,128 @@ function QsmProfileCard({
           )}
         </div>
 
-        <div className="qsm-dashboard-v3-profile-name">
-          <h2>Perfil QSM</h2>
-          <strong>{fullName}</strong>
-          <span className={isVerified ? "verified" : "pending"}>
-            {isVerified ? "Usuario verificado" : "Verificación pendiente"}
-          </span>
-        </div>
+        <div className="qsm-dashboard-v3-profile-identity">
+          <div className="qsm-dashboard-v3-profile-name">
+            <span className="qsm-dashboard-v3-section-eyebrow">
+              Perfil QSM
+            </span>
 
-        <QsmProgress label="Perfil completado" value={profileCompletion} />
-        <QsmProgress label="Confianza QSM" value={trustScore} />
+            <strong>
+              {fullName}
+            </strong>
 
-        <div className="qsm-dashboard-v3-profile-meta">
-          <div>
-            <span>Estado verificación</span>
-            <strong>{
-              isVerified
-                ? "Verificado"
-                : formatVerificationStatus(verificationStatus)
-            }</strong>
+            <span
+              className={
+                isVerified
+                  ? "verified"
+                  : "pending"
+              }
+            >
+              {isVerified
+                ? "✓ Usuario verificado"
+                : "● Verificación pendiente"}
+            </span>
           </div>
 
-          <div>
-            <span>Nivel de confianza</span>
-            <strong>{formatTrustLevel(trustScore)}</strong>
+          <div className="qsm-dashboard-v3-profile-score">
+            <span>
+              Confianza QSM
+            </span>
+
+            <strong>
+              {trustScore}/100
+            </strong>
+
+            <small>
+              Nivel {
+                formatTrustLevel(
+                  trustScore
+                )
+              }
+            </small>
+          </div>
+        </div>
+
+        <QsmProgress
+          label="Perfil completado"
+          value={profileCompletion}
+        />
+
+        <div className="qsm-dashboard-v3-profile-checklist">
+          <div
+            className={
+              userHasBasicIdentity(
+                fullName
+              )
+                ? "is-complete"
+                : "is-pending"
+            }
+          >
+            <span>
+              Información personal
+            </span>
+
+            <strong>
+              {userHasBasicIdentity(
+                fullName
+              )
+                ? "✓"
+                : "Pendiente"}
+            </strong>
+          </div>
+
+          <div
+            className={
+              isVerified
+                ? "is-complete"
+                : "is-pending"
+            }
+          >
+            <span>
+              Verificación de identidad
+            </span>
+
+            <strong>
+              {isVerified
+                ? "✓"
+                : "Pendiente"}
+            </strong>
+          </div>
+
+          <div
+            className={
+              profileCompletion >= 70
+                ? "is-complete"
+                : "is-pending"
+            }
+          >
+            <span>
+              Datos de contacto
+            </span>
+
+            <strong>
+              {profileCompletion >= 70
+                ? "✓"
+                : "Pendiente"}
+            </strong>
+          </div>
+
+          <div
+            className={
+              trustScore >= 70
+                ? "is-complete"
+                : "is-pending"
+            }
+          >
+            <span>
+              Nivel de confianza
+            </span>
+
+            <strong>
+              {trustScore >= 70
+                ? "✓"
+                : "En progreso"}
+            </strong>
           </div>
         </div>
 
@@ -1270,6 +2147,52 @@ function QsmProgress({ label, value }) {
   );
 }
 
+function QsmDashboardAction({
+  to,
+  icon,
+  title,
+  text,
+  tone,
+  primary = false,
+  alert = false
+}) {
+  return (
+    <Link
+      to={to}
+      className={`qsm-dashboard-v3-dashboard-action tone-${tone} ${
+        primary
+          ? "is-primary"
+          : ""
+      }`}
+    >
+      <span className="qsm-dashboard-v3-dashboard-action__icon">
+        {icon}
+      </span>
+
+      <div>
+        <strong>
+          {title}
+        </strong>
+
+        <small>
+          {text}
+        </small>
+      </div>
+
+      {alert ? (
+        <i
+          className="qsm-dashboard-v3-dashboard-action__alert"
+          aria-label="Acción pendiente"
+        />
+      ) : (
+        <b aria-hidden="true">
+          →
+        </b>
+      )}
+    </Link>
+  );
+}
+
 function QsmRecentPanel({
   title,
   linkText,
@@ -1280,18 +2203,73 @@ function QsmRecentPanel({
   footerText,
   footerTo
 }) {
+  const safeItems =
+    Array.isArray(items)
+      ? items
+      : [];
+
+  const visual =
+    getRecentPanelVisual(
+      title
+    );
+
   return (
-    <article className="qsm-dashboard-v3-card qsm-dashboard-v3-recent-panel">
-      <header>
-        <h3>{title}</h3>
-        <Link to={linkTo}>{linkText}</Link>
+    <article
+      className={`qsm-dashboard-v3-card qsm-dashboard-v3-recent-panel qsm-dashboard-v3-recent-panel--premium tone-${visual.tone}`}
+    >
+      <header className="qsm-dashboard-v3-recent-header">
+        <div className="qsm-dashboard-v3-recent-heading">
+          <span
+            className="qsm-dashboard-v3-recent-heading__icon"
+            aria-hidden="true"
+          >
+            {visual.icon}
+          </span>
+
+          <div>
+            <span className="qsm-dashboard-v3-section-eyebrow">
+              Actividad reciente
+            </span>
+
+            <h3>
+              {title}
+            </h3>
+          </div>
+        </div>
+
+        <div className="qsm-dashboard-v3-recent-header__right">
+          <span className="qsm-dashboard-v3-recent-count">
+            {safeItems.length}
+          </span>
+
+          <Link to={linkTo}>
+            {linkText}
+            <span aria-hidden="true">
+              {" "}→
+            </span>
+          </Link>
+        </div>
       </header>
 
       <div className="qsm-dashboard-v3-recent-list">
-        {items.length === 0 ? (
-          <div className="qsm-dashboard-v3-empty">{emptyText}</div>
+        {safeItems.length === 0 ? (
+          <div className="qsm-dashboard-v3-empty qsm-dashboard-v3-empty--premium">
+            <span aria-hidden="true">
+              {visual.emptyIcon}
+            </span>
+
+            <strong>
+              Sin actividad reciente
+            </strong>
+
+            <p>
+              {emptyText}
+            </p>
+          </div>
         ) : (
-          items.slice(0, 3).map(renderItem)
+          safeItems
+            .slice(0, 3)
+            .map(renderItem)
         )}
       </div>
 
@@ -1299,7 +2277,13 @@ function QsmRecentPanel({
         to={footerTo}
         className="qsm-dashboard-v3-outline-button qsm-dashboard-v3-recent-footer"
       >
-        {footerText}
+        <span>
+          {footerText}
+        </span>
+
+        <b aria-hidden="true">
+          →
+        </b>
       </Link>
     </article>
   );
@@ -1312,168 +2296,842 @@ function QsmRecentItem({
   subtitle,
   status
 }) {
-  const [imageFailed, setImageFailed] = useState(false);
+  const [
+    imageFailed,
+    setImageFailed
+  ] = useState(false);
+
+  const statusTone =
+    getRecentStatusTone(
+      status
+    );
 
   return (
-    <div className="qsm-dashboard-v3-recent-item">
+    <div className="qsm-dashboard-v3-recent-item qsm-dashboard-v3-recent-item--premium">
       <div className="qsm-dashboard-v3-recent-thumb">
         {image && !imageFailed ? (
           <img
             src={image}
             alt={title}
-            onError={() => setImageFailed(true)} loading="lazy" decoding="async" />
+            onError={() =>
+              setImageFailed(true)
+            }
+            loading="lazy"
+            decoding="async"
+          />
         ) : (
-          <span>{fallback}</span>
+          <span>
+            {fallback}
+          </span>
         )}
       </div>
 
       <div className="qsm-dashboard-v3-recent-copy">
-        <strong>{title}</strong>
-        <span>{subtitle}</span>
+        <strong title={title}>
+          {title}
+        </strong>
+
+        <span title={subtitle}>
+          {subtitle}
+        </span>
       </div>
 
-      <span className="qsm-dashboard-v3-recent-status">{status}</span>
+      <span
+        className={`qsm-dashboard-v3-recent-status is-${statusTone}`}
+      >
+        <i aria-hidden="true" />
+
+        {status}
+      </span>
     </div>
   );
 }
 
-function QsmActivityChart({ purchases, sales, disputes }) {
+/* QSM_FASE15_BLOCK2_PROFESSIONAL_ACTIVITY_CHART */
+
+function QsmActivityChart({
+  purchases,
+  sales,
+  disputes,
+  period = "30",
+  onPeriodChange
+}) {
+  const [
+    activeSeries,
+    setActiveSeries
+  ] = useState({
+    purchases: true,
+    sales: true,
+    disputes: true
+  });
+
+  const [
+    hoveredPoint,
+    setHoveredPoint
+  ] = useState(null);
+
   const data = useMemo(
-    () => buildChartData({ purchases, sales, disputes }),
-    [purchases, sales, disputes]
+    () =>
+      buildChartData({
+        purchases,
+        sales,
+        disputes,
+        period
+      }),
+    [
+      purchases,
+      sales,
+      disputes,
+      period
+    ]
   );
 
-  const hasActivity = data.some(
-    (item) =>
-      item.purchases > 0 ||
-      item.sales > 0 ||
-      item.disputes > 0
+  const totals = useMemo(
+    () => {
+      return data.reduce(
+        (
+          accumulator,
+          item
+        ) => ({
+          purchases:
+            accumulator.purchases +
+            item.purchases,
+
+          sales:
+            accumulator.sales +
+            item.sales,
+
+          disputes:
+            accumulator.disputes +
+            item.disputes
+        }),
+        {
+          purchases: 0,
+          sales: 0,
+          disputes: 0
+        }
+      );
+    },
+    [data]
   );
 
-  if (!hasActivity) {
-    return (
-      <div className="qsm-dashboard-v3-chart-empty">
-        Aún no hay suficiente actividad registrada para generar la gráfica.
-      </div>
-    );
-  }
+  const totalOperations =
+    totals.purchases +
+    totals.sales +
+    totals.disputes;
 
-  const width = 760;
-  const height = 260;
+  const bestBucket =
+    useMemo(() => {
+      return [...data].sort(
+        (
+          first,
+          second
+        ) => {
+          const firstTotal =
+            first.purchases +
+            first.sales +
+            first.disputes;
+
+          const secondTotal =
+            second.purchases +
+            second.sales +
+            second.disputes;
+
+          return (
+            secondTotal -
+            firstTotal
+          );
+        }
+      )[0] || null;
+    }, [data]);
+
+  const bestBucketTotal =
+    bestBucket
+      ? bestBucket.purchases +
+        bestBucket.sales +
+        bestBucket.disputes
+      : 0;
+
+  const hasActivity =
+    totalOperations > 0;
+
+  const width = 900;
+  const height = 330;
+
   const padding = {
-    top: 18,
-    right: 20,
-    bottom: 34,
-    left: 36
+    top: 32,
+    right: 28,
+    bottom: 48,
+    left: 68
   };
 
-  const chartWidth = width - padding.left - padding.right;
-  const chartHeight = height - padding.top - padding.bottom;
+  const chartWidth =
+    width -
+    padding.left -
+    padding.right;
 
-  const maxValue = Math.max(
-    1,
-    ...data.flatMap((item) => [
-      item.purchases,
-      item.sales,
-      item.disputes
-    ])
-  );
+  const chartHeight =
+    height -
+    padding.top -
+    padding.bottom;
 
-  const makePoints = (key) =>
-    data
-      .map((item, index) => {
-        const x =
-          padding.left +
-          (chartWidth * index) /
-            Math.max(1, data.length - 1);
+  const visibleValues =
+    data.flatMap(
+      (item) => {
+        const values = [];
 
-        const y =
-          padding.top +
-          chartHeight -
-          (item[key] / maxValue) * chartHeight;
+        if (
+          activeSeries.purchases
+        ) {
+          values.push(
+            item.purchases
+          );
+        }
 
-        return `${x},${y}`;
-      })
+        if (
+          activeSeries.sales
+        ) {
+          values.push(
+            item.sales
+          );
+        }
+
+        if (
+          activeSeries.disputes
+        ) {
+          values.push(
+            item.disputes
+          );
+        }
+
+        return values;
+      }
+    );
+
+  const maxValue =
+    Math.max(
+      1,
+      ...visibleValues
+    );
+
+  const getX = (
+    index
+  ) => {
+    return (
+      padding.left +
+      (
+        chartWidth *
+        index
+      ) /
+      Math.max(
+        1,
+        data.length - 1
+      )
+    );
+  };
+
+  const getY = (
+    value
+  ) => {
+    return (
+      padding.top +
+      chartHeight -
+      (
+        Number(value || 0) /
+        maxValue
+      ) *
+      chartHeight
+    );
+  };
+
+  const makePoints = (
+    key
+  ) => {
+    return data
+      .map(
+        (
+          item,
+          index
+        ) =>
+          `${getX(index)},${getY(
+            item[key]
+          )}`
+      )
       .join(" ");
+  };
+
+  const makeAreaPoints = (
+    key
+  ) => {
+    return [
+      `${padding.left},${
+        padding.top +
+        chartHeight
+      }`,
+
+      makePoints(key),
+
+      `${
+        width -
+        padding.right
+      },${
+        padding.top +
+        chartHeight
+      }`
+    ].join(" ");
+  };
+
+  const toggleSeries = (
+    key
+  ) => {
+    setHoveredPoint(
+      null
+    );
+
+    setActiveSeries(
+      (current) => ({
+        ...current,
+        [key]:
+          !current[key]
+      })
+    );
+  };
+
+  const series = [
+    {
+      key: "purchases",
+      label: "Compras",
+      value: totals.purchases
+    },
+    {
+      key: "sales",
+      label: "Ventas",
+      value: totals.sales
+    },
+    {
+      key: "disputes",
+      label: "Reclamos",
+      value: totals.disputes
+    }
+  ];
 
   return (
-    <>
-      <div className="qsm-dashboard-v3-chart-legend">
-        <span><i className="purchases" />Compras</span>
-        <span><i className="sales" />Ventas</span>
-        <span><i className="disputes" />Reclamos</span>
+    <div className="qsm-dashboard-v3-activity-premium">
+      <div className="qsm-dashboard-v3-activity-toolbar">
+        <div className="qsm-dashboard-v3-activity-totals">
+          {series.map(
+            (item) => (
+              <article
+                key={item.key}
+                className={
+                  `is-${item.key}`
+                }
+              >
+                <strong>
+                  {item.value}
+                </strong>
+
+                <span>
+                  {item.label}
+                </span>
+              </article>
+            )
+          )}
+        </div>
+
+        <div className="qsm-dashboard-v3-period-tabs">
+          {[
+            ["7", "7 días"],
+            ["30", "30 días"],
+            ["90", "90 días"]
+          ].map(
+            (
+              [
+                value,
+                label
+              ]
+            ) => (
+              <button
+                key={value}
+                type="button"
+                className={
+                  String(period) ===
+                  value
+                    ? "is-active"
+                    : ""
+                }
+                onClick={() => {
+                  setHoveredPoint(
+                    null
+                  );
+
+                  onPeriodChange?.(
+                    value
+                  );
+                }}
+              >
+                {label}
+              </button>
+            )
+          )}
+        </div>
       </div>
 
-      <div className="qsm-dashboard-v3-chart-wrap">
-        <svg
-          viewBox={`0 0 ${width} ${height}`}
-          preserveAspectRatio="xMidYMid meet"
-          role="img"
-          aria-label="Resumen de actividad de los últimos 30 días"
-        >
-          {[0, 1, 2, 3, 4].map((step) => {
-            const y = padding.top + (chartHeight * step) / 4;
-            const value = Math.round(
-              maxValue - (maxValue * step) / 4
-            );
+      <div className="qsm-dashboard-v3-chart-controls">
+        {series.map(
+          (item) => (
+            <button
+              key={item.key}
+              type="button"
+              className={
+                `is-${item.key} ${
+                  activeSeries[
+                    item.key
+                  ]
+                    ? "is-active"
+                    : ""
+                }`
+              }
+              onClick={() =>
+                toggleSeries(
+                  item.key
+                )
+              }
+              aria-pressed={
+                activeSeries[
+                  item.key
+                ]
+              }
+            >
+              <i aria-hidden="true" />
 
-            return (
-              <g key={step}>
-                <line
-                  x1={padding.left}
-                  x2={width - padding.right}
-                  y1={y}
-                  y2={y}
-                  className="qsm-dashboard-v3-grid-line"
+              {item.label}
+            </button>
+          )
+        )}
+      </div>
+
+      {!hasActivity ? (
+        <div className="qsm-dashboard-v3-chart-empty qsm-dashboard-v3-chart-empty--premium">
+          <span aria-hidden="true">
+            ◔
+          </span>
+
+          <strong>
+            Todavía no hay suficiente actividad
+          </strong>
+
+          <p>
+            Cuando registres compras, ventas o reclamos,
+            aparecerán aquí tus tendencias.
+          </p>
+        </div>
+      ) : (
+        <div
+          className="qsm-dashboard-v3-chart-wrap qsm-dashboard-v3-chart-wrap--premium"
+          onMouseLeave={() =>
+            setHoveredPoint(null)
+          }
+        >
+          <svg
+            viewBox={
+              `0 0 ${width} ${height}`
+            }
+            preserveAspectRatio="none"
+            role="img"
+            aria-label={
+              `Actividad de los últimos ${period} días`
+            }
+          >
+            <defs>
+              <linearGradient
+                id="qsm-purchases-area"
+                x1="0"
+                x2="0"
+                y1="0"
+                y2="1"
+              >
+                <stop
+                  offset="0%"
+                  stopColor="#a855f7"
+                  stopOpacity=".42"
                 />
 
-                <text
-                  x="4"
-                  y={y + 3}
-                  className="qsm-dashboard-v3-axis-label"
-                >
-                  {value}
-                </text>
-              </g>
-            );
-          })}
+                <stop
+                  offset="100%"
+                  stopColor="#a855f7"
+                  stopOpacity="0"
+                />
+              </linearGradient>
 
-          <polyline
-            points={makePoints("purchases")}
-            className="qsm-dashboard-v3-line purchases"
-          />
-
-          <polyline
-            points={makePoints("sales")}
-            className="qsm-dashboard-v3-line sales"
-          />
-
-          <polyline
-            points={makePoints("disputes")}
-            className="qsm-dashboard-v3-line disputes"
-          />
-
-          {data.map((item, index) => {
-            const x =
-              padding.left +
-              (chartWidth * index) /
-                Math.max(1, data.length - 1);
-
-            return (
-              <text
-                key={item.label}
-                x={x}
-                y={height - 10}
-                textAnchor="middle"
-                className="qsm-dashboard-v3-axis-label"
+              <linearGradient
+                id="qsm-sales-area"
+                x1="0"
+                x2="0"
+                y1="0"
+                y2="1"
               >
-                {item.label}
-              </text>
-            );
-          })}
-        </svg>
+                <stop
+                  offset="0%"
+                  stopColor="#38bdf8"
+                  stopOpacity=".34"
+                />
+
+                <stop
+                  offset="100%"
+                  stopColor="#38bdf8"
+                  stopOpacity="0"
+                />
+              </linearGradient>
+
+              <linearGradient
+                id="qsm-disputes-area"
+                x1="0"
+                x2="0"
+                y1="0"
+                y2="1"
+              >
+                <stop
+                  offset="0%"
+                  stopColor="#2dd4bf"
+                  stopOpacity=".28"
+                />
+
+                <stop
+                  offset="100%"
+                  stopColor="#2dd4bf"
+                  stopOpacity="0"
+                />
+              </linearGradient>
+            </defs>
+
+            {[0, 1, 2, 3, 4].map(
+              (step) => {
+                const y =
+                  padding.top +
+                  (
+                    chartHeight *
+                    step
+                  ) /
+                  4;
+
+                const value =
+                  Math.round(
+                    maxValue -
+                    (
+                      maxValue *
+                      step
+                    ) /
+                    4
+                  );
+
+                return (
+                  <g key={step}>
+                    <line
+                      x1={
+                        padding.left
+                      }
+                      x2={
+                        width -
+                        padding.right
+                      }
+                      y1={y}
+                      y2={y}
+                      className="qsm-dashboard-v3-grid-line"
+                    />
+
+                    <text
+                      x={
+                        padding.left -
+                        15
+                      }
+                      y={y + 4}
+                      textAnchor="end"
+                      className="qsm-dashboard-v3-axis-label"
+                    >
+                      {value}
+                    </text>
+                  </g>
+                );
+              }
+            )}
+
+            {series.map(
+              (item) => {
+                if (
+                  !activeSeries[
+                    item.key
+                  ]
+                ) {
+                  return null;
+                }
+
+                return (
+                  <g key={item.key}>
+                    <polygon
+                      points={
+                        makeAreaPoints(
+                          item.key
+                        )
+                      }
+                      className={
+                        `qsm-dashboard-v3-area ${item.key}`
+                      }
+                    />
+
+                    <polyline
+                      points={
+                        makePoints(
+                          item.key
+                        )
+                      }
+                      className={
+                        `qsm-dashboard-v3-line ${item.key}`
+                      }
+                    />
+
+                    {data.map(
+                      (
+                        dataItem,
+                        index
+                      ) => (
+                        <circle
+                          key={
+                            `${item.key}-${dataItem.label}`
+                          }
+                          cx={
+                            getX(index)
+                          }
+                          cy={
+                            getY(
+                              dataItem[
+                                item.key
+                              ]
+                            )
+                          }
+                          r="4.5"
+                          className={
+                            `qsm-dashboard-v3-point ${item.key}`
+                          }
+                          onMouseEnter={() =>
+                            setHoveredPoint({
+                              index,
+                              item:
+                                dataItem,
+                              x:
+                                getX(
+                                  index
+                                ),
+                              y:
+                                getY(
+                                  dataItem[
+                                    item.key
+                                  ]
+                                )
+                            })
+                          }
+                        />
+                      )
+                    )}
+                  </g>
+                );
+              }
+            )}
+
+            {data.map(
+              (
+                item,
+                index
+              ) => (
+                <text
+                  key={
+                    item.label
+                  }
+                  x={
+                    getX(index)
+                  }
+                  y={
+                    height -
+                    13
+                  }
+                  textAnchor="middle"
+                  className="qsm-dashboard-v3-axis-label qsm-dashboard-v3-axis-label--date"
+                >
+                  {item.label}
+                </text>
+              )
+            )}
+
+            {hoveredPoint && (
+              <line
+                x1={
+                  hoveredPoint.x
+                }
+                x2={
+                  hoveredPoint.x
+                }
+                y1={
+                  padding.top
+                }
+                y2={
+                  padding.top +
+                  chartHeight
+                }
+                className="qsm-dashboard-v3-hover-line"
+              />
+            )}
+          </svg>
+
+          {hoveredPoint && (
+            <div
+              className="qsm-dashboard-v3-chart-tooltip"
+              style={{
+                left:
+                  `clamp(
+                    92px,
+                    ${
+                      (
+                        hoveredPoint.x /
+                        width
+                      ) *
+                      100
+                    }%,
+                    calc(100% - 92px)
+                  )`,
+
+                top:
+                  `clamp(
+                    108px,
+                    ${
+                      Math.max(
+                        10,
+                        (
+                          hoveredPoint.y /
+                          height
+                        ) *
+                        100 -
+                        5
+                      )
+                    }%,
+                    calc(100% - 18px)
+                  )`
+              }}
+            >
+              <strong>
+                {
+                  hoveredPoint
+                    .item
+                    .fullLabel
+                }
+              </strong>
+
+              <span className="purchases">
+                Compras
+                <b>
+                  {
+                    hoveredPoint
+                      .item
+                      .purchases
+                  }
+                </b>
+              </span>
+
+              <span className="sales">
+                Ventas
+                <b>
+                  {
+                    hoveredPoint
+                      .item
+                      .sales
+                  }
+                </b>
+              </span>
+
+              <span className="disputes">
+                Reclamos
+                <b>
+                  {
+                    hoveredPoint
+                      .item
+                      .disputes
+                  }
+                </b>
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="qsm-dashboard-v3-activity-insights">
+        <article>
+          <span aria-hidden="true">
+            ↗
+          </span>
+
+          <div>
+            <small>
+              Actividad total
+            </small>
+
+            <strong>
+              {totalOperations}
+            </strong>
+
+            <p>
+              En el período seleccionado
+            </p>
+          </div>
+        </article>
+
+        <article>
+          <span aria-hidden="true">
+            ☆
+          </span>
+
+          <div>
+            <small>
+              Mejor período
+            </small>
+
+            <strong>
+              {
+                bestBucket?.label ||
+                "Sin datos"
+              }
+            </strong>
+
+            <p>
+              {bestBucketTotal}
+              {" "}
+              operaciones
+            </p>
+          </div>
+        </article>
+
+        <article>
+          <span aria-hidden="true">
+            ▥
+          </span>
+
+          <div>
+            <small>
+              Operaciones protegidas
+            </small>
+
+            <strong>
+              {
+                totals.purchases +
+                totals.sales
+              }
+            </strong>
+
+            <p>
+              Compras y ventas
+            </p>
+          </div>
+        </article>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -2372,6 +4030,156 @@ function formatSecurityLevel(value) {
 |--------------------------------------------------------------------------
 */
 
+/* QSM_FASE15_BLOCK5_RECENT_RESPONSIVE_POLISH */
+
+function getRecentPanelVisual(
+  title
+) {
+  const normalized =
+    String(
+      title || ""
+    ).toLocaleLowerCase(
+      "es-DO"
+    );
+
+  if (
+    normalized.includes(
+      "producto"
+    )
+  ) {
+    return {
+      icon: "▣",
+      emptyIcon: "□",
+      tone: "purple"
+    };
+  }
+
+  if (
+    normalized.includes(
+      "compra"
+    )
+  ) {
+    return {
+      icon: "🛒",
+      emptyIcon: "○",
+      tone: "blue"
+    };
+  }
+
+  if (
+    normalized.includes(
+      "venta"
+    )
+  ) {
+    return {
+      icon: "$",
+      emptyIcon: "◇",
+      tone: "green"
+    };
+  }
+
+  if (
+    normalized.includes(
+      "disputa"
+    )
+  ) {
+    return {
+      icon: "⚖",
+      emptyIcon: "✓",
+      tone: "red"
+    };
+  }
+
+  return {
+    icon: "◈",
+    emptyIcon: "○",
+    tone: "cyan"
+  };
+}
+
+function getRecentStatusTone(
+  status
+) {
+  const normalized =
+    String(
+      status || ""
+    )
+      .trim()
+      .toLocaleLowerCase(
+        "es-DO"
+      );
+
+  const successWords = [
+    "activo",
+    "activa",
+    "aprobado",
+    "aprobada",
+    "completado",
+    "completada",
+    "entregado",
+    "entregada",
+    "pagado",
+    "vendido",
+    "verificado",
+    "liberado"
+  ];
+
+  const warningWords = [
+    "pendiente",
+    "esperando",
+    "revisión",
+    "retenido",
+    "camino",
+    "inspección"
+  ];
+
+  const dangerWords = [
+    "cancelado",
+    "cancelada",
+    "rechazado",
+    "rechazada",
+    "reembolsado",
+    "bloqueado",
+    "disputa",
+    "reclamo"
+  ];
+
+  if (
+    successWords.some(
+      (word) =>
+        normalized.includes(
+          word
+        )
+    )
+  ) {
+    return "success";
+  }
+
+  if (
+    dangerWords.some(
+      (word) =>
+        normalized.includes(
+          word
+        )
+    )
+  ) {
+    return "danger";
+  }
+
+  if (
+    warningWords.some(
+      (word) =>
+        normalized.includes(
+          word
+        )
+    )
+  ) {
+    return "warning";
+  }
+
+  return "neutral";
+}
+
 function getProductImage(product) {
   if (!product) {
     return "";
@@ -2435,6 +4243,16 @@ function getProductImage(product) {
   return `${apiOrigin}/uploads/products/images/${cleanValue}`;
 }
 
+function userHasBasicIdentity(
+  fullName
+) {
+  return Boolean(
+    String(
+      fullName || ""
+    ).trim()
+  );
+}
+
 function formatTrustLevel(value) {
   const score = clampNumber(value, 0, 100, 0);
 
@@ -2449,71 +4267,195 @@ function formatTrustLevel(value) {
   return "Inicial";
 }
 
-function buildChartData({ purchases, sales, disputes }) {
-  const now = new Date();
+function buildChartData({
+  purchases,
+  sales,
+  disputes,
+  period = "30"
+}) {
+  const totalDays =
+    Math.max(
+      7,
+      Number(period || 30)
+    );
+
+  const bucketCount =
+    totalDays <= 7
+      ? 7
+      : totalDays <= 30
+        ? 10
+        : 12;
+
+  const daysPerBucket =
+    Math.ceil(
+      totalDays /
+      bucketCount
+    );
+
+  const now =
+    new Date();
+
+  now.setHours(
+    23,
+    59,
+    59,
+    999
+  );
+
+  const rangeStart =
+    new Date(now);
+
+  rangeStart.setDate(
+    rangeStart.getDate() -
+    totalDays +
+    1
+  );
+
+  rangeStart.setHours(
+    0,
+    0,
+    0,
+    0
+  );
 
   const buckets =
     Array.from(
-      { length: 7 },
-      (_, index) => {
-        const start = new Date(now);
-        start.setHours(0, 0, 0, 0);
+      {
+        length:
+          bucketCount
+      },
+      (
+        _,
+        index
+      ) => {
+        const start =
+          new Date(
+            rangeStart
+          );
+
         start.setDate(
-          start.getDate() -
-          (6 - index) * 5
+          start.getDate() +
+          index *
+          daysPerBucket
         );
 
-        const end = new Date(start);
-        end.setDate(end.getDate() + 5);
+        const end =
+          new Date(start);
+
+        end.setDate(
+          end.getDate() +
+          daysPerBucket
+        );
+
+        if (
+          end >
+          new Date(
+            now.getTime() +
+            1
+          )
+        ) {
+          end.setTime(
+            now.getTime() +
+            1
+          );
+        }
 
         return {
           start,
           end,
+
           label:
             new Intl.DateTimeFormat(
               "es-DO",
               {
-                day: "2-digit",
-                month: "short"
+                day:
+                  "2-digit",
+                month:
+                  "short"
               }
             ).format(start),
+
+          fullLabel:
+            new Intl.DateTimeFormat(
+              "es-DO",
+              {
+                day:
+                  "numeric",
+                month:
+                  "long",
+                year:
+                  "numeric"
+              }
+            ).format(start),
+
           purchases: 0,
           sales: 0,
           disputes: 0
         };
       }
+    ).filter(
+      (bucket) =>
+        bucket.start <= now
     );
 
-  const addItems = (items, key) => {
-    (Array.isArray(items) ? items : [])
-      .forEach((item) => {
+  const addItems = (
+    items,
+    key
+  ) => {
+    (
+      Array.isArray(items)
+        ? items
+        : []
+    ).forEach(
+      (item) => {
         const date =
           new Date(
             item?.createdAt ||
             item?.updatedAt ||
+            item?.date ||
             0
           );
 
-        if (Number.isNaN(date.getTime())) {
+        if (
+          Number.isNaN(
+            date.getTime()
+          ) ||
+          date < rangeStart ||
+          date > now
+        ) {
           return;
         }
 
         const bucket =
           buckets.find(
             (entry) =>
-              date >= entry.start &&
-              date < entry.end
+              date >=
+                entry.start &&
+              date <
+                entry.end
           );
 
         if (bucket) {
           bucket[key] += 1;
         }
-      });
+      }
+    );
   };
 
-  addItems(purchases, "purchases");
-  addItems(sales, "sales");
-  addItems(disputes, "disputes");
+  addItems(
+    purchases,
+    "purchases"
+  );
+
+  addItems(
+    sales,
+    "sales"
+  );
+
+  addItems(
+    disputes,
+    "disputes"
+  );
 
   return buckets;
 }
@@ -2789,6 +4731,420 @@ function dashboardV3Styles(settings) {
       font-size: 17px;
     }
 
+    /* =======================================================
+       QSM_FASE15_BLOCK1_EXECUTIVE_HEADER_STATS
+    ======================================================= */
+
+    .qsm-dashboard-v3-header--executive {
+      display: grid;
+      grid-template-columns:
+        minmax(300px, 1.15fr)
+        minmax(250px, .75fr)
+        auto;
+      align-items: center;
+      gap: 22px;
+      padding: 9px 0 4px;
+    }
+
+    .qsm-dashboard-v3-header--executive
+    .qsm-dashboard-v3-title-block > strong {
+      margin-bottom: 6px;
+      color: var(--qsm-text);
+      font-size: 13px;
+    }
+
+    .qsm-dashboard-v3-header-status {
+      display: grid;
+      gap: 8px;
+      padding: 10px 14px;
+      border-left:
+        1px solid var(--qsm-border);
+    }
+
+    .qsm-dashboard-v3-header-status > span {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--qsm-text-secondary);
+      font-size: 9px;
+      white-space: nowrap;
+    }
+
+    .qsm-dashboard-v3-header-status strong {
+      color: var(--qsm-text);
+      font-size: 9px;
+    }
+
+    .qsm-dashboard-v3-status-dot,
+    .qsm-dashboard-v3-health-dot {
+      width: 7px;
+      height: 7px;
+      flex: 0 0 7px;
+      border-radius: 50%;
+    }
+
+    .qsm-dashboard-v3-status-dot {
+      background: #38bdf8;
+      box-shadow:
+        0 0 9px rgba(56, 189, 248, .72);
+    }
+
+    .qsm-dashboard-v3-health-dot.is-stable {
+      background: #22c55e;
+      box-shadow:
+        0 0 9px rgba(34, 197, 94, .72);
+    }
+
+    .qsm-dashboard-v3-health-dot.is-warning {
+      background: #f59e0b;
+      box-shadow:
+        0 0 9px rgba(245, 158, 11, .7);
+    }
+
+    .qsm-dashboard-v3-health-dot.is-critical {
+      background: #fb7185;
+      box-shadow:
+        0 0 9px rgba(251, 113, 133, .7);
+    }
+
+    .qsm-dashboard-v3-header-status
+    strong.is-stable {
+      color: #4ade80;
+    }
+
+    .qsm-dashboard-v3-header-status
+    strong.is-warning {
+      color: #fbbf24;
+    }
+
+    .qsm-dashboard-v3-header-status
+    strong.is-critical {
+      color: #fda4af;
+    }
+
+    .qsm-dashboard-v3-header-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 9px;
+    }
+
+    .qsm-dashboard-v3-period-control,
+    .qsm-dashboard-v3-report-button {
+      min-height: 42px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border:
+        1px solid var(--qsm-border);
+      border-radius: 12px;
+      background:
+        rgba(15, 23, 42, .58);
+      color: var(--qsm-text-secondary);
+      font-size: 9px;
+      font-weight: 850;
+    }
+
+    .qsm-dashboard-v3-period-control select {
+      min-width: 118px;
+      border: 0;
+      outline: 0;
+      background: transparent;
+      color: var(--qsm-text);
+      font-size: 9px;
+      font-weight: 850;
+      cursor: pointer;
+    }
+
+    .qsm-dashboard-v3-period-control option {
+      background: #0f172a;
+      color: #f8fafc;
+    }
+
+    .qsm-dashboard-v3-report-button {
+      border-color:
+        rgba(139, 92, 246, .36);
+      color: #c4b5fd;
+      cursor: pointer;
+    }
+
+    .qsm-dashboard-v3-stats {
+      grid-template-columns:
+        repeat(
+          3,
+          minmax(0, 1fr)
+        )
+        minmax(0, 1.34fr);
+      gap: 13px;
+    }
+
+    .qsm-dashboard-v3-stat--premium {
+      position: relative;
+      min-height: 126px;
+      display: grid;
+      grid-template-columns: 1fr;
+      grid-template-rows:
+        minmax(0, 1fr)
+        auto;
+      gap: 0;
+      padding: 0;
+      overflow: hidden;
+      border-radius: 18px;
+      isolation: isolate;
+      transition:
+        transform .2s ease,
+        border-color .2s ease,
+        box-shadow .2s ease;
+    }
+
+    .qsm-dashboard-v3-stat--premium::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+      opacity: .42;
+      background:
+        radial-gradient(
+          circle at 90% 14%,
+          currentColor,
+          transparent 35%
+        );
+      pointer-events: none;
+    }
+
+    .qsm-dashboard-v3-stat--premium:hover {
+      transform:
+        translateY(-3px);
+      border-color:
+        rgba(125, 211, 252, .28);
+      box-shadow:
+        0 22px 54px
+        rgba(0, 0, 0, .24);
+    }
+
+    .qsm-dashboard-v3-stat-main {
+      min-width: 0;
+      display: grid;
+      grid-template-columns:
+        48px
+        minmax(0, 1fr)
+        minmax(74px, .72fr);
+      align-items: center;
+      gap: 11px;
+      padding: 15px 15px 12px;
+    }
+
+    .qsm-dashboard-v3-stat-copy {
+      min-width: 0;
+    }
+
+    .qsm-dashboard-v3-stat--premium
+    .qsm-dashboard-v3-stat-icon {
+      width: 48px;
+      height: 48px;
+      border:
+        1px solid currentColor;
+      box-shadow:
+        inset 0 0 18px
+        rgba(255, 255, 255, .025);
+    }
+
+    .qsm-dashboard-v3-stat--premium
+    .qsm-dashboard-v3-stat-copy small {
+      font-size: 10px;
+    }
+
+    .qsm-dashboard-v3-stat--premium
+    .qsm-dashboard-v3-stat-copy strong {
+      margin: 4px 0;
+      font-size:
+        clamp(
+          22px,
+          1.9vw,
+          29px
+        );
+    }
+
+    .qsm-dashboard-v3-stat--premium
+    .qsm-dashboard-v3-stat-copy
+    strong.compact {
+      font-size:
+        clamp(
+          18px,
+          1.45vw,
+          24px
+        );
+    }
+
+    .qsm-dashboard-v3-stat--premium
+    .qsm-dashboard-v3-stat-copy p {
+      font-size: 8px;
+    }
+
+    .qsm-dashboard-v3-stat-sparkline {
+      width: 100%;
+      height: 48px;
+      align-self: center;
+      color: var(--qsm-accent);
+      filter:
+        drop-shadow(
+          0 0 7px
+          rgba(var(--qsm-accent-rgb), .34)
+        );
+    }
+
+    .qsm-dashboard-v3-stat-sparkline svg {
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+
+    .qsm-dashboard-v3-stat.tone-purple {
+      color: #a855f7;
+    }
+
+    .qsm-dashboard-v3-stat.tone-blue {
+      color: #3b82f6;
+    }
+
+    .qsm-dashboard-v3-stat.tone-green {
+      color: #14b8a6;
+    }
+
+    .qsm-dashboard-v3-stat.tone-orange {
+      color: #f59e0b;
+    }
+
+    .qsm-dashboard-v3-stat.tone-purple
+    .qsm-dashboard-v3-stat-icon,
+    .qsm-dashboard-v3-stat.tone-purple
+    .qsm-dashboard-v3-stat-sparkline {
+      color: #a855f7;
+    }
+
+    .qsm-dashboard-v3-stat.tone-blue
+    .qsm-dashboard-v3-stat-icon,
+    .qsm-dashboard-v3-stat.tone-blue
+    .qsm-dashboard-v3-stat-sparkline {
+      color: #3b82f6;
+    }
+
+    .qsm-dashboard-v3-stat.tone-green
+    .qsm-dashboard-v3-stat-icon,
+    .qsm-dashboard-v3-stat.tone-green
+    .qsm-dashboard-v3-stat-sparkline {
+      color: #14b8a6;
+    }
+
+    .qsm-dashboard-v3-stat.tone-orange
+    .qsm-dashboard-v3-stat-icon,
+    .qsm-dashboard-v3-stat.tone-orange
+    .qsm-dashboard-v3-stat-sparkline {
+      color: #f59e0b;
+    }
+
+    .qsm-dashboard-v3-stat-footer {
+      min-height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 15px;
+      border-top:
+        1px solid var(--qsm-border);
+      background:
+        rgba(2, 6, 23, .18);
+    }
+
+    .qsm-dashboard-v3-stat-footer span {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      color: #4ade80;
+      font-size: 8px;
+      font-weight: 850;
+    }
+
+    .qsm-dashboard-v3-stat-footer i {
+      font-style: normal;
+    }
+
+    .qsm-dashboard-v3-stat-footer b {
+      color: var(--qsm-muted);
+      font-size: 7px;
+      font-weight: 750;
+    }
+
+    @media (max-width: 1500px) {
+      .qsm-dashboard-v3-header--executive {
+        grid-template-columns:
+          minmax(280px, 1fr)
+          auto;
+      }
+
+      .qsm-dashboard-v3-header-status {
+        display: none;
+      }
+
+      .qsm-dashboard-v3-stats {
+        grid-template-columns:
+          repeat(
+            2,
+            minmax(0, 1fr)
+          );
+      }
+
+      .qsm-dashboard-v3-stat.is-wide {
+        grid-column:
+          span 1;
+      }
+    }
+
+    @media (max-width: 1050px) {
+      .qsm-dashboard-v3-header--executive {
+        grid-template-columns:
+          minmax(0, 1fr);
+        align-items: stretch;
+      }
+
+      .qsm-dashboard-v3-header-actions {
+        justify-content:
+          flex-start;
+        flex-wrap: wrap;
+      }
+    }
+
+    @media (max-width: 650px) {
+      .qsm-dashboard-v3-header-actions {
+        display: grid;
+        grid-template-columns:
+          1fr;
+      }
+
+      .qsm-dashboard-v3-header-actions > *,
+      .qsm-dashboard-v3-period-control {
+        width: 100%;
+      }
+
+      .qsm-dashboard-v3-period-control select {
+        width: 100%;
+      }
+
+      .qsm-dashboard-v3-stats {
+        grid-template-columns:
+          minmax(0, 1fr);
+      }
+
+      .qsm-dashboard-v3-stat-main {
+        grid-template-columns:
+          48px
+          minmax(0, 1fr)
+          88px;
+      }
+    }
+
     .qsm-dashboard-v3-upper {
       display: grid;
       grid-template-columns:
@@ -2937,6 +5293,474 @@ function dashboardV3Styles(settings) {
       text-align: center;
     }
 
+    /* =======================================================
+       QSM_FASE15_BLOCK2_PROFESSIONAL_ACTIVITY_CHART
+    ======================================================= */
+
+    .qsm-dashboard-v3-live-indicator {
+      display: inline-flex !important;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .qsm-dashboard-v3-live-indicator i {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #22c55e;
+      box-shadow:
+        0 0 9px rgba(34, 197, 94, .65);
+    }
+
+    .qsm-dashboard-v3-chart-card {
+      min-height: 470px;
+      padding: 19px;
+    }
+
+    .qsm-dashboard-v3-activity-premium {
+      display: grid;
+      gap: 12px;
+    }
+
+    .qsm-dashboard-v3-activity-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .qsm-dashboard-v3-activity-totals {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .qsm-dashboard-v3-activity-totals article {
+      min-width: 76px;
+      display: grid;
+      gap: 2px;
+      padding: 6px 12px;
+      border-right:
+        1px solid var(--qsm-border);
+      text-align: center;
+    }
+
+    .qsm-dashboard-v3-activity-totals article:last-child {
+      border-right: 0;
+    }
+
+    .qsm-dashboard-v3-activity-totals strong {
+      font-size: 21px;
+      line-height: 23px;
+    }
+
+    .qsm-dashboard-v3-activity-totals span {
+      color: var(--qsm-text-secondary);
+      font-size: 9px;
+      font-weight: 800;
+    }
+
+    .qsm-dashboard-v3-activity-totals
+    .is-purchases strong {
+      color: #c084fc;
+    }
+
+    .qsm-dashboard-v3-activity-totals
+    .is-sales strong {
+      color: #60a5fa;
+    }
+
+    .qsm-dashboard-v3-activity-totals
+    .is-disputes strong {
+      color: #2dd4bf;
+    }
+
+    .qsm-dashboard-v3-period-tabs {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 4px;
+      border: 1px solid var(--qsm-border);
+      border-radius: 12px;
+      background: rgba(2, 6, 23, .25);
+    }
+
+    .qsm-dashboard-v3-period-tabs button {
+      min-height: 32px;
+      padding: 6px 13px;
+      border: 0;
+      border-radius: 9px;
+      background: transparent;
+      color: var(--qsm-text-secondary);
+      font-size: 9px;
+      font-weight: 850;
+      cursor: pointer;
+    }
+
+    .qsm-dashboard-v3-period-tabs button.is-active {
+      color: #fff;
+      background:
+        linear-gradient(
+          135deg,
+          rgba(59, 130, 246, .64),
+          rgba(139, 92, 246, .72)
+        );
+      box-shadow:
+        0 8px 22px
+        rgba(91, 33, 182, .23);
+    }
+
+    .qsm-dashboard-v3-chart-controls {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 7px;
+    }
+
+    .qsm-dashboard-v3-chart-controls button {
+      min-height: 29px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 9px;
+      border: 1px solid var(--qsm-border);
+      border-radius: 9px;
+      background: rgba(2, 6, 23, .22);
+      color: var(--qsm-muted);
+      font-size: 8px;
+      font-weight: 800;
+      cursor: pointer;
+      opacity: .54;
+    }
+
+    .qsm-dashboard-v3-chart-controls button.is-active {
+      color: var(--qsm-text);
+      opacity: 1;
+    }
+
+    .qsm-dashboard-v3-chart-controls i {
+      width: 9px;
+      height: 9px;
+      border-radius: 3px;
+    }
+
+    .qsm-dashboard-v3-chart-controls
+    .is-purchases i {
+      background: #a855f7;
+    }
+
+    .qsm-dashboard-v3-chart-controls
+    .is-sales i {
+      background: #3b82f6;
+    }
+
+    .qsm-dashboard-v3-chart-controls
+    .is-disputes i {
+      background: #14b8a6;
+    }
+
+    .qsm-dashboard-v3-chart-wrap--premium {
+      position: relative;
+      min-height: 285px;
+      overflow: visible;
+      border-top:
+        1px solid rgba(148, 163, 184, .05);
+      border-bottom:
+        1px solid rgba(148, 163, 184, .05);
+    }
+
+    .qsm-dashboard-v3-chart-wrap--premium svg {
+      width: 100%;
+      height: 285px;
+      overflow: visible;
+    }
+
+    .qsm-dashboard-v3-grid-line {
+      stroke:
+        rgba(148, 163, 184, .13);
+      stroke-width: 1;
+      stroke-dasharray: 4 5;
+    }
+
+    .qsm-dashboard-v3-axis-label {
+      fill:
+        var(--qsm-text-secondary);
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .qsm-dashboard-v3-axis-label--date {
+      fill:
+        #94a3b8;
+      font-size: 9px;
+    }
+
+    .qsm-dashboard-v3-line {
+      fill: none;
+      stroke-width: 3.2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      filter:
+        drop-shadow(
+          0 0 5px
+          rgba(255, 255, 255, .12)
+        );
+    }
+
+    .qsm-dashboard-v3-line.purchases {
+      stroke: #a855f7;
+    }
+
+    .qsm-dashboard-v3-line.sales {
+      stroke: #3b82f6;
+    }
+
+    .qsm-dashboard-v3-line.disputes {
+      stroke: #14b8a6;
+    }
+
+    .qsm-dashboard-v3-area.purchases {
+      fill:
+        url(#qsm-purchases-area);
+    }
+
+    .qsm-dashboard-v3-area.sales {
+      fill:
+        url(#qsm-sales-area);
+    }
+
+    .qsm-dashboard-v3-area.disputes {
+      fill:
+        url(#qsm-disputes-area);
+    }
+
+    .qsm-dashboard-v3-point {
+      stroke: #081226;
+      stroke-width: 2;
+      cursor: pointer;
+      transition: r .14s ease;
+    }
+
+    .qsm-dashboard-v3-point:hover {
+      r: 7;
+    }
+
+    .qsm-dashboard-v3-point.purchases {
+      fill: #a855f7;
+    }
+
+    .qsm-dashboard-v3-point.sales {
+      fill: #3b82f6;
+    }
+
+    .qsm-dashboard-v3-point.disputes {
+      fill: #14b8a6;
+    }
+
+    .qsm-dashboard-v3-hover-line {
+      stroke:
+        rgba(226, 232, 240, .38);
+      stroke-width: 1;
+      stroke-dasharray: 4 4;
+    }
+
+    .qsm-dashboard-v3-chart-tooltip {
+      position: absolute;
+      z-index: 20;
+      width: 150px;
+      display: grid;
+      gap: 6px;
+      padding: 10px 11px;
+      transform:
+        translate(-50%, -100%);
+      border:
+        1px solid
+        rgba(125, 211, 252, .22);
+      border-radius: 12px;
+      background:
+        rgba(5, 12, 28, .97);
+      box-shadow:
+        0 18px 50px
+        rgba(0, 0, 0, .45);
+      pointer-events: none;
+    }
+
+    .qsm-dashboard-v3-chart-tooltip > strong {
+      padding-bottom: 5px;
+      border-bottom:
+        1px solid var(--qsm-border);
+      color: #f8fafc;
+      font-size: 9px;
+    }
+
+    .qsm-dashboard-v3-chart-tooltip > span {
+      display: flex;
+      justify-content: space-between;
+      color: #94a3b8;
+      font-size: 8px;
+    }
+
+    .qsm-dashboard-v3-chart-tooltip
+    span.purchases b {
+      color: #c084fc;
+    }
+
+    .qsm-dashboard-v3-chart-tooltip
+    span.sales b {
+      color: #60a5fa;
+    }
+
+    .qsm-dashboard-v3-chart-tooltip
+    span.disputes b {
+      color: #2dd4bf;
+    }
+
+    .qsm-dashboard-v3-activity-insights {
+      display: grid;
+      grid-template-columns:
+        repeat(3, minmax(0, 1fr));
+      gap: 9px;
+    }
+
+    .qsm-dashboard-v3-activity-insights article {
+      min-width: 0;
+      display: grid;
+      grid-template-columns:
+        40px minmax(0, 1fr);
+      align-items: center;
+      gap: 9px;
+      padding: 10px;
+      border: 1px solid var(--qsm-border);
+      border-radius: 13px;
+      background:
+        rgba(2, 6, 23, .23);
+    }
+
+    .qsm-dashboard-v3-activity-insights
+    article > span {
+      width: 40px;
+      height: 40px;
+      display: grid;
+      place-items: center;
+      border-radius: 11px;
+      background:
+        linear-gradient(
+          135deg,
+          rgba(56, 189, 248, .12),
+          rgba(139, 92, 246, .16)
+        );
+      color: #7dd3fc;
+      font-size: 17px;
+    }
+
+    .qsm-dashboard-v3-activity-insights small,
+    .qsm-dashboard-v3-activity-insights strong,
+    .qsm-dashboard-v3-activity-insights p {
+      display: block;
+    }
+
+    .qsm-dashboard-v3-activity-insights small {
+      color: var(--qsm-muted);
+      font-size: 7px;
+    }
+
+    .qsm-dashboard-v3-activity-insights strong {
+      margin: 3px 0;
+      overflow: hidden;
+      color: var(--qsm-text);
+      font-size: 12px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .qsm-dashboard-v3-activity-insights p {
+      margin: 0;
+      color: var(--qsm-text-secondary);
+      font-size: 7px;
+    }
+
+    .qsm-dashboard-v3-chart-empty--premium {
+      min-height: 285px;
+      align-content: center;
+      gap: 7px;
+      border:
+        1px dashed
+        rgba(148, 163, 184, .16);
+      border-radius: 15px;
+      background:
+        radial-gradient(
+          circle at center,
+          rgba(56, 189, 248, .05),
+          transparent 65%
+        );
+    }
+
+    .qsm-dashboard-v3-chart-empty--premium > span {
+      color: #38bdf8;
+      font-size: 34px;
+    }
+
+    .qsm-dashboard-v3-chart-empty--premium strong {
+      color: var(--qsm-text);
+      font-size: 12px;
+    }
+
+    .qsm-dashboard-v3-chart-empty--premium p {
+      max-width: 360px;
+      margin: 0;
+      color: var(--qsm-muted);
+      font-size: 9px;
+      line-height: 15px;
+    }
+
+    @media (max-width: 1100px) {
+      .qsm-dashboard-v3-activity-toolbar {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .qsm-dashboard-v3-period-tabs {
+        width: 100%;
+      }
+
+      .qsm-dashboard-v3-period-tabs button {
+        flex: 1;
+      }
+
+      .qsm-dashboard-v3-chart-controls {
+        justify-content: flex-start;
+      }
+    }
+
+    @media (max-width: 650px) {
+      .qsm-dashboard-v3-activity-totals {
+        width: 100%;
+      }
+
+      .qsm-dashboard-v3-activity-totals article {
+        min-width: 0;
+        flex: 1;
+        padding:
+          5px 7px;
+      }
+
+      .qsm-dashboard-v3-activity-totals strong {
+        font-size: 17px;
+      }
+
+      .qsm-dashboard-v3-chart-wrap--premium svg {
+        height: 235px;
+      }
+
+      .qsm-dashboard-v3-activity-insights {
+        grid-template-columns: 1fr;
+      }
+
+      .qsm-dashboard-v3-chart-tooltip {
+        display: none;
+      }
+    }
+
     .qsm-dashboard-v3-quick-metric {
       display: grid;
       grid-template-columns: 37px minmax(0, 1fr) auto;
@@ -2985,6 +5809,463 @@ function dashboardV3Styles(settings) {
     .qsm-dashboard-v3-quick-card .qsm-dashboard-v3-outline-button {
       width: 100%;
       margin-top: 14px;
+    }
+
+    /* =======================================================
+       QSM_FASE15_BLOCK3_PREMIUM_QUICK_PROFILE
+    ======================================================= */
+
+    .qsm-dashboard-v3-upper {
+      grid-template-columns:
+        minmax(0, 1.72fr)
+        minmax(260px, .72fr)
+        minmax(340px, .96fr);
+      align-items: stretch;
+    }
+
+    .qsm-dashboard-v3-chart-card,
+    .qsm-dashboard-v3-quick-card,
+    .qsm-dashboard-v3-profile-card {
+      height: 100%;
+      min-height: 540px;
+    }
+
+    .qsm-dashboard-v3-section-eyebrow {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--qsm-accent);
+      font-size: 7px;
+      font-weight: 950;
+      letter-spacing: 1.35px;
+      text-transform: uppercase;
+    }
+
+    .qsm-dashboard-v3-card-link {
+      color: #67e8f9;
+      font-size: 8px;
+      font-weight: 850;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    /* RESUMEN RÁPIDO */
+
+    .qsm-dashboard-v3-quick-card--premium {
+      display: flex;
+      flex-direction: column;
+      padding: 17px;
+      overflow: hidden;
+      background:
+        radial-gradient(
+          circle at top right,
+          rgba(139, 92, 246, .11),
+          transparent 34%
+        ),
+        var(
+          --qsm-surface,
+          rgba(15, 23, 42, .74)
+        );
+    }
+
+    .qsm-dashboard-v3-quick-card--premium
+    .qsm-dashboard-v3-card-header {
+      margin-bottom: 14px;
+      padding-bottom: 12px;
+      border-bottom:
+        1px solid var(--qsm-border);
+    }
+
+    .qsm-dashboard-v3-quick-grid {
+      display: grid;
+      grid-template-columns:
+        repeat(
+          2,
+          minmax(0, 1fr)
+        );
+      gap: 9px;
+    }
+
+    .qsm-dashboard-v3-quick-metric--premium {
+      position: relative;
+      min-width: 0;
+      min-height: 116px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 12px;
+      overflow: hidden;
+      border:
+        1px solid var(--qsm-border);
+      border-radius: 14px;
+      background:
+        rgba(2, 6, 23, .3);
+      color: var(--qsm-text);
+      text-decoration: none;
+      transition:
+        transform .18s ease,
+        border-color .18s ease,
+        background .18s ease;
+    }
+
+    .qsm-dashboard-v3-quick-metric--premium::before {
+      content: "";
+      position: absolute;
+      top: -40px;
+      right: -40px;
+      width: 90px;
+      height: 90px;
+      border-radius: 50%;
+      background:
+        currentColor;
+      opacity: .07;
+      filter: blur(7px);
+      pointer-events: none;
+    }
+
+    .qsm-dashboard-v3-quick-metric--premium:hover {
+      transform:
+        translateY(-2px);
+      border-color:
+        rgba(125, 211, 252, .28);
+      background:
+        rgba(15, 23, 42, .62);
+    }
+
+    .qsm-dashboard-v3-quick-metric__top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .qsm-dashboard-v3-quick-metric__icon {
+      width: 37px;
+      height: 37px;
+      display: grid;
+      place-items: center;
+      border-radius: 11px;
+      background:
+        rgba(139, 92, 246, .12);
+      color: currentColor;
+      font-size: 17px;
+    }
+
+    .qsm-dashboard-v3-quick-alert {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #fb7185;
+      box-shadow:
+        0 0 9px
+        rgba(251, 113, 133, .7);
+    }
+
+    .qsm-dashboard-v3-quick-metric__copy {
+      min-width: 0;
+      display: grid;
+      gap: 3px;
+    }
+
+    .qsm-dashboard-v3-quick-metric__copy > span {
+      overflow: hidden;
+      color: var(--qsm-text-secondary);
+      font-size: 8px;
+      font-weight: 800;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .qsm-dashboard-v3-quick-metric__copy strong {
+      color: var(--qsm-text);
+      font-size: 19px;
+      line-height: 21px;
+    }
+
+    .qsm-dashboard-v3-quick-metric__copy small {
+      overflow: hidden;
+      color: var(--qsm-muted);
+      font-size: 7px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .qsm-dashboard-v3-quick-metric--premium.tone-purple {
+      color: #a78bfa;
+    }
+
+    .qsm-dashboard-v3-quick-metric--premium.tone-blue {
+      color: #60a5fa;
+    }
+
+    .qsm-dashboard-v3-quick-metric--premium.tone-red {
+      color: #fb7185;
+    }
+
+    .qsm-dashboard-v3-quick-metric--premium.tone-cyan {
+      color: #2dd4bf;
+    }
+
+    .qsm-dashboard-v3-quick-footer {
+      display: grid;
+      gap: 11px;
+      margin-top: auto;
+      padding-top: 14px;
+    }
+
+    .qsm-dashboard-v3-quick-footer > div {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 11px;
+      border:
+        1px solid var(--qsm-border);
+      border-radius: 12px;
+      background:
+        rgba(2, 6, 23, .24);
+    }
+
+    .qsm-dashboard-v3-quick-footer span {
+      color: var(--qsm-muted);
+      font-size: 8px;
+    }
+
+    .qsm-dashboard-v3-quick-footer strong {
+      font-size: 8px;
+    }
+
+    .qsm-dashboard-v3-quick-footer
+    strong.is-stable {
+      color: #4ade80;
+    }
+
+    .qsm-dashboard-v3-quick-footer
+    strong.is-warning {
+      color: #fbbf24;
+    }
+
+    .qsm-dashboard-v3-quick-footer
+    strong.is-critical {
+      color: #fda4af;
+    }
+
+    .qsm-dashboard-v3-quick-footer
+    .qsm-dashboard-v3-outline-button {
+      margin-top: 0;
+    }
+
+    /* PERFIL PREMIUM */
+
+    .qsm-dashboard-v3-profile-card {
+      display: flex;
+      flex-direction: column;
+      background:
+        radial-gradient(
+          circle at 85% 8%,
+          rgba(139, 92, 246, .22),
+          transparent 34%
+        ),
+        var(
+          --qsm-surface,
+          rgba(15, 23, 42, .74)
+        );
+    }
+
+    .qsm-dashboard-v3-profile-cover {
+      height: 72px;
+      flex: 0 0 72px;
+      background:
+        radial-gradient(
+          circle at 85% 40%,
+          rgba(255,255,255,.16),
+          transparent 24%
+        ),
+        linear-gradient(
+          110deg,
+          #22d3ee,
+          #3b82f6,
+          #8b5cf6
+        );
+    }
+
+    .qsm-dashboard-v3-profile-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding:
+        0 16px 16px;
+    }
+
+    .qsm-dashboard-v3-avatar-wrap {
+      width: 68px;
+      height: 68px;
+      margin-top: -34px;
+    }
+
+    .qsm-dashboard-v3-avatar {
+      width: 68px;
+      height: 68px;
+      font-size: 27px;
+    }
+
+    .qsm-dashboard-v3-profile-identity {
+      display: grid;
+      grid-template-columns:
+        minmax(0, 1fr)
+        105px;
+      align-items: center;
+      gap: 11px;
+      margin:
+        10px 0 9px;
+    }
+
+    .qsm-dashboard-v3-profile-name {
+      min-width: 0;
+      margin: 0;
+    }
+
+    .qsm-dashboard-v3-profile-name > strong {
+      display: block;
+      overflow: hidden;
+      color: var(--qsm-text);
+      font-size: 14px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .qsm-dashboard-v3-profile-name > span:last-child {
+      display: block;
+      margin-top: 5px;
+      font-size: 8px;
+      font-weight: 850;
+    }
+
+    .qsm-dashboard-v3-profile-score {
+      display: grid;
+      gap: 3px;
+      padding: 9px;
+      border:
+        1px solid
+        rgba(56, 189, 248, .18);
+      border-radius: 12px;
+      background:
+        rgba(2, 6, 23, .34);
+      text-align: center;
+    }
+
+    .qsm-dashboard-v3-profile-score span {
+      color: #67e8f9;
+      font-size: 7px;
+      font-weight: 850;
+    }
+
+    .qsm-dashboard-v3-profile-score strong {
+      color: #f8fafc;
+      font-size: 15px;
+    }
+
+    .qsm-dashboard-v3-profile-score small {
+      color: var(--qsm-muted);
+      font-size: 7px;
+    }
+
+    .qsm-dashboard-v3-profile-checklist {
+      display: grid;
+      gap: 2px;
+      margin: 9px 0 13px;
+      padding:
+        8px 0;
+      border-top:
+        1px solid var(--qsm-border);
+      border-bottom:
+        1px solid var(--qsm-border);
+    }
+
+    .qsm-dashboard-v3-profile-checklist > div {
+      min-height: 31px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding:
+        5px 3px;
+    }
+
+    .qsm-dashboard-v3-profile-checklist span {
+      color: var(--qsm-text-secondary);
+      font-size: 8px;
+    }
+
+    .qsm-dashboard-v3-profile-checklist strong {
+      font-size: 8px;
+    }
+
+    .qsm-dashboard-v3-profile-checklist
+    .is-complete strong {
+      color: #2dd4bf;
+    }
+
+    .qsm-dashboard-v3-profile-checklist
+    .is-pending strong {
+      color: #fbbf24;
+    }
+
+    .qsm-dashboard-v3-profile-card
+    .qsm-dashboard-v3-primary-button {
+      margin-top: auto;
+    }
+
+    @media (max-width: 1500px) {
+      .qsm-dashboard-v3-upper {
+        grid-template-columns:
+          minmax(0, 1.5fr)
+          minmax(255px, .72fr);
+        grid-template-areas:
+          "chart quick"
+          "profile profile";
+      }
+
+      .qsm-dashboard-v3-profile-card {
+        max-width: none;
+        min-height: 420px;
+      }
+    }
+
+    @media (max-width: 820px) {
+      .qsm-dashboard-v3-chart-card,
+      .qsm-dashboard-v3-quick-card,
+      .qsm-dashboard-v3-profile-card {
+        min-height: auto;
+      }
+
+      .qsm-dashboard-v3-quick-grid {
+        grid-template-columns:
+          repeat(
+            2,
+            minmax(0, 1fr)
+          );
+      }
+    }
+
+    @media (max-width: 480px) {
+      .qsm-dashboard-v3-quick-grid {
+        grid-template-columns:
+          minmax(0, 1fr);
+      }
+
+      .qsm-dashboard-v3-quick-metric--premium {
+        min-height: 92px;
+      }
+
+      .qsm-dashboard-v3-profile-identity {
+        grid-template-columns:
+          minmax(0, 1fr);
+      }
+
+      .qsm-dashboard-v3-profile-score {
+        text-align: left;
+      }
     }
 
     .qsm-dashboard-v3-profile-cover {
@@ -3235,6 +6516,409 @@ function dashboardV3Styles(settings) {
         );
     }
 
+    /* =======================================================
+       QSM_FASE15_BLOCK4_MARKETPLACE_ACTION_CENTER
+    ======================================================= */
+
+    .qsm-dashboard-v3-actions-card--premium {
+      position: relative;
+      display: grid;
+      gap: 12px;
+      padding: 15px;
+      overflow: hidden;
+      border-radius: 19px;
+      background:
+        radial-gradient(
+          circle at 93% 15%,
+          rgba(139, 92, 246, .13),
+          transparent 25%
+        ),
+        radial-gradient(
+          circle at 8% 90%,
+          rgba(45, 212, 191, .08),
+          transparent 26%
+        ),
+        var(
+          --qsm-surface,
+          rgba(15, 23, 42, .74)
+        );
+    }
+
+    .qsm-dashboard-v3-action-center-header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 18px;
+    }
+
+    .qsm-dashboard-v3-action-center-header h2 {
+      margin: 2px 0 4px;
+      color: var(--qsm-text);
+      font-size: 15px;
+    }
+
+    .qsm-dashboard-v3-action-center-header p {
+      margin: 0;
+      color: var(--qsm-muted);
+      font-size: 8px;
+    }
+
+    .qsm-dashboard-v3-action-center-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 10px;
+      border:
+        1px solid
+        rgba(34, 197, 94, .18);
+      border-radius: 999px;
+      background:
+        rgba(22, 101, 52, .1);
+      color: #86efac;
+      font-size: 8px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .qsm-dashboard-v3-action-center-status i {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #22c55e;
+      box-shadow:
+        0 0 9px
+        rgba(34, 197, 94, .75);
+    }
+
+    /* BUSCADOR */
+
+    .qsm-dashboard-v3-market-search--premium {
+      min-height: 62px;
+      grid-template-columns:
+        42px
+        minmax(0, 1fr)
+        auto
+        124px;
+      gap: 10px;
+      padding: 7px;
+      border:
+        1px solid
+        rgba(56, 189, 248, .22);
+      border-radius: 15px;
+      background:
+        linear-gradient(
+          90deg,
+          rgba(2, 6, 23, .48),
+          rgba(15, 23, 42, .68)
+        );
+      box-shadow:
+        inset 0 0 0 1px
+        rgba(255, 255, 255, .015);
+      transition:
+        border-color .18s ease,
+        box-shadow .18s ease;
+    }
+
+    .qsm-dashboard-v3-market-search--premium:focus-within {
+      border-color:
+        rgba(56, 189, 248, .48);
+      box-shadow:
+        0 0 0 3px
+        rgba(56, 189, 248, .07),
+        inset 0 0 0 1px
+        rgba(139, 92, 246, .06);
+    }
+
+    .qsm-dashboard-v3-market-search__icon {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      border-radius: 12px;
+      background:
+        linear-gradient(
+          135deg,
+          rgba(45, 212, 191, .14),
+          rgba(59, 130, 246, .14)
+        );
+      color: #67e8f9 !important;
+      font-size: 20px !important;
+    }
+
+    .qsm-dashboard-v3-market-search__field {
+      min-width: 0;
+      display: grid;
+      align-content: center;
+      gap: 3px;
+    }
+
+    .qsm-dashboard-v3-market-search__field label {
+      color: #67e8f9;
+      font-size: 7px;
+      font-weight: 900;
+      letter-spacing: .65px;
+      text-transform: uppercase;
+    }
+
+    .qsm-dashboard-v3-market-search__field input {
+      height: 23px;
+      padding: 0;
+      font-size: 10px;
+    }
+
+    .qsm-dashboard-v3-market-search__clear {
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      border: 0;
+      border-radius: 9px;
+      background:
+        rgba(148, 163, 184, .08);
+      color: var(--qsm-text-secondary);
+      font-size: 17px;
+      cursor: pointer;
+    }
+
+    .qsm-dashboard-v3-market-search__submit {
+      width: 124px;
+      height: 46px !important;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      border-radius: 12px !important;
+      font-size: 10px !important;
+      box-shadow:
+        0 12px 32px
+        rgba(59, 130, 246, .16);
+    }
+
+    /* ACCIONES */
+
+    .qsm-dashboard-v3-actions--premium {
+      grid-template-columns:
+        repeat(
+          6,
+          minmax(0, 1fr)
+        );
+      gap: 8px;
+      margin-top: 0;
+    }
+
+    .qsm-dashboard-v3-dashboard-action {
+      position: relative;
+      min-width: 0;
+      min-height: 77px;
+      display: grid !important;
+      grid-template-columns:
+        38px
+        minmax(0, 1fr)
+        18px;
+      align-items: center !important;
+      justify-content: initial !important;
+      gap: 9px;
+      padding: 10px !important;
+      overflow: hidden;
+      border:
+        1px solid
+        var(--qsm-border) !important;
+      border-radius: 13px !important;
+      background:
+        rgba(2, 6, 23, .25) !important;
+      color: var(--qsm-text) !important;
+      text-align: left !important;
+      transition:
+        transform .18s ease,
+        border-color .18s ease,
+        background .18s ease,
+        box-shadow .18s ease;
+    }
+
+    .qsm-dashboard-v3-dashboard-action::before {
+      content: "";
+      position: absolute;
+      top: -35px;
+      right: -35px;
+      width: 75px;
+      height: 75px;
+      border-radius: 50%;
+      background: currentColor;
+      opacity: .06;
+      filter: blur(8px);
+      pointer-events: none;
+    }
+
+    .qsm-dashboard-v3-dashboard-action:hover {
+      transform:
+        translateY(-2px);
+      border-color:
+        rgba(125, 211, 252, .3) !important;
+      background:
+        rgba(15, 23, 42, .66) !important;
+      box-shadow:
+        0 13px 30px
+        rgba(0, 0, 0, .18);
+    }
+
+    .qsm-dashboard-v3-dashboard-action__icon {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      border:
+        1px solid currentColor;
+      border-radius: 11px;
+      background:
+        rgba(255, 255, 255, .025);
+      color: currentColor;
+      font-size: 16px;
+      font-weight: 900;
+    }
+
+    .qsm-dashboard-v3-dashboard-action > div {
+      min-width: 0;
+      display: grid;
+      gap: 4px;
+    }
+
+    .qsm-dashboard-v3-dashboard-action strong,
+    .qsm-dashboard-v3-dashboard-action small {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .qsm-dashboard-v3-dashboard-action strong {
+      color: var(--qsm-text);
+      font-size: 9px;
+    }
+
+    .qsm-dashboard-v3-dashboard-action small {
+      color: var(--qsm-muted);
+      font-size: 7px;
+    }
+
+    .qsm-dashboard-v3-dashboard-action > b {
+      color: currentColor;
+      font-size: 12px;
+    }
+
+    .qsm-dashboard-v3-dashboard-action__alert {
+      width: 8px;
+      height: 8px;
+      justify-self: center;
+      border-radius: 50%;
+      background: #fbbf24;
+      box-shadow:
+        0 0 9px
+        rgba(251, 191, 36, .68);
+    }
+
+    .qsm-dashboard-v3-dashboard-action.tone-cyan {
+      color: #22d3ee !important;
+    }
+
+    .qsm-dashboard-v3-dashboard-action.tone-green {
+      color: #2dd4bf !important;
+    }
+
+    .qsm-dashboard-v3-dashboard-action.tone-purple {
+      color: #a78bfa !important;
+    }
+
+    .qsm-dashboard-v3-dashboard-action.tone-orange {
+      color: #fbbf24 !important;
+    }
+
+    .qsm-dashboard-v3-dashboard-action.tone-blue {
+      color: #60a5fa !important;
+    }
+
+    .qsm-dashboard-v3-dashboard-action.tone-shield {
+      color: #818cf8 !important;
+    }
+
+    .qsm-dashboard-v3-dashboard-action.is-primary {
+      border-color:
+        rgba(56, 189, 248, .34) !important;
+      background:
+        linear-gradient(
+          135deg,
+          rgba(14, 165, 233, .14),
+          rgba(139, 92, 246, .16)
+        ) !important;
+    }
+
+    @media (max-width: 1380px) {
+      .qsm-dashboard-v3-actions--premium {
+        grid-template-columns:
+          repeat(
+            3,
+            minmax(0, 1fr)
+          );
+      }
+    }
+
+    @media (max-width: 820px) {
+      .qsm-dashboard-v3-action-center-header {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .qsm-dashboard-v3-market-search--premium {
+        grid-template-columns:
+          42px
+          minmax(0, 1fr)
+          auto;
+      }
+
+      .qsm-dashboard-v3-market-search__submit {
+        width: 100% !important;
+        grid-column: 1 / -1;
+      }
+
+      .qsm-dashboard-v3-actions--premium {
+        grid-template-columns:
+          repeat(
+            2,
+            minmax(0, 1fr)
+          );
+      }
+    }
+
+    @media (max-width: 500px) {
+      .qsm-dashboard-v3-actions-card--premium {
+        padding: 11px;
+      }
+
+      .qsm-dashboard-v3-action-center-status {
+        display: none;
+      }
+
+      .qsm-dashboard-v3-market-search--premium {
+        grid-template-columns:
+          38px
+          minmax(0, 1fr)
+          auto;
+      }
+
+      .qsm-dashboard-v3-market-search__icon {
+        width: 38px;
+        height: 38px;
+      }
+
+      .qsm-dashboard-v3-actions--premium {
+        grid-template-columns:
+          minmax(0, 1fr);
+      }
+
+      .qsm-dashboard-v3-dashboard-action {
+        min-height: 68px;
+      }
+    }
+
     .qsm-dashboard-v3-recent-grid {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -3340,6 +7024,1409 @@ function dashboardV3Styles(settings) {
       min-height: 36px;
       margin-top: 9px;
       font-size: 8px;
+    }
+
+    /* =======================================================
+       QSM_FASE15_BLOCK5_RECENT_RESPONSIVE_POLISH
+       PANELES RECIENTES Y PULIDO RESPONSIVE
+    ======================================================= */
+
+    .qsm-dashboard-v3-recent-grid {
+      align-items: stretch;
+      gap: 12px;
+    }
+
+    .qsm-dashboard-v3-recent-panel--premium {
+      position: relative;
+      min-height: 310px;
+      padding: 15px;
+      overflow: hidden;
+      isolation: isolate;
+      transition:
+        transform .2s ease,
+        border-color .2s ease,
+        box-shadow .2s ease;
+    }
+
+    .qsm-dashboard-v3-recent-panel--premium::before {
+      content: "";
+      position: absolute;
+      top: -85px;
+      right: -65px;
+      z-index: -1;
+      width: 180px;
+      height: 180px;
+      border-radius: 50%;
+      background: currentColor;
+      opacity: .055;
+      filter: blur(10px);
+      pointer-events: none;
+    }
+
+    .qsm-dashboard-v3-recent-panel--premium:hover {
+      transform: translateY(-2px);
+      border-color:
+        rgba(125, 211, 252, .22);
+      box-shadow:
+        0 22px 52px
+        rgba(0, 0, 0, .2);
+    }
+
+    .qsm-dashboard-v3-recent-panel--premium.tone-purple {
+      color: #a78bfa;
+    }
+
+    .qsm-dashboard-v3-recent-panel--premium.tone-blue {
+      color: #60a5fa;
+    }
+
+    .qsm-dashboard-v3-recent-panel--premium.tone-green {
+      color: #2dd4bf;
+    }
+
+    .qsm-dashboard-v3-recent-panel--premium.tone-red {
+      color: #fb7185;
+    }
+
+    .qsm-dashboard-v3-recent-header {
+      min-height: 51px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 7px !important;
+      padding-bottom: 11px;
+      border-bottom:
+        1px solid var(--qsm-border);
+    }
+
+    .qsm-dashboard-v3-recent-heading {
+      min-width: 0;
+      display: grid;
+      grid-template-columns:
+        38px minmax(0, 1fr);
+      align-items: center;
+      gap: 9px;
+    }
+
+    .qsm-dashboard-v3-recent-heading__icon {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      border:
+        1px solid currentColor;
+      border-radius: 11px;
+      background:
+        rgba(255, 255, 255, .025);
+      color: currentColor;
+      font-size: 15px;
+      font-weight: 900;
+    }
+
+    .qsm-dashboard-v3-recent-heading > div {
+      min-width: 0;
+    }
+
+    .qsm-dashboard-v3-recent-heading h3 {
+      overflow: hidden;
+      color: var(--qsm-text);
+      font-size: 10px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .qsm-dashboard-v3-recent-header__right {
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .qsm-dashboard-v3-recent-count {
+      min-width: 24px;
+      height: 24px;
+      display: grid;
+      place-items: center;
+      padding: 0 5px;
+      border:
+        1px solid var(--qsm-border);
+      border-radius: 999px;
+      background:
+        rgba(2, 6, 23, .28);
+      color: var(--qsm-text-secondary);
+      font-size: 8px;
+      font-weight: 900;
+    }
+
+    .qsm-dashboard-v3-recent-header__right a {
+      color: currentColor !important;
+      font-size: 7px !important;
+      font-weight: 850;
+    }
+
+    .qsm-dashboard-v3-recent-list {
+      min-height: 162px;
+      display: flex;
+      flex: 1;
+      flex-direction: column;
+    }
+
+    .qsm-dashboard-v3-recent-item--premium {
+      position: relative;
+      min-height: 58px;
+      display: grid;
+      grid-template-columns:
+        42px minmax(0, 1fr) auto;
+      gap: 9px;
+      padding: 8px 3px;
+      border-bottom:
+        1px solid var(--qsm-border);
+      border-radius: 9px;
+      transition:
+        background .17s ease,
+        transform .17s ease;
+    }
+
+    .qsm-dashboard-v3-recent-item--premium:hover {
+      padding-left: 6px;
+      background:
+        rgba(148, 163, 184, .035);
+      transform:
+        translateX(2px);
+    }
+
+    .qsm-dashboard-v3-recent-thumb {
+      width: 42px;
+      height: 42px;
+      border:
+        1px solid
+        rgba(148, 163, 184, .12);
+      border-radius: 11px;
+      background:
+        linear-gradient(
+          135deg,
+          rgba(56, 189, 248, .07),
+          rgba(139, 92, 246, .09)
+        );
+    }
+
+    .qsm-dashboard-v3-recent-thumb img {
+      transition:
+        transform .22s ease;
+    }
+
+    .qsm-dashboard-v3-recent-item--premium:hover
+    .qsm-dashboard-v3-recent-thumb img {
+      transform:
+        scale(1.06);
+    }
+
+    .qsm-dashboard-v3-recent-copy strong {
+      color: var(--qsm-text);
+      font-size: 8px;
+      line-height: 13px;
+    }
+
+    .qsm-dashboard-v3-recent-copy span {
+      color: var(--qsm-muted);
+      font-size: 7px;
+      line-height: 12px;
+    }
+
+    .qsm-dashboard-v3-recent-status {
+      min-height: 23px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      align-self: center;
+      padding: 4px 7px;
+      border:
+        1px solid
+        rgba(148, 163, 184, .14);
+      border-radius: 999px;
+      background:
+        rgba(148, 163, 184, .07);
+      color: var(--qsm-text-secondary);
+      font-size: 6px;
+      font-weight: 900;
+    }
+
+    .qsm-dashboard-v3-recent-status i {
+      width: 6px;
+      height: 6px;
+      flex: 0 0 6px;
+      border-radius: 50%;
+      background: currentColor;
+      box-shadow:
+        0 0 7px currentColor;
+    }
+
+    .qsm-dashboard-v3-recent-status.is-success {
+      border-color:
+        rgba(34, 197, 94, .2);
+      background:
+        rgba(22, 101, 52, .12);
+      color: #4ade80;
+    }
+
+    .qsm-dashboard-v3-recent-status.is-warning {
+      border-color:
+        rgba(245, 158, 11, .22);
+      background:
+        rgba(146, 64, 14, .12);
+      color: #fbbf24;
+    }
+
+    .qsm-dashboard-v3-recent-status.is-danger {
+      border-color:
+        rgba(251, 113, 133, .22);
+      background:
+        rgba(159, 18, 57, .12);
+      color: #fb7185;
+    }
+
+    .qsm-dashboard-v3-recent-status.is-neutral {
+      color: #60a5fa;
+    }
+
+    .qsm-dashboard-v3-empty--premium {
+      min-height: 162px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      padding: 16px;
+      border:
+        1px dashed
+        rgba(148, 163, 184, .14);
+      border-radius: 13px;
+      background:
+        radial-gradient(
+          circle at center,
+          rgba(56, 189, 248, .04),
+          transparent 70%
+        );
+    }
+
+    .qsm-dashboard-v3-empty--premium > span {
+      width: 39px;
+      height: 39px;
+      display: grid;
+      place-items: center;
+      border-radius: 12px;
+      background:
+        rgba(148, 163, 184, .07);
+      color: currentColor;
+      font-size: 17px;
+    }
+
+    .qsm-dashboard-v3-empty--premium strong {
+      color: var(--qsm-text);
+      font-size: 9px;
+    }
+
+    .qsm-dashboard-v3-empty--premium p {
+      max-width: 220px;
+      margin: 0;
+      color: var(--qsm-muted);
+      font-size: 7px;
+      line-height: 13px;
+      text-align: center;
+    }
+
+    .qsm-dashboard-v3-recent-footer {
+      min-height: 39px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 10px;
+      padding:
+        8px 11px;
+      color: currentColor;
+    }
+
+    .qsm-dashboard-v3-recent-footer b {
+      font-size: 12px;
+    }
+
+    /* Enfoque accesible */
+
+    .qsm-dashboard-v3 a:focus-visible,
+    .qsm-dashboard-v3 button:focus-visible,
+    .qsm-dashboard-v3 select:focus-visible,
+    .qsm-dashboard-v3 input:focus-visible {
+      outline:
+        2px solid
+        rgba(56, 189, 248, .78);
+      outline-offset: 3px;
+    }
+
+    /* Ajuste final para pantallas grandes */
+
+    @media (min-width: 1650px) {
+      .qsm-dashboard-v3-shell {
+        max-width: 1740px;
+      }
+
+      .qsm-dashboard-v3-upper {
+        grid-template-columns:
+          minmax(0, 1.8fr)
+          minmax(275px, .72fr)
+          minmax(365px, 1fr);
+      }
+
+      .qsm-dashboard-v3-recent-panel--premium {
+        min-height: 325px;
+      }
+    }
+
+    /* Laptop */
+
+    @media (max-width: 1450px) {
+      .qsm-dashboard-v3-recent-grid {
+        grid-template-columns:
+          repeat(
+            2,
+            minmax(0, 1fr)
+          );
+      }
+
+      .qsm-dashboard-v3-recent-panel--premium {
+        min-height: 300px;
+      }
+    }
+
+    /* Tablet */
+
+    @media (max-width: 900px) {
+      .qsm-dashboard-v3-main {
+        padding:
+          14px 14px 46px;
+      }
+
+      .qsm-dashboard-v3-header--executive {
+        margin-top: 8px;
+      }
+
+      .qsm-dashboard-v3-title-block h1 {
+        font-size:
+          clamp(
+            29px,
+            7vw,
+            38px
+          );
+      }
+
+      .qsm-dashboard-v3-stat--premium {
+        min-height: 118px;
+      }
+
+      .qsm-dashboard-v3-upper {
+        gap: 12px;
+      }
+
+      .qsm-dashboard-v3-chart-card,
+      .qsm-dashboard-v3-quick-card,
+      .qsm-dashboard-v3-profile-card {
+        height: auto;
+      }
+
+      .qsm-dashboard-v3-recent-grid {
+        grid-template-columns:
+          repeat(
+            2,
+            minmax(0, 1fr)
+          );
+      }
+    }
+
+    /* Móvil */
+
+    @media (max-width: 620px) {
+      .qsm-dashboard-v3-main {
+        padding:
+          10px 9px 42px;
+      }
+
+      .qsm-dashboard-v3-title-block h1 {
+        font-size: 29px;
+      }
+
+      .qsm-dashboard-v3-title-block p {
+        font-size: 10px;
+        line-height: 16px;
+      }
+
+      .qsm-dashboard-v3-stats,
+      .qsm-dashboard-v3-recent-grid {
+        grid-template-columns:
+          minmax(0, 1fr);
+      }
+
+      .qsm-dashboard-v3-stat-main {
+        grid-template-columns:
+          45px
+          minmax(0, 1fr)
+          92px;
+      }
+
+      .qsm-dashboard-v3-stat-sparkline {
+        height: 42px;
+      }
+
+      .qsm-dashboard-v3-chart-card {
+        padding: 13px;
+      }
+
+      .qsm-dashboard-v3-activity-totals {
+        overflow-x: auto;
+      }
+
+      .qsm-dashboard-v3-chart-controls {
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        padding-bottom: 4px;
+      }
+
+      .qsm-dashboard-v3-chart-controls button {
+        flex: 0 0 auto;
+      }
+
+      .qsm-dashboard-v3-recent-panel--premium {
+        min-height: 290px;
+        padding: 13px;
+      }
+
+      .qsm-dashboard-v3-recent-item--premium {
+        grid-template-columns:
+          40px minmax(0, 1fr);
+      }
+
+      .qsm-dashboard-v3-recent-status {
+        grid-column: 2;
+        justify-self: start;
+        margin-top: -2px;
+      }
+    }
+
+    /* Evitar mareos y animaciones innecesarias */
+
+
+    /* =======================================================
+       QSM_FASE15_BLOCK6_WIDTH_AXIS_TOOLTIP_FIX
+       ANCHO COMPLETO, EJE VISIBLE Y TOOLTIP SEGURO
+    ======================================================= */
+
+    /*
+      El contenedor deja de estar centrado con un ancho máximo.
+      Así desaparece la franja vacía situada después del menú.
+    */
+
+    .qsm-dashboard-v3-shell {
+      width: 100% !important;
+      max-width: none !important;
+      margin-left: 0 !important;
+      margin-right: 0 !important;
+    }
+
+    .qsm-dashboard-v3-main {
+      width: 100% !important;
+      max-width: none !important;
+      margin-left: 0 !important;
+      margin-right: 0 !important;
+
+      padding-left:
+        clamp(
+          14px,
+          1.3vw,
+          22px
+        ) !important;
+
+      padding-right:
+        clamp(
+          14px,
+          1.3vw,
+          22px
+        ) !important;
+
+      overflow-x: clip;
+    }
+
+    .qsm-dashboard-v3 {
+      width: 100%;
+      max-width: none;
+      overflow-x: clip;
+    }
+
+    /*
+      Algunos wrappers anteriores podrían estar centrando el
+      Dashboard mediante align-items o justify-content.
+    */
+
+    .qsm-dashboard-v3-page,
+    .qsm-dashboard-v3-content,
+    .qsm-dashboard-v3-container {
+      width: 100% !important;
+      max-width: none !important;
+      margin-left: 0 !important;
+      margin-right: 0 !important;
+    }
+
+    /*
+      La cuadrícula debe ocupar exactamente el ancho disponible
+      sin generar un desplazamiento horizontal.
+    */
+
+    .qsm-dashboard-v3-stats,
+    .qsm-dashboard-v3-upper,
+    .qsm-dashboard-v3-actions-card,
+    .qsm-dashboard-v3-recent-grid {
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
+    }
+
+    .qsm-dashboard-v3-stats > *,
+    .qsm-dashboard-v3-upper > *,
+    .qsm-dashboard-v3-recent-grid > * {
+      min-width: 0;
+    }
+
+    /*
+      El SVG y su contenedor conservan espacio para las cifras
+      del eje vertical.
+    */
+
+    .qsm-dashboard-v3-chart-wrap--premium {
+      min-width: 0;
+      padding-left: 2px;
+      overflow: visible !important;
+    }
+
+    .qsm-dashboard-v3-chart-wrap--premium svg {
+      display: block;
+      width: 100%;
+      max-width: 100%;
+      overflow: visible !important;
+    }
+
+    .qsm-dashboard-v3-axis-label {
+      fill: #cbd5e1 !important;
+      font-size: 11px !important;
+      font-weight: 850 !important;
+      paint-order: stroke;
+      stroke:
+        rgba(2, 6, 23, .88);
+      stroke-width: 2px;
+      stroke-linejoin: round;
+    }
+
+    .qsm-dashboard-v3-axis-label--date {
+      fill: #94a3b8 !important;
+      font-size: 9px !important;
+      font-weight: 750 !important;
+      stroke-width: 1.5px;
+    }
+
+    /*
+      El tooltip deja de quedar atrapado encima del eje o de las
+      métricas superiores.
+    */
+
+    .qsm-dashboard-v3-chart-tooltip {
+      z-index: 80 !important;
+      width: 168px;
+      max-width:
+        calc(100% - 20px);
+
+      transform:
+        translate(
+          -50%,
+          calc(-100% - 12px)
+        );
+
+      border-color:
+        rgba(125, 211, 252, .36);
+
+      background:
+        linear-gradient(
+          145deg,
+          rgba(7, 15, 34, .99),
+          rgba(16, 24, 49, .99)
+        );
+
+      box-shadow:
+        0 20px 55px
+        rgba(0, 0, 0, .58),
+        0 0 0 1px
+        rgba(255, 255, 255, .025);
+    }
+
+    /*
+      Cuando el cursor abandona el gráfico, el tooltip también
+      desaparece mediante el nuevo onMouseLeave.
+    */
+
+    .qsm-dashboard-v3-chart-wrap--premium:hover
+    .qsm-dashboard-v3-point {
+      pointer-events: auto;
+    }
+
+    /*
+      Líneas de la cuadrícula más visibles, pero discretas.
+    */
+
+    .qsm-dashboard-v3-grid-line {
+      stroke:
+        rgba(148, 163, 184, .18) !important;
+
+      stroke-width:
+        1 !important;
+    }
+
+    /*
+      En pantallas grandes se elimina el antiguo máximo de
+      1740px que volvía a centrar el contenido.
+    */
+
+    @media (min-width: 1650px) {
+      .qsm-dashboard-v3-shell {
+        max-width: none !important;
+      }
+    }
+
+    @media (max-width: 900px) {
+      .qsm-dashboard-v3-main {
+        padding-left:
+          12px !important;
+
+        padding-right:
+          12px !important;
+      }
+
+      .qsm-dashboard-v3-chart-tooltip {
+        width: 150px;
+      }
+    }
+
+    @media (max-width: 620px) {
+      .qsm-dashboard-v3-main {
+        padding-left:
+          8px !important;
+
+        padding-right:
+          8px !important;
+      }
+
+      .qsm-dashboard-v3-chart-wrap--premium {
+        overflow-x: auto !important;
+        overflow-y: visible !important;
+      }
+
+      .qsm-dashboard-v3-axis-label {
+        font-size:
+          10px !important;
+      }
+
+      .qsm-dashboard-v3-chart-tooltip {
+        display: none !important;
+      }
+    }
+
+
+    /* =======================================================
+       QSM_FASE15_BLOCK6_FIX_SIDEBAR_SPACING
+       SEPARACIÓN CORRECTA ENTRE SIDEBAR Y DASHBOARD
+    ======================================================= */
+
+    /*
+      El Bloque 6 anterior eliminó completamente el espacio
+      reservado para el sidebar. Esta corrección recupera
+      únicamente ese ancho y mantiene una separación pequeña.
+    */
+
+    .qsm-dashboard-v3-main {
+      width:
+        calc(
+          100% - 72px
+        ) !important;
+
+      max-width:
+        calc(
+          100% - 72px
+        ) !important;
+
+      margin-left:
+        72px !important;
+
+      margin-right:
+        0 !important;
+
+      padding-left:
+        12px !important;
+
+      padding-right:
+        clamp(
+          14px,
+          1.3vw,
+          22px
+        ) !important;
+
+      box-sizing:
+        border-box !important;
+
+      overflow-x:
+        clip;
+    }
+
+    .qsm-dashboard-v3-shell {
+      width:
+        100% !important;
+
+      max-width:
+        none !important;
+
+      margin-left:
+        0 !important;
+
+      margin-right:
+        0 !important;
+    }
+
+    .qsm-dashboard-v3 {
+      width:
+        100% !important;
+
+      max-width:
+        100% !important;
+
+      overflow-x:
+        clip;
+    }
+
+    /*
+      Evita que reglas anteriores vuelvan a colocar el contenido
+      debajo del menú lateral.
+    */
+
+    .qsm-dashboard-v3-page,
+    .qsm-dashboard-v3-content,
+    .qsm-dashboard-v3-container {
+      width:
+        100% !important;
+
+      max-width:
+        100% !important;
+
+      margin-left:
+        0 !important;
+
+      margin-right:
+        0 !important;
+    }
+
+    /*
+      Mantiene la pequeña línea visual entre el sidebar y el
+      contenido principal.
+    */
+
+    .qsm-dashboard-v3-main::before {
+      content:
+        "";
+
+      position:
+        fixed;
+
+      top:
+        0;
+
+      bottom:
+        0;
+
+      left:
+        71px;
+
+      width:
+        1px;
+
+      z-index:
+        20;
+
+      background:
+        linear-gradient(
+          180deg,
+          transparent,
+          rgba(56, 189, 248, .18) 14%,
+          rgba(139, 92, 246, .15) 52%,
+          rgba(56, 189, 248, .12) 86%,
+          transparent
+        );
+
+      pointer-events:
+        none;
+    }
+
+    /*
+      Laptop con sidebar compacto.
+    */
+
+    @media (max-width: 1200px) {
+      .qsm-dashboard-v3-main {
+        width:
+          calc(
+            100% - 68px
+          ) !important;
+
+        max-width:
+          calc(
+            100% - 68px
+          ) !important;
+
+        margin-left:
+          68px !important;
+
+        padding-left:
+          10px !important;
+
+        padding-right:
+          12px !important;
+      }
+
+      .qsm-dashboard-v3-main::before {
+        left:
+          67px;
+      }
+    }
+
+    /*
+      En móvil el sidebar deja de ocupar una columna fija.
+    */
+
+    @media (max-width: 700px) {
+      .qsm-dashboard-v3-main {
+        width:
+          100% !important;
+
+        max-width:
+          100% !important;
+
+        margin-left:
+          0 !important;
+
+        padding-left:
+          8px !important;
+
+        padding-right:
+          8px !important;
+      }
+
+      .qsm-dashboard-v3-main::before {
+        display:
+          none;
+      }
+    }
+
+
+    /* =======================================================
+       QSM_FASE15_BLOCK6_FIX2_SIDEBAR_CONNECTION
+       CONEXIÓN FINAL ENTRE SIDEBAR Y DASHBOARD
+    ======================================================= */
+
+    /*
+      Sidebar de escritorio: 72px.
+      Dejamos solamente 4px de separación física y 8px
+      internos para que el contenido no quede cortado.
+    */
+
+    .qsm-dashboard-v3-main {
+      position: relative !important;
+
+      width:
+        calc(
+          100% - 76px
+        ) !important;
+
+      max-width:
+        calc(
+          100% - 76px
+        ) !important;
+
+      margin-left:
+        76px !important;
+
+      margin-right:
+        0 !important;
+
+      padding-left:
+        8px !important;
+
+      padding-right:
+        clamp(
+          12px,
+          1.15vw,
+          20px
+        ) !important;
+
+      box-sizing:
+        border-box !important;
+
+      overflow-x:
+        clip !important;
+    }
+
+    /*
+      El contenido interno comienza exactamente después
+      del pequeño espacio reservado junto al sidebar.
+    */
+
+    .qsm-dashboard-v3-shell {
+      width:
+        100% !important;
+
+      max-width:
+        none !important;
+
+      margin:
+        0 !important;
+
+      padding-left:
+        0 !important;
+
+      box-sizing:
+        border-box !important;
+    }
+
+    .qsm-dashboard-v3 {
+      width:
+        100% !important;
+
+      max-width:
+        100% !important;
+
+      margin:
+        0 !important;
+
+      box-sizing:
+        border-box !important;
+
+      overflow-x:
+        clip !important;
+    }
+
+    /*
+      Evitar que otros wrappers vuelvan a mover el
+      Dashboard debajo del sidebar.
+    */
+
+    .qsm-dashboard-v3-page,
+    .qsm-dashboard-v3-content,
+    .qsm-dashboard-v3-container {
+      width:
+        100% !important;
+
+      max-width:
+        100% !important;
+
+      margin-left:
+        0 !important;
+
+      margin-right:
+        0 !important;
+
+      padding-left:
+        0 !important;
+
+      box-sizing:
+        border-box !important;
+    }
+
+    /*
+      Línea fina conectada al borde derecho del sidebar.
+      No queda flotando ni crea una franja adicional.
+    */
+
+    .qsm-dashboard-v3-main::before {
+      content:
+        "";
+
+      position:
+        fixed;
+
+      top:
+        0;
+
+      bottom:
+        0;
+
+      left:
+        72px;
+
+      width:
+        1px;
+
+      z-index:
+        30;
+
+      background:
+        linear-gradient(
+          180deg,
+          rgba(56, 189, 248, .08),
+          rgba(56, 189, 248, .24) 18%,
+          rgba(139, 92, 246, .2) 52%,
+          rgba(56, 189, 248, .16) 82%,
+          rgba(56, 189, 248, .05)
+        );
+
+      box-shadow:
+        1px 0 10px
+        rgba(56, 189, 248, .07);
+
+      pointer-events:
+        none;
+    }
+
+    /*
+      Garantiza que el saludo y las tarjetas nunca se
+      desplacen hacia la izquierda.
+    */
+
+    .qsm-dashboard-v3-header--executive,
+    .qsm-dashboard-v3-stats,
+    .qsm-dashboard-v3-upper,
+    .qsm-dashboard-v3-actions-card,
+    .qsm-dashboard-v3-recent-grid {
+      width:
+        100% !important;
+
+      max-width:
+        100% !important;
+
+      margin-left:
+        0 !important;
+
+      box-sizing:
+        border-box !important;
+    }
+
+    /*
+      Laptop: sidebar ligeramente más estrecho.
+    */
+
+    @media (max-width: 1200px) {
+      .qsm-dashboard-v3-main {
+        width:
+          calc(
+            100% - 72px
+          ) !important;
+
+        max-width:
+          calc(
+            100% - 72px
+          ) !important;
+
+        margin-left:
+          72px !important;
+
+        padding-left:
+          7px !important;
+
+        padding-right:
+          11px !important;
+      }
+
+      .qsm-dashboard-v3-main::before {
+        left:
+          68px;
+      }
+    }
+
+    /*
+      En tablet y móvil no se reserva una columna fija.
+    */
+
+    @media (max-width: 700px) {
+      .qsm-dashboard-v3-main {
+        width:
+          100% !important;
+
+        max-width:
+          100% !important;
+
+        margin-left:
+          0 !important;
+
+        padding-left:
+          8px !important;
+
+        padding-right:
+          8px !important;
+      }
+
+      .qsm-dashboard-v3-main::before {
+        display:
+          none !important;
+      }
+    }
+
+
+    /* =======================================================
+       QSM_FASE15_BLOCK6_FIX3_DYNAMIC_SIDEBAR_CONNECTION
+       SIDEBAR ABIERTO/CERRADO + 8PX DE SEPARACIÓN
+    ======================================================= */
+
+    /*
+      Esta regla reemplaza los márgenes fijos de los FIX
+      anteriores. El valor proviene del Sidebar real.
+    */
+
+    .qsm-dashboard-v3-main {
+      --qsm-sidebar-gap:
+        8px;
+
+      position:
+        relative !important;
+
+      width:
+        calc(
+          100vw -
+          var(
+            --qsm-live-sidebar-right,
+            80px
+          ) -
+          var(
+            --qsm-sidebar-gap
+          ) -
+          10px
+        ) !important;
+
+      max-width:
+        calc(
+          100vw -
+          var(
+            --qsm-live-sidebar-right,
+            80px
+          ) -
+          var(
+            --qsm-sidebar-gap
+          ) -
+          10px
+        ) !important;
+
+      margin-left:
+        calc(
+          var(
+            --qsm-live-sidebar-right,
+            80px
+          ) +
+          var(
+            --qsm-sidebar-gap
+          )
+        ) !important;
+
+      margin-right:
+        10px !important;
+
+      padding-left:
+        0 !important;
+
+      padding-right:
+        0 !important;
+
+      box-sizing:
+        border-box !important;
+
+      overflow-x:
+        clip !important;
+
+      transition:
+        margin-left .24s ease,
+        width .24s ease,
+        max-width .24s ease !important;
+    }
+
+    /*
+      El Dashboard ocupa todo el espacio disponible dentro
+      de su área, sin volver a crear una franja interna.
+    */
+
+    .qsm-dashboard-v3,
+    .qsm-dashboard-v3-shell {
+      width:
+        100% !important;
+
+      max-width:
+        100% !important;
+
+      margin-left:
+        0 !important;
+
+      margin-right:
+        0 !important;
+
+      padding-left:
+        0 !important;
+
+      box-sizing:
+        border-box !important;
+
+      overflow-x:
+        clip !important;
+    }
+
+    /*
+      Anula wrappers agregados durante los FIX anteriores.
+    */
+
+    .qsm-dashboard-v3-page,
+    .qsm-dashboard-v3-content,
+    .qsm-dashboard-v3-container {
+      width:
+        100% !important;
+
+      max-width:
+        100% !important;
+
+      margin:
+        0 !important;
+
+      padding-left:
+        0 !important;
+
+      box-sizing:
+        border-box !important;
+    }
+
+    /*
+      Línea elegante exactamente en el borde del Sidebar.
+      Se mueve junto con él.
+    */
+
+    .qsm-dashboard-v3-main::before {
+      content:
+        "";
+
+      position:
+        fixed;
+
+      top:
+        0;
+
+      bottom:
+        0;
+
+      left:
+        var(
+          --qsm-live-sidebar-right,
+          80px
+        );
+
+      width:
+        1px;
+
+      z-index:
+        30;
+
+      background:
+        linear-gradient(
+          180deg,
+          transparent,
+          rgba(56, 189, 248, .22) 15%,
+          rgba(139, 92, 246, .18) 50%,
+          rgba(56, 189, 248, .14) 85%,
+          transparent
+        );
+
+      box-shadow:
+        2px 0 10px
+        rgba(56, 189, 248, .06);
+
+      pointer-events:
+        none;
+
+      transition:
+        left .24s ease;
+    }
+
+    /*
+      Todas las secciones quedan dentro del borde real.
+    */
+
+    .qsm-dashboard-v3-header--executive,
+    .qsm-dashboard-v3-stats,
+    .qsm-dashboard-v3-upper,
+    .qsm-dashboard-v3-actions-card,
+    .qsm-dashboard-v3-recent-grid {
+      width:
+        100% !important;
+
+      max-width:
+        100% !important;
+
+      min-width:
+        0 !important;
+
+      margin-left:
+        0 !important;
+
+      margin-right:
+        0 !important;
+
+      box-sizing:
+        border-box !important;
+    }
+
+    /*
+      Móvil: el Sidebar funciona como panel flotante.
+    */
+
+    @media (max-width: 700px) {
+      .qsm-dashboard-v3-main {
+        width:
+          calc(
+            100% - 16px
+          ) !important;
+
+        max-width:
+          calc(
+            100% - 16px
+          ) !important;
+
+        margin-left:
+          8px !important;
+
+        margin-right:
+          8px !important;
+
+        padding-left:
+          0 !important;
+
+        padding-right:
+          0 !important;
+      }
+
+      .qsm-dashboard-v3-main::before {
+        display:
+          none !important;
+      }
+    }
+
+    @media (
+      prefers-reduced-motion:
+      reduce
+    ) {
+      .qsm-dashboard-v3 *,
+      .qsm-dashboard-v3 *::before,
+      .qsm-dashboard-v3 *::after {
+        scroll-behavior: auto !important;
+        animation-duration:
+          .01ms !important;
+        animation-iteration-count:
+          1 !important;
+        transition-duration:
+          .01ms !important;
+      }
     }
 
     .qsm-dashboard-v3-empty {

@@ -48,6 +48,8 @@ const INTERNAL_ROLES = [
   "SUPPORT"
 ];
 
+/* QSM_FASE16_BLOCK1_SIDEBAR_RESTRUCTURE */
+
 function Sidebar({
   counts = {
     purchases: 0,
@@ -323,6 +325,705 @@ function Sidebar({
             translateY(-2px) !important;
         }
 
+        /* QSM_FASE16_BLOCK1_SIDEBAR_RESTRUCTURE */
+
+        .qsm-sidebar-layout-toggle:hover {
+          transform:
+            translateY(-2px);
+
+          border-color:
+            rgba(56, 189, 248, .48) !important;
+
+          background:
+            linear-gradient(
+              135deg,
+              rgba(8, 145, 178, .24),
+              rgba(79, 70, 229, .22)
+            ) !important;
+
+          box-shadow:
+            0 14px 34px
+            rgba(2, 132, 199, .14) !important;
+        }
+
+        .qsm-sidebar-layout-toggle:hover
+        .qsm-sidebar-layout-toggle__icon {
+          transform:
+            translateX(-2px);
+        }
+
+        .qsm-sidebar-layout-toggle__icon {
+          transition:
+            transform .2s ease;
+        }
+
+        /* ===================================================
+           QSM_FASE16_BLOCK2_PREMIUM_SVG_ICONS
+        =================================================== */
+
+        .qsm-sidebar-brand-icon {
+          color: #67e8f9;
+          transition:
+            transform .24s ease,
+            filter .24s ease;
+        }
+
+        .qsm-sidebar-brand-icon:hover {
+          transform:
+            rotate(-5deg)
+            scale(1.06);
+
+          filter:
+            drop-shadow(
+              0 0 10px
+              rgba(56, 189, 248, .65)
+            );
+        }
+
+        .qsm-sidebar-menu-icon {
+          position: relative;
+          isolation: isolate;
+          transition:
+            transform .22s ease,
+            color .22s ease,
+            background .22s ease,
+            box-shadow .22s ease;
+        }
+
+        .qsm-sidebar-menu-icon::before {
+          content: "";
+          position: absolute;
+          inset: 3px;
+          z-index: -1;
+          border-radius: inherit;
+          background: currentColor;
+          opacity: .08;
+          filter: blur(7px);
+          transition:
+            opacity .22s ease,
+            transform .22s ease;
+        }
+
+        .qsm-sidebar-link:hover
+        .qsm-sidebar-menu-icon,
+        .qsm-sidebar-collapsed-link:hover
+        .qsm-sidebar-menu-icon {
+          transform:
+            translateY(-2px)
+            rotate(-4deg)
+            scale(1.08);
+
+          box-shadow:
+            0 10px 28px
+            rgba(0, 0, 0, .22);
+        }
+
+        .qsm-sidebar-link:hover
+        .qsm-sidebar-menu-icon::before,
+        .qsm-sidebar-collapsed-link:hover
+        .qsm-sidebar-menu-icon::before {
+          opacity: .22;
+          transform: scale(1.2);
+        }
+
+        .qsm-sidebar-menu-icon.tone-cyan {
+          color: #22d3ee !important;
+          background:
+            rgba(34, 211, 238, .10) !important;
+        }
+
+        .qsm-sidebar-menu-icon.tone-purple {
+          color: #a78bfa !important;
+          background:
+            rgba(167, 139, 250, .10) !important;
+        }
+
+        .qsm-sidebar-menu-icon.tone-green {
+          color: #34d399 !important;
+          background:
+            rgba(52, 211, 153, .10) !important;
+        }
+
+        .qsm-sidebar-menu-icon.tone-blue {
+          color: #60a5fa !important;
+          background:
+            rgba(96, 165, 250, .10) !important;
+        }
+
+        .qsm-sidebar-menu-icon.tone-gold {
+          color: #fbbf24 !important;
+          background:
+            rgba(251, 191, 36, .10) !important;
+        }
+
+        .qsm-sidebar-menu-icon.tone-pink {
+          color: #f472b6 !important;
+          background:
+            rgba(244, 114, 182, .10) !important;
+        }
+
+        .qsm-sidebar-menu-icon.tone-sky {
+          color: #38bdf8 !important;
+          background:
+            rgba(56, 189, 248, .10) !important;
+        }
+
+        .qsm-sidebar-menu-icon.tone-teal {
+          color: #2dd4bf !important;
+          background:
+            rgba(45, 212, 191, .10) !important;
+        }
+
+        .qsm-sidebar-menu-icon.tone-red {
+          color: #fb7185 !important;
+          background:
+            rgba(251, 113, 133, .10) !important;
+        }
+
+        .qsm-sidebar-menu-icon.tone-slate {
+          color: #cbd5e1 !important;
+          background:
+            rgba(203, 213, 225, .08) !important;
+        }
+
+        .qsm-sidebar-menu-icon.tone-violet {
+          color: #c084fc !important;
+          background:
+            rgba(192, 132, 252, .10) !important;
+        }
+
+        /* ===================================================
+           QSM_FASE16_BLOCK3_PREMIUM_PROFILE_SECURITY
+           PERFIL Y SEGURIDAD
+        =================================================== */
+
+        .qsm-sidebar-user-card {
+          position: relative;
+          overflow: hidden;
+          isolation: isolate;
+
+          transition:
+            transform .22s ease,
+            border-color .22s ease,
+            box-shadow .22s ease,
+            background .22s ease;
+        }
+
+        .qsm-sidebar-user-card::before {
+          content: "";
+          position: absolute;
+          top: -55px;
+          right: -45px;
+          z-index: -1;
+
+          width: 120px;
+          height: 120px;
+
+          border-radius: 50%;
+
+          background:
+            radial-gradient(
+              circle,
+              rgba(56, 189, 248, .22),
+              rgba(139, 92, 246, .10) 42%,
+              transparent 72%
+            );
+
+          pointer-events: none;
+        }
+
+        .qsm-sidebar-user-card::after {
+          content: "";
+          position: absolute;
+          left: 14px;
+          right: 14px;
+          bottom: 0;
+
+          height: 1px;
+
+          background:
+            linear-gradient(
+              90deg,
+              transparent,
+              rgba(56, 189, 248, .42),
+              rgba(139, 92, 246, .34),
+              transparent
+            );
+
+          opacity: .65;
+        }
+
+        .qsm-sidebar-user-card:hover {
+          transform:
+            translateY(-2px);
+
+          border-color:
+            rgba(56, 189, 248, .38) !important;
+
+          background:
+            linear-gradient(
+              135deg,
+              rgba(15, 23, 42, .94),
+              rgba(30, 27, 75, .54)
+            ) !important;
+
+          box-shadow:
+            0 20px 50px
+            rgba(0, 0, 0, .25),
+            0 0 28px
+            rgba(56, 189, 248, .07) !important;
+        }
+
+        .qsm-sidebar-user-card:hover
+        [style*="border-radius: 50%"] {
+          filter:
+            drop-shadow(
+              0 0 9px
+              rgba(56, 189, 248, .34)
+            );
+        }
+
+        .qsm-sidebar-profile-status {
+          width: fit-content;
+          max-width: 100%;
+
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+
+          margin-top: 1px;
+          padding: 3px 7px;
+
+          border-radius: 999px;
+
+          font-size: 7px;
+          line-height: 10px;
+          font-weight: 850;
+        }
+
+        .qsm-sidebar-profile-status > span {
+          width: 13px;
+          height: 13px;
+
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+
+          border-radius: 50%;
+
+          font-size: 7px;
+          font-weight: 950;
+        }
+
+        .qsm-sidebar-profile-status > strong {
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        .qsm-sidebar-profile-status.is-verified {
+          border:
+            1px solid
+            rgba(34, 197, 94, .24);
+
+          background:
+            rgba(22, 101, 52, .13);
+
+          color:
+            #86efac;
+        }
+
+        .qsm-sidebar-profile-status.is-verified
+        > span {
+          background:
+            rgba(34, 197, 94, .22);
+
+          color:
+            #bbf7d0;
+        }
+
+        .qsm-sidebar-profile-status.is-pending {
+          border:
+            1px solid
+            rgba(245, 158, 11, .24);
+
+          background:
+            rgba(146, 64, 14, .12);
+
+          color:
+            #fbbf24;
+        }
+
+        .qsm-sidebar-profile-status.is-pending
+        > span {
+          background:
+            rgba(245, 158, 11, .20);
+
+          color:
+            #fde68a;
+        }
+
+
+        /* ===================================================
+           QSM_FASE16_BLOCK4_FOOTER_CONTROLS_POLISH
+           CONTROLES INFERIORES
+        =================================================== */
+
+        .qsm-sidebar-footer-controls {
+          position: relative;
+
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 8px;
+
+          width: 100%;
+
+          padding: 8px;
+
+          border:
+            1px solid rgba(148, 163, 184, .10);
+
+          border-radius: 17px;
+
+          background:
+            linear-gradient(
+              145deg,
+              rgba(15, 23, 42, .72),
+              rgba(2, 6, 23, .58)
+            );
+
+          box-shadow:
+            inset 0 0 18px
+            rgba(56, 189, 248, .018);
+        }
+
+        .qsm-sidebar-footer-action {
+          position: relative;
+
+          width: 100% !important;
+          min-height: 48px !important;
+
+          display: flex !important;
+          align-items: center !important;
+
+          border-radius: 13px !important;
+
+          overflow: visible;
+
+          transition:
+            transform .2s ease,
+            border-color .2s ease,
+            background .2s ease,
+            box-shadow .2s ease !important;
+        }
+
+        .qsm-sidebar-footer-action:hover {
+          transform:
+            translateY(-2px);
+        }
+
+        .qsm-sidebar-footer-action--logout:hover {
+          border-color:
+            rgba(248, 113, 113, .48) !important;
+
+          background:
+            linear-gradient(
+              135deg,
+              rgba(153, 27, 27, .30),
+              rgba(76, 5, 25, .25)
+            ) !important;
+
+          box-shadow:
+            0 13px 32px
+            rgba(127, 29, 29, .18) !important;
+        }
+
+        .qsm-sidebar-footer-action--toggle:hover {
+          border-color:
+            rgba(56, 189, 248, .50) !important;
+
+          background:
+            linear-gradient(
+              135deg,
+              rgba(8, 145, 178, .25),
+              rgba(79, 70, 229, .23)
+            ) !important;
+
+          box-shadow:
+            0 13px 32px
+            rgba(2, 132, 199, .15) !important;
+        }
+
+        .qsm-sidebar-footer-tooltip {
+          position: absolute;
+
+          top: 50%;
+          left: calc(100% + 14px);
+
+          min-width: 132px;
+
+          padding: 8px 10px;
+
+          transform:
+            translate(-7px, -50%);
+
+          border:
+            1px solid
+            rgba(56, 189, 248, .22);
+
+          border-radius: 10px;
+
+          background:
+            rgba(5, 12, 28, .98);
+
+          color:
+            #e2e8f0;
+
+          font-size:
+            9px;
+
+          font-weight:
+            850;
+
+          text-align:
+            center;
+
+          white-space:
+            nowrap;
+
+          opacity: 0;
+          visibility: hidden;
+
+          box-shadow:
+            0 17px 40px
+            rgba(0, 0, 0, .42);
+
+          pointer-events:
+            none;
+
+          transition:
+            opacity .18s ease,
+            visibility .18s ease,
+            transform .18s ease;
+
+          z-index: 2100;
+        }
+
+        .qsm-sidebar-footer-action:hover
+        .qsm-sidebar-footer-tooltip {
+          opacity: 1;
+          visibility: visible;
+
+          transform:
+            translate(0, -50%);
+        }
+
+        /*
+          En modo cerrado los dos botones conservan exactamente
+          la misma medida y alineación.
+        */
+
+        .qsm-desktop-sidebar[style*="96px"]
+        .qsm-sidebar-footer-controls {
+          padding: 6px;
+          gap: 7px;
+        }
+
+        .qsm-desktop-sidebar[style*="96px"]
+        .qsm-sidebar-footer-action {
+          min-height: 52px !important;
+
+          justify-content:
+            center !important;
+
+          padding:
+            10px !important;
+
+          border-radius:
+            15px !important;
+        }
+
+        @media (max-width: 1100px) {
+          .qsm-sidebar-footer-tooltip {
+            display: none;
+          }
+        }
+
+        @media (
+          prefers-reduced-motion:
+          reduce
+        ) {
+          .qsm-sidebar-footer-action,
+          .qsm-sidebar-footer-tooltip {
+            transition:
+              none !important;
+
+            transform:
+              none !important;
+          }
+        }
+
+        .qsm-sidebar-security-banner {
+          position: relative;
+          overflow: hidden;
+          isolation: isolate;
+
+          transition:
+            transform .2s ease,
+            border-color .2s ease,
+            background .2s ease;
+        }
+
+        .qsm-sidebar-security-banner::before {
+          content: "";
+          position: absolute;
+          inset: 0;
+          z-index: -1;
+
+          background:
+            linear-gradient(
+              110deg,
+              transparent,
+              rgba(56, 189, 248, .055),
+              rgba(139, 92, 246, .07),
+              transparent
+            );
+
+          transform:
+            translateX(-100%);
+
+          transition:
+            transform .65s ease;
+        }
+
+        .qsm-sidebar-security-banner:hover {
+          transform:
+            translateY(-1px);
+
+          border-color:
+            rgba(56, 189, 248, .24) !important;
+
+          background:
+            rgba(14, 116, 144, .075) !important;
+        }
+
+        .qsm-sidebar-security-banner:hover::before {
+          transform:
+            translateX(100%);
+        }
+
+        .qsm-sidebar-security-banner__icon {
+          color:
+            #67e8f9;
+
+          box-shadow:
+            inset 0 0 15px
+            rgba(56, 189, 248, .08);
+
+          transition:
+            transform .22s ease,
+            filter .22s ease;
+        }
+
+        .qsm-sidebar-security-banner:hover
+        .qsm-sidebar-security-banner__icon {
+          transform:
+            rotate(-5deg)
+            scale(1.06);
+
+          filter:
+            drop-shadow(
+              0 0 8px
+              rgba(56, 189, 248, .48)
+            );
+        }
+
+        .qsm-sidebar-security-banner strong {
+          display: block;
+
+          color:
+            #cbd5e1;
+
+          font-size:
+            8px;
+
+          line-height:
+            12px;
+        }
+
+        .qsm-sidebar-security-banner p {
+          margin:
+            3px 0 0;
+
+          color:
+            #64748b;
+
+          font-size:
+            7px;
+
+          line-height:
+            11px;
+        }
+
+        .qsm-sidebar-user-card--mobile {
+          min-height: 94px;
+        }
+
+        @media (
+          prefers-reduced-motion:
+          reduce
+        ) {
+          .qsm-sidebar-user-card,
+          .qsm-sidebar-security-banner,
+          .qsm-sidebar-security-banner::before,
+          .qsm-sidebar-security-banner__icon {
+            transition:
+              none !important;
+
+            transform:
+              none !important;
+          }
+        }
+
+        .qsm-sidebar-link[aria-current="page"]
+        .qsm-sidebar-menu-icon,
+        .qsm-sidebar-collapsed-link[aria-current="page"]
+        .qsm-sidebar-menu-icon {
+          box-shadow:
+            0 0 0 1px
+            currentColor,
+            0 0 20px
+            color-mix(
+              in srgb,
+              currentColor 34%,
+              transparent
+            );
+        }
+
+        @media (
+          prefers-reduced-motion:
+          reduce
+        ) {
+          .qsm-sidebar-brand-icon,
+          .qsm-sidebar-menu-icon,
+          .qsm-sidebar-menu-icon::before {
+            transition: none !important;
+            transform: none !important;
+          }
+        }
+
+        .qsm-mobile-sidebar-close-action:hover {
+          border-color:
+            rgba(56, 189, 248, .48) !important;
+
+          background:
+            linear-gradient(
+              135deg,
+              rgba(8, 145, 178, .23),
+              rgba(79, 70, 229, .22)
+            ) !important;
+        }
+
         .qsm-sidebar-tooltip {
           opacity: 0;
           visibility: hidden;
@@ -379,8 +1080,18 @@ function Sidebar({
             style={brand(collapsed)}
             onClick={closeMobile}
           >
-            <div style={brandIcon(collapsed)}>
-              🛡
+            <div
+              className="qsm-sidebar-brand-icon"
+              style={brandIcon(collapsed)}
+            >
+              <SidebarIcon
+                name="shield"
+                size={
+                  collapsed
+                    ? 29
+                    : 30
+                }
+              />
             </div>
 
             {!collapsed && (
@@ -395,26 +1106,6 @@ function Sidebar({
               </div>
             )}
           </Link>
-
-          <button
-            type="button"
-            onClick={toggleCollapsed}
-            style={collapseButton}
-            aria-label={
-              collapsed
-                ? "Expandir menú lateral"
-                : "Minimizar menú lateral"
-            }
-            title={
-              collapsed
-                ? "Expandir"
-                : "Minimizar"
-            }
-          >
-            {collapsed
-              ? "»"
-              : "«"}
-          </button>
         </div>
 
         <div
@@ -427,7 +1118,8 @@ function Sidebar({
           >
             <SidebarLink
               to="/dashboard"
-              icon="⌂"
+              icon="home"
+              tone="cyan"
               label="Inicio"
               description="Dashboard"
               collapsed={collapsed}
@@ -435,7 +1127,8 @@ function Sidebar({
 
             <SidebarLink
               to="/marketplace"
-              icon="♧"
+              icon="store"
+              tone="purple"
               label="Marketplace"
               description="Explorar productos"
               collapsed={collapsed}
@@ -443,7 +1136,8 @@ function Sidebar({
 
             <SidebarLink
               to="/new-product"
-              icon="＋"
+              icon="plusBox"
+              tone="green"
               label="Publicar producto"
               description="Vender de forma segura"
               collapsed={collapsed}
@@ -460,7 +1154,8 @@ function Sidebar({
           >
             <SidebarLink
               to="/orders"
-              icon="◈"
+              icon="package"
+              tone="blue"
               label="Mis compras"
               description="Órdenes y envíos"
               count={counts?.purchases}
@@ -469,7 +1164,8 @@ function Sidebar({
 
             <SidebarLink
               to="/sales"
-              icon="＄"
+              icon="trend"
+              tone="gold"
               label="Mis ventas"
               description="Tus publicaciones"
               count={counts?.sales}
@@ -478,7 +1174,8 @@ function Sidebar({
 
             <SidebarLink
               to="/favorites"
-              icon="♡"
+              icon="heart"
+              tone="pink"
               label="Favoritos"
               description="Productos guardados"
               count={counts?.favorites}
@@ -487,9 +1184,10 @@ function Sidebar({
 
             <SidebarLink
               to="/messages"
-              icon="▣"
-              label="Mensajes"
-              description="Conversaciones"
+              icon="message"
+              tone="sky"
+              label="Messenger"
+              description="Centro de conversaciones"
               count={counts?.messages}
               collapsed={collapsed}
             />
@@ -505,7 +1203,8 @@ function Sidebar({
           >
             <SidebarLink
               to="/complete-profile"
-              icon="♢"
+              icon="verified"
+              tone="teal"
               label="Verificación QSM"
               description="Completa tu perfil"
               badge={
@@ -523,7 +1222,8 @@ function Sidebar({
 
             <SidebarLink
               to="/disputes"
-              icon="⚖"
+              icon="scale"
+              tone="red"
               label="Centro de reclamos"
               description="Disputas y mediación"
               count={counts?.disputes}
@@ -533,7 +1233,8 @@ function Sidebar({
 
             <SidebarLink
               to="/settings"
-              icon="⚙"
+              icon="settings"
+              tone="slate"
               label="Configuración"
               description="Cuenta y privacidad"
               collapsed={collapsed}
@@ -552,7 +1253,8 @@ function Sidebar({
               >
                 <SidebarLink
                   to="/admin"
-                  icon="⌘"
+                  icon="command"
+              tone="violet"
                   label="BackOffice QSM"
                   description={formatRole(role)}
                   badge="INTERNO"
@@ -568,6 +1270,7 @@ function Sidebar({
         <div style={sidebarBottom}>
           <Link
             to="/profile"
+            className="qsm-sidebar-user-card"
             style={userCard(collapsed)}
             title={
               collapsed
@@ -607,6 +1310,28 @@ function Sidebar({
                   {formatRole(role)}
                 </span>
 
+                <div
+                  className={
+                    `qsm-sidebar-profile-status ${
+                      isVerified
+                        ? "is-verified"
+                        : "is-pending"
+                    }`
+                  }
+                >
+                  <span aria-hidden="true">
+                    {isVerified
+                      ? "✓"
+                      : "!"}
+                  </span>
+
+                  <strong>
+                    {isVerified
+                      ? "Identidad verificada"
+                      : "Verificación pendiente"}
+                  </strong>
+                </div>
+
                 <div style={trustHeader}>
                   <span style={userMeta}>
                     Confianza
@@ -636,9 +1361,11 @@ function Sidebar({
             )}
           </Link>
 
+          <div className="qsm-sidebar-footer-controls">
           <button
             type="button"
             onClick={handleLogout}
+            className="qsm-sidebar-footer-action qsm-sidebar-footer-action--logout"
             style={logoutButton(collapsed)}
             title={
               collapsed
@@ -647,7 +1374,10 @@ function Sidebar({
             }
           >
             <span style={logoutIcon}>
-              ⇥
+              <SidebarIcon
+                name="logout"
+                size={19}
+              />
             </span>
 
             {!collapsed && (
@@ -655,12 +1385,75 @@ function Sidebar({
                 Cerrar sesión
               </span>
             )}
+
+            {collapsed && (
+              <span className="qsm-sidebar-footer-tooltip">
+                Cerrar sesión
+              </span>
+            )}
           </button>
 
+          <button
+            type="button"
+            onClick={toggleCollapsed}
+            className="qsm-sidebar-footer-action qsm-sidebar-layout-toggle qsm-sidebar-footer-action--toggle"
+            style={sidebarToggleButton(collapsed)}
+            title={
+              collapsed
+                ? "Desplegar menú"
+                : "Cerrar menú"
+            }
+            aria-label={
+              collapsed
+                ? "Desplegar menú lateral"
+                : "Cerrar menú lateral"
+            }
+            aria-expanded={
+              !collapsed
+            }
+          >
+            <span
+              className="qsm-sidebar-layout-toggle__icon"
+              style={sidebarToggleIcon}
+              aria-hidden="true"
+            >
+              <SidebarIcon
+                name={
+                  collapsed
+                    ? "expand"
+                    : "collapse"
+                }
+                size={20}
+              />
+            </span>
+
+            {!collapsed && (
+              <span>
+                Cerrar menú
+              </span>
+            )}
+
+            {collapsed && (
+              <span className="qsm-sidebar-footer-tooltip">
+                Desplegar menú
+              </span>
+            )}
+          </button>
+        </div>
+
           {!collapsed && (
-            <div style={securityMessage}>
-              <span style={securityMessageIcon}>
-                🛡
+            <div
+              className="qsm-sidebar-security-banner"
+              style={securityMessage}
+            >
+              <span
+                className="qsm-sidebar-security-banner__icon"
+                style={securityMessageIcon}
+              >
+                <SidebarIcon
+                  name="shield"
+                  size={18}
+                />
               </span>
 
               <div>
@@ -707,8 +1500,14 @@ function Sidebar({
                 style={mobileBrand}
                 onClick={closeMobile}
               >
-                <div style={mobileBrandIcon}>
-                  🛡
+                <div
+                  className="qsm-sidebar-brand-icon"
+                  style={mobileBrandIcon}
+                >
+                  <SidebarIcon
+                    name="shield"
+                    size={24}
+                  />
                 </div>
 
                 <div>
@@ -742,7 +1541,8 @@ function Sidebar({
               >
                 <SidebarLink
                   to="/dashboard"
-                  icon="⌂"
+                  icon="home"
+              tone="cyan"
                   label="Inicio"
                   description="Dashboard"
                   collapsed={false}
@@ -751,7 +1551,8 @@ function Sidebar({
 
                 <SidebarLink
                   to="/marketplace"
-                  icon="♧"
+                  icon="store"
+              tone="purple"
                   label="Marketplace"
                   description="Explorar productos"
                   collapsed={false}
@@ -760,7 +1561,8 @@ function Sidebar({
 
                 <SidebarLink
                   to="/new-product"
-                  icon="＋"
+                  icon="plusBox"
+              tone="green"
                   label="Publicar producto"
                   description="Vender de forma segura"
                   collapsed={false}
@@ -778,7 +1580,8 @@ function Sidebar({
               >
                 <SidebarLink
                   to="/orders"
-                  icon="◈"
+                  icon="package"
+              tone="blue"
                   label="Mis compras"
                   description="Órdenes y envíos"
                   count={counts?.purchases}
@@ -788,7 +1591,8 @@ function Sidebar({
 
                 <SidebarLink
                   to="/sales"
-                  icon="＄"
+                  icon="trend"
+              tone="gold"
                   label="Mis ventas"
                   description="Tus publicaciones"
                   count={counts?.sales}
@@ -798,7 +1602,8 @@ function Sidebar({
 
                 <SidebarLink
                   to="/favorites"
-                  icon="♡"
+                  icon="heart"
+              tone="pink"
                   label="Favoritos"
                   description="Productos guardados"
                   count={counts?.favorites}
@@ -808,9 +1613,10 @@ function Sidebar({
 
                 <SidebarLink
                   to="/messages"
-                  icon="▣"
-                  label="Mensajes"
-                  description="Conversaciones"
+                  icon="message"
+              tone="sky"
+                  label="Messenger"
+                  description="Centro de conversaciones"
                   count={counts?.messages}
                   collapsed={false}
                   onNavigate={closeMobile}
@@ -827,7 +1633,8 @@ function Sidebar({
               >
                 <SidebarLink
                   to="/complete-profile"
-                  icon="♢"
+                  icon="verified"
+              tone="teal"
                   label="Verificación QSM"
                   description="Completa tu perfil"
                   badge={
@@ -846,7 +1653,8 @@ function Sidebar({
 
                 <SidebarLink
                   to="/disputes"
-                  icon="⚖"
+                  icon="scale"
+              tone="red"
                   label="Centro de reclamos"
                   description="Disputas y mediación"
                   count={counts?.disputes}
@@ -857,7 +1665,8 @@ function Sidebar({
 
                 <SidebarLink
                   to="/settings"
-                  icon="⚙"
+                  icon="settings"
+              tone="slate"
                   label="Configuración"
                   description="Cuenta y privacidad"
                   collapsed={false}
@@ -877,7 +1686,8 @@ function Sidebar({
                   >
                     <SidebarLink
                       to="/admin"
-                      icon="⌘"
+                      icon="command"
+              tone="violet"
                       label="BackOffice QSM"
                       description={formatRole(role)}
                       badge="INTERNO"
@@ -894,6 +1704,7 @@ function Sidebar({
             <div style={mobileBottom}>
               <Link
                 to="/profile"
+                className="qsm-sidebar-user-card qsm-sidebar-user-card--mobile"
                 style={mobileUserCard}
                 onClick={closeMobile}
               >
@@ -920,6 +1731,28 @@ function Sidebar({
                   <span style={userRole}>
                     {formatRole(role)}
                   </span>
+
+                  <div
+                    className={
+                      `qsm-sidebar-profile-status ${
+                        isVerified
+                          ? "is-verified"
+                          : "is-pending"
+                      }`
+                    }
+                  >
+                    <span aria-hidden="true">
+                      {isVerified
+                        ? "✓"
+                        : "!"}
+                    </span>
+
+                    <strong>
+                      {isVerified
+                        ? "Identidad verificada"
+                        : "Verificación pendiente"}
+                    </strong>
+                  </div>
 
                   <div style={trustHeader}>
                     <span style={userMeta}>
@@ -948,7 +1781,28 @@ function Sidebar({
                 onClick={handleLogout}
                 style={mobileLogoutButton}
               >
-                ⇥ Cerrar sesión
+                <span aria-hidden="true">
+                  ⇥
+                </span>
+
+                <span>
+                  Cerrar sesión
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={closeMobile}
+                className="qsm-mobile-sidebar-close-action"
+                style={mobileSidebarCloseAction}
+              >
+                <span aria-hidden="true">
+                  «
+                </span>
+
+                <span>
+                  Cerrar menú
+                </span>
               </button>
             </div>
           </aside>
@@ -1020,6 +1874,7 @@ function SidebarLink({
   badgeType = "default",
   collapsed = false,
   highlighted = false,
+  tone = "cyan",
   onNavigate
 }) {
   const safeCount =
@@ -1061,8 +1916,18 @@ function SidebarLink({
             : undefined
         }
       >
-        <span style={menuIcon(collapsed)}>
-          {icon}
+        <span
+          className={`qsm-sidebar-menu-icon tone-${tone}`}
+          style={menuIcon(collapsed)}
+        >
+          <SidebarIcon
+            name={icon}
+            size={
+              collapsed
+                ? 22
+                : 20
+            }
+          />
         </span>
 
         {!collapsed && (
@@ -1154,6 +2019,158 @@ function SidebarLink({
 | Avatar del Sidebar
 |--------------------------------------------------------------------------
 */
+
+/*
+|--------------------------------------------------------------------------
+| QSM_FASE16_BLOCK2_PREMIUM_SVG_ICONS
+| Iconos SVG internos del Sidebar
+|--------------------------------------------------------------------------
+*/
+
+/* QSM_FASE16_BLOCK2_PREMIUM_SVG_ICONS */
+
+function SidebarIcon({
+  name,
+  size = 20
+}) {
+  const commonProps = {
+    width: size,
+    height: size,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.9,
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    "aria-hidden": true,
+    focusable: false
+  };
+
+  const icons = {
+    shield: (
+      <svg {...commonProps}>
+        <path d="M12 3 20 6v5c0 5.1-3.2 8.6-8 10-4.8-1.4-8-4.9-8-10V6l8-3Z" />
+        <path d="m9.2 12 1.8 1.8 4-4.2" />
+      </svg>
+    ),
+
+    home: (
+      <svg {...commonProps}>
+        <path d="m3 11 9-8 9 8" />
+        <path d="M5 10v10h14V10" />
+        <path d="M9 20v-6h6v6" />
+      </svg>
+    ),
+
+    store: (
+      <svg {...commonProps}>
+        <path d="M4 9h16l-1.3-5H5.3L4 9Z" />
+        <path d="M5 9v11h14V9" />
+        <path d="M9 20v-6h6v6" />
+        <path d="M4 9c0 1.7 1.3 3 3 3s3-1.3 3-3c0 1.7 1.3 3 3 3s3-1.3 3-3c0 1.7 1.3 3 3 3" />
+      </svg>
+    ),
+
+    plusBox: (
+      <svg {...commonProps}>
+        <rect x="3" y="3" width="18" height="18" rx="5" />
+        <path d="M12 8v8M8 12h8" />
+      </svg>
+    ),
+
+    package: (
+      <svg {...commonProps}>
+        <path d="m4 7 8-4 8 4-8 4-8-4Z" />
+        <path d="m4 7 8 4 8-4v10l-8 4-8-4V7Z" />
+        <path d="M12 11v10" />
+      </svg>
+    ),
+
+    trend: (
+      <svg {...commonProps}>
+        <path d="M4 18V6" />
+        <path d="M4 18h16" />
+        <path d="m7 14 4-4 3 3 5-6" />
+        <path d="M16 7h3v3" />
+      </svg>
+    ),
+
+    heart: (
+      <svg {...commonProps}>
+        <path d="M20.8 4.6a5.4 5.4 0 0 0-7.6 0L12 5.8l-1.2-1.2a5.4 5.4 0 1 0-7.6 7.6L12 21l8.8-8.8a5.4 5.4 0 0 0 0-7.6Z" />
+      </svg>
+    ),
+
+    message: (
+      <svg {...commonProps}>
+        <path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v8Z" />
+        <path d="M8 9h8M8 13h5" />
+      </svg>
+    ),
+
+    verified: (
+      <svg {...commonProps}>
+        <path d="M12 3 20 6v5c0 5.1-3.2 8.6-8 10-4.8-1.4-8-4.9-8-10V6l8-3Z" />
+        <path d="m8.5 12 2.2 2.2 4.8-5" />
+      </svg>
+    ),
+
+    scale: (
+      <svg {...commonProps}>
+        <path d="M12 3v18M5 6h14" />
+        <path d="m7 6-4 7h8L7 6Z" />
+        <path d="m17 6-4 7h8l-4-7Z" />
+        <path d="M8 21h8" />
+      </svg>
+    ),
+
+    settings: (
+      <svg {...commonProps}>
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.6v-.2h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z" />
+      </svg>
+    ),
+
+    command: (
+      <svg {...commonProps}>
+        <path d="M9 6V5a3 3 0 1 0-3 3h1" />
+        <path d="M15 6V5a3 3 0 1 1 3 3h-1" />
+        <path d="M9 18v1a3 3 0 1 1-3-3h1" />
+        <path d="M15 18v1a3 3 0 1 0 3-3h-1" />
+        <rect x="8" y="8" width="8" height="8" rx="2" />
+      </svg>
+    ),
+
+    logout: (
+      <svg {...commonProps}>
+        <path d="M10 17l5-5-5-5" />
+        <path d="M15 12H3" />
+        <path d="M14 4h5a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-5" />
+      </svg>
+    ),
+
+    collapse: (
+      <svg {...commonProps}>
+        <path d="m13 17-5-5 5-5" />
+        <path d="m18 17-5-5 5-5" />
+      </svg>
+    ),
+
+    expand: (
+      <svg {...commonProps}>
+        <path d="m6 7 5 5-5 5" />
+        <path d="m11 7 5 5-5 5" />
+      </svg>
+    )
+  };
+
+  return (
+    icons[name] ||
+    icons.shield
+  );
+}
+
+/* QSM_FASE16_BLOCK3_PREMIUM_PROFILE_SECURITY */
 
 function SidebarAvatar({
   photo,
@@ -2029,14 +3046,16 @@ const menuIcon = (
   background:
     "rgba(var(--qsm-accent-rgb), .08)",
 
-  color: "#e2e8f0",
+  color: "inherit",
 
   fontSize:
     collapsed
       ? "21px"
       : "19px",
 
-  fontWeight: "900"
+  fontWeight: "900",
+
+  overflow: "visible"
 });
 
 const menuText = {
@@ -2179,11 +3198,29 @@ const tooltipCount = {
 |--------------------------------------------------------------------------
 */
 
-const sidebarBottom = {
-  display: "grid",
-  gap: "11px",
+/* QSM_FASE16_BLOCK4_FOOTER_CONTROLS_POLISH */
 
-  paddingTop: "10px"
+const sidebarBottom = {
+  position:
+    "relative",
+
+  flexShrink:
+    0,
+
+  display:
+    "grid",
+
+  gap:
+    "10px",
+
+  paddingTop:
+    "10px",
+
+  borderTop:
+    "1px solid rgba(148, 163, 184, .08)",
+
+  background:
+    "linear-gradient(180deg, rgba(2, 6, 23, 0), rgba(2, 6, 23, .80) 16%)"
 };
 
 const userCard = (
@@ -2214,14 +3251,14 @@ const userCard = (
     "1px solid rgba(56, 189, 248, .18)",
 
   background:
-    "linear-gradient(135deg, rgba(15, 23, 42, .86), rgba(30, 27, 75, .40))",
+    "linear-gradient(135deg, rgba(15, 23, 42, .92), rgba(30, 27, 75, .48))",
 
   color: "#ffffff",
 
   textDecoration: "none",
 
   boxShadow:
-    "0 16px 45px rgba(0, 0, 0, .16)"
+    "0 17px 48px rgba(0, 0, 0, .20), inset 0 0 22px rgba(56, 189, 248, .025)"
 });
 
 const sidebarAvatar = {
@@ -2248,7 +3285,10 @@ const sidebarAvatar = {
   fontWeight: "950",
 
   boxShadow:
-    "0 0 0 4px rgba(139, 92, 246, .10), 0 12px 34px rgba(var(--qsm-accent-rgb), .18)"
+    "0 0 0 4px rgba(139, 92, 246, .12), 0 0 22px rgba(56, 189, 248, .19), 0 14px 38px rgba(var(--qsm-accent-rgb), .20)",
+
+  transition:
+    "transform .22s ease, filter .22s ease"
 };
 
 const sidebarAvatarImage = {
@@ -2441,6 +3481,9 @@ const logoutButton = (
 
   gap: "10px",
 
+  lineHeight:
+    "1",
+
   padding:
     collapsed
       ? "10px"
@@ -2471,6 +3514,91 @@ const logoutIcon = {
 
 /*
 |--------------------------------------------------------------------------
+| QSM_FASE16_BLOCK1_SIDEBAR_RESTRUCTURE
+| Control inferior del Sidebar
+|--------------------------------------------------------------------------
+*/
+
+const sidebarToggleButton = (
+  collapsed
+) => ({
+  width: "100%",
+
+  minHeight:
+    collapsed
+      ? "52px"
+      : "48px",
+
+  display: "flex",
+  alignItems: "center",
+
+  justifyContent:
+    collapsed
+      ? "center"
+      : "flex-start",
+
+  gap: "10px",
+
+  padding:
+    collapsed
+      ? "10px"
+      : "11px 14px",
+
+  borderRadius:
+    collapsed
+      ? "16px"
+      : "14px",
+
+  border:
+    "1px solid rgba(56, 189, 248, .26)",
+
+  background:
+    "linear-gradient(135deg, rgba(8, 145, 178, .15), rgba(79, 70, 229, .14))",
+
+  color:
+    "#7dd3fc",
+
+  fontSize:
+    "11px",
+
+  fontWeight:
+    "900",
+
+  cursor:
+    "pointer",
+
+  boxShadow:
+    "0 10px 30px rgba(2, 132, 199, .08)",
+
+  transition:
+    "transform .2s ease, border-color .2s ease, background .2s ease, box-shadow .2s ease"
+});
+
+const sidebarToggleIcon = {
+  minWidth:
+    "19px",
+
+  display:
+    "inline-flex",
+
+  alignItems:
+    "center",
+
+  justifyContent:
+    "center",
+
+  color:
+    "#67e8f9",
+
+  fontSize:
+    "19px",
+
+  fontWeight:
+    "950"
+};
+
+/*
+|--------------------------------------------------------------------------
 | Mensaje de seguridad
 |--------------------------------------------------------------------------
 */
@@ -2479,35 +3607,56 @@ const securityMessage = {
   display: "grid",
 
   gridTemplateColumns:
-    "32px minmax(0, 1fr)",
+    "34px minmax(0, 1fr)",
+
+  alignItems:
+    "center",
 
   gap: "10px",
 
-  padding: "11px",
+  padding:
+    "10px 11px",
 
-  borderRadius: "14px",
+  borderRadius:
+    "14px",
 
   border:
-    "1px solid rgba(var(--qsm-accent-rgb), .12)",
+    "1px solid rgba(56, 189, 248, .15)",
 
   background:
-    "rgba(var(--qsm-accent-rgb), .05)",
+    "linear-gradient(135deg, rgba(8, 145, 178, .065), rgba(79, 70, 229, .055))",
 
-  color: "var(--qsm-muted)"
+  color:
+    "var(--qsm-muted)",
+
+  boxShadow:
+    "inset 0 0 18px rgba(56, 189, 248, .018)"
 };
 
 const securityMessageIcon = {
-  width: "32px",
-  height: "32px",
+  width:
+    "34px",
 
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
+  height:
+    "34px",
 
-  borderRadius: "10px",
+  display:
+    "flex",
+
+  alignItems:
+    "center",
+
+  justifyContent:
+    "center",
+
+  borderRadius:
+    "11px",
+
+  border:
+    "1px solid rgba(56, 189, 248, .15)",
 
   background:
-    "rgba(var(--qsm-accent-rgb), .10)"
+    "linear-gradient(135deg, rgba(34, 211, 238, .10), rgba(139, 92, 246, .10))"
 };
 
 /*
@@ -2738,6 +3887,44 @@ const mobileLogoutButton = {
   fontWeight: "900",
 
   cursor: "pointer"
+};
+
+const mobileSidebarCloseAction = {
+  minHeight:
+    "46px",
+
+  display:
+    "flex",
+
+  alignItems:
+    "center",
+
+  justifyContent:
+    "center",
+
+  gap:
+    "9px",
+
+  borderRadius:
+    "14px",
+
+  border:
+    "1px solid rgba(56, 189, 248, .25)",
+
+  background:
+    "linear-gradient(135deg, rgba(8, 145, 178, .14), rgba(79, 70, 229, .14))",
+
+  color:
+    "#7dd3fc",
+
+  fontSize:
+    "11px",
+
+  fontWeight:
+    "900",
+
+  cursor:
+    "pointer"
 };
 
 export default Sidebar;

@@ -19,6 +19,12 @@ import {
   getSmartConversationResponse
 } from "../services/luna-conversation-router.service";
 
+import {
+  resolveContextualQuestion,
+  buildConversationMemory,
+  getMemoryAwareResponse
+} from "../services/luna-conversation-memory.service";
+
 /* QSM_FASE10_BLOCK1_VISUAL_CORE */
 
 const DEFAULT_CORE = {
@@ -62,6 +68,10 @@ const LUNA_DIALOGUE_FIELD =
 /* QSM_FASE13_BLOCK1_HUMAN_PERSONALITY */
 
 /* QSM_FASE13_BLOCK2_SMART_REDIRECTION */
+
+/* QSM_FASE13_BLOCK3_CONVERSATION_MEMORY */
+
+/* QSM_FASE13_BLOCK4_REAL_CONTEXT_MEMORY */
 
 function AiAssistant({ pageContext }) {
   const location = useLocation();
@@ -361,6 +371,18 @@ return (
       forced ||
       String(chatQuestion || "").trim();
 
+    const contextualQuestion =
+      resolveContextualQuestion({
+        question,
+        history: chatMessages
+      });
+
+    const conversationMemory =
+      buildConversationMemory({
+        history: chatMessages,
+        currentPath
+      });
+
     if (!question) {
       setChatError(
         "Escribe una pregunta antes de enviarla."
@@ -376,6 +398,13 @@ return (
       return;
     }
 
+    const memoryAwareResponse =
+      getMemoryAwareResponse({
+        question,
+        history: chatMessages,
+        user: core.user || {}
+      });
+
     const smartConversationResponse =
       getSmartConversationResponse({
         question,
@@ -385,6 +414,7 @@ return (
       });
 
     const localHumanResponse =
+      memoryAwareResponse ||
       smartConversationResponse ||
       getHumanizedLocalResponse({
         question,
@@ -466,6 +496,15 @@ return (
             content: question,
             query: question,
 
+            originalQuestion:
+              question,
+
+            memory:
+              conversationMemory,
+
+            conversationHistory:
+              conversationMemory.recentMessages,
+
             sessionId,
             conversationId: sessionId,
 
@@ -487,7 +526,13 @@ return (
               authenticated:
                 Boolean(
                   core.authenticated
-                )
+                ),
+
+              conversationTopic:
+                conversationMemory.currentTopic,
+
+              recentMessages:
+                conversationMemory.recentMessages
             }
           }
         );
@@ -550,6 +595,10 @@ return (
 
   const clearLunaChat = () => {
     chatRequestLockRef.current = false;
+
+    window.sessionStorage.removeItem(
+      "qsm_luna_session"
+    );
     setChatMessages([
       {
         id: `LUNA-WELCOME-${Date.now()}`,
@@ -593,6 +642,10 @@ return (
 
   const closeLunaChat = () => {
     chatRequestLockRef.current = false;
+
+    window.sessionStorage.removeItem(
+      "qsm_luna_session"
+    );
     window.sessionStorage.removeItem(
       "qsm_luna_session"
     );
