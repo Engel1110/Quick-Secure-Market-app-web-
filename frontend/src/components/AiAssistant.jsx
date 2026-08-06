@@ -15,6 +15,10 @@ import {
   getLunaResetMessage
 } from "../services/luna-personality.service";
 
+import {
+  getSmartConversationResponse
+} from "../services/luna-conversation-router.service";
+
 /* QSM_FASE10_BLOCK1_VISUAL_CORE */
 
 const DEFAULT_CORE = {
@@ -56,6 +60,8 @@ const LUNA_DIALOGUE_FIELD =
 /* QSM_FASE12_BLOCK3_FINAL_CHAT_FIX */
 
 /* QSM_FASE13_BLOCK1_HUMAN_PERSONALITY */
+
+/* QSM_FASE13_BLOCK2_SMART_REDIRECTION */
 
 function AiAssistant({ pageContext }) {
   const location = useLocation();
@@ -370,7 +376,16 @@ return (
       return;
     }
 
+    const smartConversationResponse =
+      getSmartConversationResponse({
+        question,
+        user: core.user || {},
+        history: chatMessages,
+        currentPath
+      });
+
     const localHumanResponse =
+      smartConversationResponse ||
       getHumanizedLocalResponse({
         question,
         user: core.user || {}
