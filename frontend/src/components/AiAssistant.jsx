@@ -8,6 +8,13 @@ import {
 import api from "../api/axios";
 import "./AiAssistant.css";
 
+import {
+  getHumanizedLocalResponse,
+  humanizeLunaResponse,
+  getLunaWelcomeMessage,
+  getLunaResetMessage
+} from "../services/luna-personality.service";
+
 /* QSM_FASE10_BLOCK1_VISUAL_CORE */
 
 const DEFAULT_CORE = {
@@ -47,6 +54,8 @@ const LUNA_DIALOGUE_FIELD =
 /* QSM_FASE12_BLOCK2_COLLAPSIBLE_CHAT_FIX */
 
 /* QSM_FASE12_BLOCK3_FINAL_CHAT_FIX */
+
+/* QSM_FASE13_BLOCK1_HUMAN_PERSONALITY */
 
 function AiAssistant({ pageContext }) {
   const location = useLocation();
@@ -361,6 +370,41 @@ return (
       return;
     }
 
+    const localHumanResponse =
+      getHumanizedLocalResponse({
+        question,
+        user: core.user || {}
+      });
+
+    if (localHumanResponse) {
+      const userMessage = {
+        id:
+          `USER-${Date.now()}-${Math.random()
+            .toString(36)
+            .slice(2, 7)}`,
+        role: "user",
+        text: question
+      };
+
+      setChatMessages((current) => [
+        ...current,
+        userMessage,
+        {
+          id:
+            `LUNA-HUMAN-${Date.now()}-${Math.random()
+              .toString(36)
+              .slice(2, 7)}`,
+          role: "assistant",
+          text: localHumanResponse
+        }
+      ]);
+
+      setChatQuestion("");
+      setChatError("");
+
+      return;
+    }
+
     chatRequestLockRef.current = true;
     setChatSending(true);
     setChatError("");
@@ -433,10 +477,17 @@ return (
           }
         );
 
-      const answer =
+      const rawAnswer =
         extractLunaResponse(
           response?.data || {}
         );
+
+      const answer =
+        humanizeLunaResponse({
+          response: rawAnswer,
+          question,
+          user: core.user || {}
+        });
 
       setChatMessages((current) => [
         ...current,
@@ -450,12 +501,19 @@ return (
         }
       ]);
     } catch (error) {
-      const backendMessage =
+      const rawBackendMessage =
         error?.response?.data?.message ||
         error?.response?.data?.error ||
         error?.response?.data?.details ||
         error?.message ||
         "No fue posible comunicarse con LUNA.";
+
+      const backendMessage =
+        humanizeLunaResponse({
+          response: rawBackendMessage,
+          question,
+          user: core.user || {}
+        });
 
       setChatError(backendMessage);
 
@@ -482,7 +540,9 @@ return (
         id: `LUNA-WELCOME-${Date.now()}`,
         role: "assistant",
         text:
-          "Conversación reiniciada. ¿En qué puedo ayudarte?"
+          getLunaResetMessage(
+            core.user || {}
+          )
       }
     ]);
 
@@ -505,7 +565,9 @@ return (
         id: `LUNA-START-${Date.now()}`,
         role: "assistant",
         text:
-          "Hola. Soy LUNA. ¿En qué puedo ayudarte dentro de QSM?"
+          getLunaWelcomeMessage(
+            core.user || {}
+          )
       }
     ]);
 
@@ -525,7 +587,9 @@ return (
         id: `LUNA-CLOSE-${Date.now()}`,
         role: "assistant",
         text:
-          "Hola. Soy LUNA. ¿En qué puedo ayudarte dentro de QSM?"
+          getLunaWelcomeMessage(
+            core.user || {}
+          )
       }
     ]);
 
