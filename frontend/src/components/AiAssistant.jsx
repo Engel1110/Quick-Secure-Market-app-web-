@@ -37,7 +37,12 @@ const DEFAULT_CORE = {
 const LUNA_DIALOGUE_ENDPOINT =
   "/ai/memory/message";
 
+const LUNA_DIALOGUE_FIELD =
+  "message";
+
 /* QSM_FASE11_BLOCK3_CHAT_LAYOUT */
+
+/* QSM_FASE12_BLOCK1_REAL_DIALOGUE_FIX */
 
 function AiAssistant({ pageContext }) {
   const location = useLocation();
@@ -250,13 +255,31 @@ function AiAssistant({ pageContext }) {
       data?.response,
       data?.reply,
       data?.answer,
+      data?.text,
+      data?.content,
+      data?.message,
+
       data?.result?.response,
       data?.result?.reply,
       data?.result?.answer,
+      data?.result?.text,
+      data?.result?.content,
       data?.result?.message,
-      data?.message,
+
+      data?.data?.response,
+      data?.data?.reply,
+      data?.data?.answer,
+      data?.data?.text,
+      data?.data?.message,
+
+      data?.conversation?.response,
+      data?.conversation?.reply,
+
       data?.result?.response?.message,
-      data?.result?.response?.text
+      data?.result?.response?.text,
+
+      data?.response?.message,
+      data?.response?.text
     ];
 
     const response =
@@ -264,6 +287,19 @@ function AiAssistant({ pageContext }) {
         (value) =>
           typeof value === "string" &&
           value.trim()
+      );
+
+    const objectResponse =
+      candidates.find(
+        (value) =>
+          value &&
+          typeof value === "object" &&
+          (
+            typeof value.message ===
+              "string" ||
+            typeof value.text ===
+              "string"
+          )
       );
 
     useEffect(() => {
@@ -275,7 +311,9 @@ function AiAssistant({ pageContext }) {
 
   return (
       response?.trim() ||
-      "Procesé tu solicitud, pero no recibí una respuesta textual."
+      objectResponse?.message?.trim?.() ||
+      objectResponse?.text?.trim?.() ||
+      "Procesé tu solicitud correctamente, pero el motor no devolvió una respuesta textual."
     );
   };
 
@@ -286,10 +324,11 @@ function AiAssistant({ pageContext }) {
     event?.preventDefault?.();
 
     const question =
-      String(
-        forcedQuestion ||
-        chatQuestion
-      ).trim();
+      typeof forcedQuestion === "string" &&
+      forcedQuestion.trim()
+        ? forcedQuestion.trim()
+        : String(chatQuestion || "")
+            .trim();
 
     if (
       !question ||
@@ -331,18 +370,74 @@ function AiAssistant({ pageContext }) {
         await api.post(
           LUNA_DIALOGUE_ENDPOINT,
           {
-            message: question,
+            /*
+              Se envían los alias compatibles para
+              los distintos motores instalados de LUNA.
+            */
+            [LUNA_DIALOGUE_FIELD]:
+              question,
+
+            message:
+              question,
+
+            text:
+              question,
+
+            prompt:
+              question,
+
+            question:
+              question,
+
+            content:
+              question,
+
+            query:
+              question,
+
             sessionId,
+
+            conversationId:
+              sessionId,
+
+            authenticated:
+              core.authenticated,
+
             context: {
-              path: currentPath,
+              path:
+                currentPath,
+
+              page:
+                currentPath,
+
               pageContext:
                 getContextInfo(
                   currentPath
                 ),
+
               audience:
                 core.audience,
+
               accessLevel:
-                core.accessLevel
+                core.accessLevel,
+
+              user:
+                core.user
+                  ? {
+                      id:
+                        core.user.id ||
+                        core.user.userId ||
+                        null,
+
+                      firstName:
+                        core.user.firstName ||
+                        "",
+
+                      role:
+                        core.user.role ||
+                        ""
+                    }
+                  : null
             }
           }
         );
@@ -375,7 +470,7 @@ function AiAssistant({ pageContext }) {
           role: "assistant",
           error: true,
           text:
-            "No pude completar la consulta. Inténtalo nuevamente."
+            message
         }
       ]);
     } finally {
