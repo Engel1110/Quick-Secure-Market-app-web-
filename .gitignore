@@ -61,3 +61,6 @@ QSM_MESSENGER_PRISMA_CORE/
 **/*mongo.backup*
 **/*before_prisma*
 **/*_BACKUP*
+
+# Backups generados automáticamente
+backups/
