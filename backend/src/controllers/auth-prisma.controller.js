@@ -61,7 +61,7 @@ const validateCredentials = (
       valid: false,
       status: 400,
       message:
-        "Correo y contraseÃ±a son obligatorios."
+        "Correo y contraseña son obligatorios."
     };
   }
 
@@ -77,7 +77,7 @@ const validateCredentials = (
       valid: false,
       status: 400,
       message:
-        "El formato del correo no es vÃ¡lido."
+        "El formato del correo no es válido."
     };
   }
 
@@ -238,7 +238,7 @@ const getAccountRestriction = (
     return {
       status: 403,
       message:
-        "Esta cuenta ya no estÃ¡ disponible."
+        "Esta cuenta ya no está disponible."
     };
   }
 
@@ -246,7 +246,7 @@ const getAccountRestriction = (
     return {
       status: 403,
       message:
-        "Esta cuenta todavÃ­a no estÃ¡ activa."
+        "Esta cuenta todavía no está activa."
     };
   }
 
@@ -629,7 +629,7 @@ const login = async (
       return res.status(401).json({
         success: false,
         message:
-          "Credenciales invÃ¡lidas."
+          "Credenciales inválidas."
       });
     }
 
@@ -648,7 +648,7 @@ const login = async (
       return res.status(403).json({
         success: false,
         message:
-          "Las cuentas internas deben iniciar sesiÃ³n desde el BackOffice."
+          "Las cuentas internas deben iniciar sesión desde el BackOffice."
       });
     }
 
@@ -685,8 +685,8 @@ const login = async (
         success: false,
         message:
           failed.locked
-            ? `Cuenta bloqueada por ${ACCOUNT_LOCK_MINUTES} minutos debido a mÃºltiples intentos fallidos.`
-            : "Credenciales invÃ¡lidas.",
+            ? `Cuenta bloqueada por ${ACCOUNT_LOCK_MINUTES} minutos debido a múltiples intentos fallidos.`
+            : "Credenciales inválidas.",
         remainingAttempts:
           failed.remainingAttempts,
         accountLockedUntil:
@@ -724,7 +724,7 @@ const login = async (
       "PENDING_REVIEW"
     ) {
       verificationMessage =
-        "Tu identidad estÃ¡ siendo revisada. Puedes comprar, pero todavÃ­a no puedes vender.";
+        "Tu identidad está siendo revisada. Puedes comprar, pero todavía no puedes vender.";
     }
 
     if (
@@ -732,7 +732,7 @@ const login = async (
       "REJECTED"
     ) {
       verificationMessage =
-        "Tu verificaciÃ³n de identidad fue rechazada. Debes corregir y reenviar los documentos.";
+        "Tu verificación de identidad fue rechazada. Debes corregir y reenviar los documentos.";
     }
 
     if (
@@ -740,7 +740,7 @@ const login = async (
       "APPROVED"
     ) {
       verificationMessage =
-        "Tu identidad estÃ¡ verificada y tu cuenta estÃ¡ habilitada.";
+        "Tu identidad está verificada y tu cuenta está habilitada.";
     }
 
     return res.status(200).json({
@@ -748,8 +748,8 @@ const login = async (
       message:
         loginResult
           .requireFaceCheck
-          ? "Credenciales correctas. Debes completar la verificaciÃ³n facial."
-          : "Inicio de sesiÃ³n correcto.",
+          ? "Credenciales correctas. Debes completar la verificación facial."
+          : "Inicio de sesión correcto.",
       token,
       requireFaceCheck:
         loginResult
@@ -802,7 +802,7 @@ const login = async (
     return res.status(500).json({
       success: false,
       message:
-        "Error interno iniciando sesiÃ³n.",
+        "Error interno iniciando sesión.",
       error:
         process.env.NODE_ENV ===
         "development"
@@ -850,7 +850,7 @@ const adminLogin = async (
       return res.status(401).json({
         success: false,
         message:
-          "Correo o contraseÃ±a incorrectos."
+          "Correo o contraseña incorrectos."
       });
     }
 
@@ -914,7 +914,7 @@ const adminLogin = async (
         message:
           failed.locked
             ? "Cuenta administrativa bloqueada temporalmente."
-            : "Correo o contraseÃ±a incorrectos.",
+            : "Correo o contraseña incorrectos.",
         remainingAttempts:
           failed.remainingAttempts,
         accountLockedUntil:
@@ -961,7 +961,7 @@ const adminLogin = async (
     return res.status(500).json({
       success: false,
       message:
-        "Error interno iniciando sesiÃ³n administrativa.",
+        "Error interno iniciando sesión administrativa.",
       error:
         process.env.NODE_ENV ===
         "development"
@@ -1186,7 +1186,7 @@ const getRecoveryEmailStatus = async (
     return res.status(500).json({
       success: false,
       message:
-        "No se pudo consultar el correo de recuperaciÃ³n."
+        "No se pudo consultar el correo de recuperación."
     });
   }
 };
@@ -1220,7 +1220,7 @@ const requestRecoveryEmailVerification = async (
       return res.status(400).json({
         success: false,
         message:
-          "El correo de recuperaciÃ³n no es vÃ¡lido."
+          "El correo de recuperación no es válido."
       });
     }
 
@@ -1233,7 +1233,7 @@ const requestRecoveryEmailVerification = async (
       return res.status(400).json({
         success: false,
         message:
-          "El correo de recuperaciÃ³n debe ser diferente al correo principal."
+          "El correo de recuperación debe ser diferente al correo principal."
       });
     }
 
@@ -1263,7 +1263,7 @@ const requestRecoveryEmailVerification = async (
       return res.status(409).json({
         success: false,
         message:
-          "Este correo ya estÃ¡ asociado a otra cuenta QSM."
+          "Este correo ya está asociado a otra cuenta QSM."
       });
     }
 
@@ -1310,7 +1310,7 @@ const requestRecoveryEmailVerification = async (
 
     if (!frontendUrl) {
       throw new Error(
-        "FRONTEND_URL no estÃ¡ configurado."
+        "FRONTEND_URL no está configurado."
       );
     }
 
@@ -1350,7 +1350,7 @@ const requestRecoveryEmailVerification = async (
     return res.status(200).json({
       success: true,
       message:
-        "Enviamos un enlace de verificaciÃ³n al correo indicado.",
+        "Enviamos un enlace de verificación al correo indicado.",
       pendingRecoveryEmailMasked:
         maskEmail(
           cleanRecoveryEmail
@@ -1365,7 +1365,7 @@ const requestRecoveryEmailVerification = async (
     return res.status(500).json({
       success: false,
       message:
-        "No se pudo enviar la verificaciÃ³n del correo de recuperaciÃ³n."
+        "No se pudo enviar la verificación del correo de recuperación."
     });
   }
 };
@@ -1384,7 +1384,7 @@ const verifyRecoveryEmail = async (
       return res.status(400).json({
         success: false,
         message:
-          "El token de verificaciÃ³n es obligatorio."
+          "El token de verificación es obligatorio."
       });
     }
 
@@ -1408,7 +1408,7 @@ const verifyRecoveryEmail = async (
       return res.status(400).json({
         success: false,
         message:
-          "El enlace es invÃ¡lido, ya fue utilizado o expirÃ³."
+          "El enlace es inválido, ya fue utilizado o expiró."
       });
     }
 
@@ -1438,7 +1438,7 @@ const verifyRecoveryEmail = async (
     return res.status(200).json({
       success: true,
       message:
-        "Correo de recuperaciÃ³n verificado correctamente.",
+        "Correo de recuperación verificado correctamente.",
       recoveryEmailMasked:
         maskEmail(
           verifiedEmail
@@ -1453,7 +1453,7 @@ const verifyRecoveryEmail = async (
     return res.status(500).json({
       success: false,
       message:
-        "No se pudo verificar el correo de recuperaciÃ³n."
+        "No se pudo verificar el correo de recuperación."
     });
   }
 };
@@ -1496,7 +1496,7 @@ const deleteRecoveryEmail = async (
     return res.status(200).json({
       success: true,
       message:
-        "Correo de recuperaciÃ³n eliminado correctamente."
+        "Correo de recuperación eliminado correctamente."
     });
   } catch (error) {
     console.error(
@@ -1507,7 +1507,7 @@ const deleteRecoveryEmail = async (
     return res.status(500).json({
       success: false,
       message:
-        "No se pudo eliminar el correo de recuperaciÃ³n."
+        "No se pudo eliminar el correo de recuperación."
     });
   }
 };
@@ -1524,7 +1524,7 @@ const getForgotPasswordDestination = async (
       found: false,
       recoveryAvailable: false,
       recoveryEmailMasked: "",
-      message: "No encontramos un correo de recuperaciÃƒÂ³n verificado para esa cuenta."
+      message: "No encontramos un correo de recuperación verificado para esa cuenta."
     };
 
     if (!cleanEmail || !validator.isEmail(cleanEmail)) {
@@ -1549,7 +1549,7 @@ const getForgotPasswordDestination = async (
       return res.status(200).json({
         ...genericResponse,
         found: true,
-        message: "Esta cuenta todavÃƒÂ­a no tiene un correo de recuperaciÃƒÂ³n verificado."
+        message: "Esta cuenta todavía no tiene un correo de recuperación verificado."
       });
     }
 
@@ -1558,13 +1558,13 @@ const getForgotPasswordDestination = async (
       found: true,
       recoveryAvailable: true,
       recoveryEmailMasked: maskEmail(user.recoveryEmail),
-      message: "Encontramos un correo de recuperaciÃƒÂ³n verificado."
+      message: "Encontramos un correo de recuperación verificado."
     });
   } catch (error) {
     console.error("Error getForgotPasswordDestination:", error);
     return res.status(500).json({
       success: false,
-      message: "No se pudo consultar el mÃƒÂ©todo de recuperaciÃƒÂ³n."
+      message: "No se pudo consultar el método de recuperación."
     });
   }
 };
@@ -1701,7 +1701,7 @@ const forgotPassword = async (
       return res.status(200).json({
         success: true,
         message:
-          "Si la cuenta posee un correo de recuperaciÃ³n verificado, recibirÃ¡ las instrucciones."
+          "Si la cuenta posee un correo de recuperación verificado, recibirá las instrucciones."
       });
     }
 
