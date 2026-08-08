@@ -1,6 +1,174 @@
 "use strict";
 
 const express = require("express");
+/* QSM_FASE17_BLOCK4_REAL_CONTEXT_BRIDGE */
+
+/*
+| QSM_FASE17_BLOCK4_FIX_FINAL_CONTEXT_ENGINE
+*/
+
+const {
+  lunaContextEngine
+} = require(
+  "../middleware/luna-context-engine.middleware"
+);
+
+/*
+| QSM_FASE17_BLOCK6_MARKETPLACE_SEARCH
+*/
+
+const {
+  lunaMarketplaceSearch
+} = require(
+  "../middleware/luna-marketplace-search.middleware"
+);
+
+/*
+| QSM_FASE17_BLOCK7_MARKETPLACE_RECOMMENDATION
+*/
+
+const {
+  lunaMarketplaceRecommendation
+} = require(
+  "../middleware/luna-marketplace-recommendation.middleware"
+);
+
+/*
+| QSM_FASE17_BLOCK8_FIX_MARKETPLACE_CONVERSATION
+*/
+
+const {
+  lunaMarketplaceConversation
+} = require(
+  "../middleware/luna-marketplace-conversation.middleware"
+);
+
+/*
+| QSM_FASE17_BLOCK9_SECURITY_PERFORMANCE
+*/
+
+const {
+  lunaRequestGuard
+} = require(
+  "../middleware/luna-request-guard.middleware"
+);
+
+/*
+| QSM_FASE17_BLOCK10_LOCAL_SEMANTIC_CORE
+*/
+
+const {
+  lunaSemanticContext
+} = require(
+  "../middleware/luna-semantic-context.middleware"
+);
+
+/*
+| QSM_FASE17_BLOCK12_LOCAL_CONVERSATION_STATE
+*/
+
+const {
+  lunaConversationState
+} = require(
+  "../middleware/luna-conversation-state.middleware"
+);
+
+/*
+| QSM_FASE17_BLOCK13_LOCAL_GUIDED_MARKETPLACE
+*/
+
+const {
+  lunaMarketplaceGuide
+} = require(
+  "../middleware/luna-marketplace-guide.middleware"
+);
+
+/*
+| QSM_FASE17_BLOCK14_LOCAL_NATURAL_FALLBACK
+*/
+
+
+
+/*
+| QSM_FASE17_BLOCK15_LOCAL_NEUTRAL_COMPARISON
+*/
+
+const {
+  lunaNeutralComparison
+} = require(
+  "../middleware/luna-neutral-comparison.middleware"
+);
+
+/*
+| QSM_FASE17_5_BLOCK_B_CONTEXT_RESOLVER
+*/
+
+const {
+  lunaContextResolver
+} = require(
+  "../middleware/luna-context-resolver.middleware"
+);
+
+/*
+| QSM_FASE17_5_BLOCK_D_MARKETPLACE_FLOW
+*/
+
+const {
+  lunaMarketplaceConversationFlow
+} = require(
+  "../middleware/luna-marketplace-conversation-flow.middleware"
+);
+
+/*
+| QSM_FASE17_5_BLOCK_E_CONTEXTUAL_COMPARISON
+*/
+
+const {
+  lunaContextualComparison
+} = require(
+  "../middleware/luna-contextual-comparison.middleware"
+);
+
+/*
+| QSM_FASE17_5_BLOCK_F_NATURAL_CONTINUATION
+*/
+
+const {
+  lunaNaturalContinuation
+} = require(
+  "../middleware/luna-natural-continuation.middleware"
+);
+
+/*
+| QSM_FASE17_5_BLOCK_C_SEARCH_RESET_RESTORED
+*/
+
+const {
+  lunaSearchReset
+} = require(
+  "../middleware/luna-search-reset.middleware"
+);
+
+/*
+| QSM_FASE17_5_BLOCK_G_DYNAMIC_CONTEXT_RESTORED
+*/
+
+const {
+  lunaDynamicContext
+} = require(
+  "../middleware/luna-dynamic-context.middleware"
+);
+
+/*
+| QSM_FASE17_5_BLOCK_I_SMART_FALLBACK
+*/
+
+const {
+  lunaSmartFallback
+} = require(
+  "../middleware/luna-smart-fallback.middleware"
+);
+
 const router = express.Router();
 const authMiddleware = require("../middleware/auth.middleware");
 
@@ -452,10 +620,95 @@ router.post(
 );
 /* QSM_FASE7_BLOCK2_REAL_DIALOGUE_CONTEXT */
 router.post(
-  "/dialogue/contextual",
-  authMiddleware,
-  processRealAiDialogue
-);
+    "/dialogue/contextual",
+    authMiddleware,
+    /*
+      Protección y optimización de LUNA.
+    */
+    lunaRequestGuard,
+    /*
+      Interpretación semántica local.
+      No responde; enriquece la solicitud.
+    */
+    lunaSemanticContext,
+    /*
+      Memoria contextual ligera por usuario.
+    */
+    lunaConversationState,
+    /*
+      Bloque C - reinicio inteligente.
+    */
+    lunaSearchReset,
+    /*
+      Interpreta mensajes cortos según
+      lo que LUNA estaba esperando.
+    */
+    lunaContextResolver,
+    /*
+      Bloque G - contexto semántico dinámico.
+    */
+    lunaDynamicContext,
+    /*
+      Flujo conversacional Marketplace:
+      pregunta solo el próximo dato faltante.
+    */
+    /*
+      Continuación natural de resultados previos.
+    */
+    lunaNaturalContinuation,
+
+    lunaMarketplaceConversationFlow,
+    /*
+      Comparaciones contextuales sobre
+      los resultados actuales.
+    */
+    lunaContextualComparison,
+    /*
+      Marketplace guiado por contexto,
+      presupuesto y necesidad.
+    */
+    /*
+      Comparación neutral sobre el contexto Marketplace.
+    */
+    lunaNeutralComparison,
+
+    lunaMarketplaceGuide,
+    /*
+      Marketplace se evalúa antes de los
+      motores generales de LUNA.
+    */
+    lunaMarketplaceSearch,
+    /*
+      Follow-ups, comparación y recomendación.
+    */
+    lunaMarketplaceRecommendation,
+    /*
+      Referencias naturales sobre resultados anteriores.
+    */
+    lunaMarketplaceConversation,
+
+    /*
+      Primero intenta responder utilizando
+      información REAL de la cuenta.
+    */
+    lunaContextEngine,
+
+    /*
+      Si no corresponde a una intención
+      contextual, continúa con el motor
+      conversacional general.
+    */
+    /*
+      Última capa local:
+      respuesta natural, contextual o aclaración.
+    */
+    /*
+      Bloque I - Smart Fallback contextual.
+    */
+    lunaSmartFallback,
+
+    processRealAiDialogue
+  );
 
 router.get(
   "/dialogue/session/:sessionId",

@@ -1021,12 +1021,16 @@ function Orders() {
           {!loading &&
             filteredOrders.length > 0 && (
               <section
-                className="orders-grid"
-                style={ordersGrid}
+                className="orders-grid qsm-orders-compact-list"
+                style={{
+                  ...ordersGrid,
+                  gridTemplateColumns: "1fr",
+                  gap: "12px"
+                }}
               >
                 {filteredOrders.map(
                   (order, index) => (
-                    <PurchaseCard
+                    <CompactPurchaseRow
                       key={
                         getOrderId(order) ||
                         index
@@ -1259,6 +1263,516 @@ function Orders() {
     </div>
   );
 }
+
+/*
+|--------------------------------------------------------------------------
+| QSM_ORDERS_COMPACT_ROW_V1
+|--------------------------------------------------------------------------
+| Vista compacta de una compra.
+| La PurchaseCard original permanece intacta y solo se monta
+| cuando el usuario pulsa "Ver más".
+|--------------------------------------------------------------------------
+*/
+
+function CompactPurchaseRow({
+  order,
+  actionLoading,
+  onVoucher,
+  onTracking,
+  onCancel,
+  onConfirmReceipt,
+  onDispute
+}) {
+  const [expanded, setExpanded] =
+    useState(false);
+
+  const product =
+    order?.product || {};
+
+  const orderId =
+    getOrderId(order);
+
+  const status =
+    normalizeStatus(
+      order?.status
+    );
+
+  const orderCode =
+    order?.orderCode ||
+    order?.code ||
+    `QSM-${String(
+      orderId || "PENDIENTE"
+    )
+      .slice(-8)
+      .toUpperCase()}`;
+
+  const productName =
+    product?.name ||
+    product?.title ||
+    order?.productName ||
+    order?.name ||
+    "Producto QSM";
+
+  const createdAt =
+    order?.createdAt ||
+    order?.updatedAt ||
+    null;
+
+  const subtotal =
+    Number(
+      order?.price ||
+      product?.price ||
+      0
+    );
+
+  const protectionFee =
+    Number(
+      order?.protectionFee ||
+      0
+    );
+
+  const shippingFee =
+    Number(
+      order?.shippingFee ||
+      0
+    );
+
+  const totalAmount =
+    Number(
+      order?.totalAmount ||
+      subtotal +
+        protectionFee +
+        shippingFee
+    );
+
+  const image =
+    getOrderImage(product);
+
+
+  const rowStyle = {
+    width: "100%",
+    minWidth: 0,
+
+    background:
+      "#0b1328",
+
+    border:
+      expanded
+        ? "1px solid rgba(56,189,248,.42)"
+        : "1px solid rgba(148,163,184,.15)",
+
+    borderRadius:
+      "17px",
+
+    overflow:
+      "hidden",
+
+    boxShadow:
+      expanded
+        ? "0 12px 34px rgba(0,0,0,.18)"
+        : "0 5px 16px rgba(0,0,0,.10)",
+
+    transition:
+      "border-color .18s ease, box-shadow .18s ease"
+  };
+
+
+  const summaryStyle = {
+    width: "100%",
+
+    display:
+      "grid",
+
+    gridTemplateColumns:
+      "minmax(230px, 1.6fr) minmax(170px, .9fr) minmax(115px, .65fr) minmax(130px, .7fr) auto",
+
+    alignItems:
+      "center",
+
+    gap:
+      "18px",
+
+    padding:
+      "15px 18px",
+
+    color:
+      "white"
+  };
+
+
+  const productStyle = {
+    display:
+      "flex",
+
+    alignItems:
+      "center",
+
+    gap:
+      "13px",
+
+    minWidth:
+      0
+  };
+
+
+  const imageStyle = {
+    width:
+      "54px",
+
+    height:
+      "54px",
+
+    flexShrink:
+      0,
+
+    borderRadius:
+      "12px",
+
+    objectFit:
+      "cover",
+
+    background:
+      "#020617",
+
+    border:
+      "1px solid rgba(148,163,184,.16)"
+  };
+
+
+  const productTextStyle = {
+    minWidth:
+      0,
+
+    display:
+      "grid",
+
+    gap:
+      "3px"
+  };
+
+
+  const productNameStyle = {
+    overflow:
+      "hidden",
+
+    textOverflow:
+      "ellipsis",
+
+    whiteSpace:
+      "nowrap",
+
+    fontSize:
+      "15px",
+
+    fontWeight:
+      "900",
+
+    color:
+      "#f8fafc"
+  };
+
+
+  const codeStyle = {
+    overflow:
+      "hidden",
+
+    textOverflow:
+      "ellipsis",
+
+    whiteSpace:
+      "nowrap",
+
+    fontSize:
+      "11px",
+
+    letterSpacing:
+      ".07em",
+
+    color:
+      "#38bdf8",
+
+    fontWeight:
+      "800"
+  };
+
+
+  const metaStyle = {
+    display:
+      "grid",
+
+    gap:
+      "3px",
+
+    minWidth:
+      0
+  };
+
+
+  const metaLabelStyle = {
+    color:
+      "#64748b",
+
+    fontSize:
+      "10px",
+
+    textTransform:
+      "uppercase",
+
+    letterSpacing:
+      ".08em",
+
+    fontWeight:
+      "800"
+  };
+
+
+  const metaValueStyle = {
+    color:
+      "#dbeafe",
+
+    fontSize:
+      "13px",
+
+    fontWeight:
+      "800",
+
+    overflow:
+      "hidden",
+
+    textOverflow:
+      "ellipsis",
+
+    whiteSpace:
+      "nowrap"
+  };
+
+
+  const amountStyle = {
+    color:
+      "#2dd4bf",
+
+    fontWeight:
+      "950",
+
+    fontSize:
+      "15px"
+  };
+
+
+  const expandButtonStyle = {
+    minWidth:
+      "112px",
+
+    minHeight:
+      "42px",
+
+    padding:
+      "0 14px",
+
+    display:
+      "inline-flex",
+
+    alignItems:
+      "center",
+
+    justifyContent:
+      "center",
+
+    gap:
+      "8px",
+
+    border:
+      expanded
+        ? "1px solid rgba(56,189,248,.46)"
+        : "1px solid rgba(148,163,184,.17)",
+
+    borderRadius:
+      "12px",
+
+    background:
+      expanded
+        ? "rgba(56,189,248,.11)"
+        : "#0f172a",
+
+    color:
+      expanded
+        ? "#67e8f9"
+        : "#e2e8f0",
+
+    fontWeight:
+      "900",
+
+    fontSize:
+      "12px",
+
+    cursor:
+      "pointer",
+
+    transition:
+      "background .16s ease, border-color .16s ease"
+  };
+
+
+  const detailsStyle = {
+    padding:
+      "0 14px 14px",
+
+    borderTop:
+      "1px solid rgba(148,163,184,.10)"
+  };
+
+
+  return (
+    <article
+      className={
+        `qsm-purchase-row ${
+          expanded
+            ? "is-expanded"
+            : ""
+        }`
+      }
+      style={rowStyle}
+    >
+      <div
+        className="qsm-purchase-summary"
+        style={summaryStyle}
+      >
+        <div style={productStyle}>
+          {image ? (
+            <img
+              src={image}
+              alt={productName}
+              style={imageStyle}
+            />
+          ) : (
+            <div
+              style={{
+                ...imageStyle,
+                display: "grid",
+                placeItems: "center",
+                fontSize: "22px"
+              }}
+            >
+              📦
+            </div>
+          )}
+
+          <div style={productTextStyle}>
+            <span style={productNameStyle}>
+              {productName}
+            </span>
+
+            <span style={codeStyle}>
+              {orderCode}
+            </span>
+          </div>
+        </div>
+
+
+        <div style={metaStyle}>
+          <span style={metaLabelStyle}>
+            Fecha
+          </span>
+
+          <span style={metaValueStyle}>
+            {formatDate(createdAt)}
+          </span>
+        </div>
+
+
+        <div style={metaStyle}>
+          <span style={metaLabelStyle}>
+            Total
+          </span>
+
+          <span style={amountStyle}>
+            {formatMoney(totalAmount)}
+          </span>
+        </div>
+
+
+        <div style={metaStyle}>
+          <span style={metaLabelStyle}>
+            Estado
+          </span>
+
+          <span
+            style={statusBadge(
+              status
+            )}
+          >
+            {formatStatus(
+              status
+            )}
+          </span>
+        </div>
+
+
+        <button
+          type="button"
+          onClick={() =>
+            setExpanded(
+              (current) =>
+                !current
+            )
+          }
+          aria-expanded={expanded}
+          style={expandButtonStyle}
+        >
+          {expanded
+            ? "Ver menos"
+            : "Ver más"}
+
+          <span
+            style={{
+              display: "inline-block",
+              transform:
+                expanded
+                  ? "rotate(180deg)"
+                  : "rotate(0deg)",
+              transition:
+                "transform .18s ease"
+            }}
+          >
+            ▼
+          </span>
+        </button>
+      </div>
+
+
+      {expanded && (
+        <div
+          className="qsm-purchase-details"
+          style={detailsStyle}
+        >
+          <PurchaseCard
+            order={order}
+            actionLoading={
+              actionLoading
+            }
+            onVoucher={
+              onVoucher
+            }
+            onTracking={
+              onTracking
+            }
+            onCancel={
+              onCancel
+            }
+            onConfirmReceipt={
+              onConfirmReceipt
+            }
+            onDispute={
+              onDispute
+            }
+          />
+        </div>
+      )}
+    </article>
+  );
+}
+
+
 function PurchaseCard({
   order,
   actionLoading,

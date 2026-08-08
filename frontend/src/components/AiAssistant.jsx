@@ -1,12 +1,20 @@
 import { useEffect, useMemo, useState, useRef } from "react";
 
 import {
+  buildRuntimeLunaContext
+} from "../services/luna-context.service";
+
+import {
   Link,
   useLocation
 } from "react-router-dom";
 
 import api from "../api/axios";
 import "./AiAssistant.css";
+import "./AiAssistant.final.css";
+
+/* QSM_FASE17_BLOCK16_FINAL_UI */
+
 
 import {
   getHumanizedLocalResponse,
@@ -73,6 +81,81 @@ const LUNA_DIALOGUE_FIELD =
 
 /* QSM_FASE13_BLOCK4_REAL_CONTEXT_MEMORY */
 
+/* QSM_FASE17_BLOCK2_REAL_QSM_CONTEXT */
+
+function getLunaUserFromStorage() {
+  try {
+    const candidates = [
+      localStorage.getItem(
+        "qsm_user"
+      ),
+      localStorage.getItem(
+        "user"
+      )
+    ];
+
+    for (
+      const value of candidates
+    ) {
+      if (!value) {
+        continue;
+      }
+
+      const parsed =
+        JSON.parse(
+          value
+        );
+
+      if (
+        parsed &&
+        typeof parsed ===
+          "object"
+      ) {
+        return parsed;
+      }
+    }
+  } catch {
+    // Ignorar almacenamiento inválido.
+  }
+
+  return null;
+}
+
+
+/* QSM_FASE17_BLOCK3_FIX_CONTEXT_MEMORY */
+
+function buildLunaConversationSnapshot(
+  messages
+) {
+  if (!Array.isArray(messages)) {
+    return [];
+  }
+
+  return messages
+    .slice(-12)
+    .map((item) => ({
+      role:
+        item?.role === "assistant"
+          ? "assistant"
+          : "user",
+
+      content:
+        String(
+          item?.text ||
+          item?.content ||
+          ""
+        )
+          .trim()
+          .slice(0, 2000)
+    }))
+    .filter(
+      (item) =>
+        Boolean(
+          item.content
+        )
+    );
+}
+
 function AiAssistant({ pageContext }) {
   const location = useLocation();
 
@@ -105,6 +188,30 @@ function AiAssistant({ pageContext }) {
   const chatEndRef = useRef(null);
 
   /* QSM_FIX_INVALID_HOOK_CHAT_SCROLL */
+  useEffect(() => {
+    try {
+      const lunaContext =
+        buildCurrentLunaContext();
+
+      window.__QSM_LUNA_CONTEXT__ =
+        lunaContext;
+    } catch (error) {
+      console.warn(
+        "No se pudo preparar el contexto de LUNA:",
+        error
+      );
+    }
+
+    return () => {
+      try {
+        delete window
+          .__QSM_LUNA_CONTEXT__;
+      } catch {
+        // Sin acción.
+      }
+    };
+  }, []);
+
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({
       behavior: "smooth",
@@ -146,16 +253,46 @@ function AiAssistant({ pageContext }) {
 
         let accessData = null;
 
-        try {
-          const accessResponse =
-            await api.get(
-              "/ai/access/context"
-            );
+        /*
+        | QSM_LUNA_AUTH_CONTEXT_FIX
+        |
+        | /ai/access/context es privado.
+        | No debe consultarse cuando el visitante
+        | todavía no tiene token.
+        */
 
-          accessData =
-            accessResponse.data || null;
-        } catch {
-          accessData = null;
+        const authToken =
+          localStorage.getItem(
+            "qsm_token"
+          ) ||
+          sessionStorage.getItem(
+            "qsm_token"
+          ) ||
+          localStorage.getItem(
+            "token"
+          ) ||
+          sessionStorage.getItem(
+            "token"
+          ) ||
+          "";
+
+        if (authToken) {
+          try {
+            const accessResponse =
+              await api.get(
+                "/ai/access/context"
+              );
+
+            accessData =
+              accessResponse.data ||
+              null;
+          } catch {
+            /*
+              Token vencido/inválido:
+              LUNA continúa en modo público.
+            */
+            accessData = null;
+          }
         }
 
         if (!mounted) {
@@ -484,6 +621,23 @@ return (
         sessionId
       );
 
+
+      const lunaRuntimeContext =
+        typeof buildCurrentLunaContext ===
+          "function"
+          ? buildCurrentLunaContext()
+          : (
+              window
+                .__QSM_LUNA_CONTEXT__ ||
+              {}
+            );
+
+      const conversationSnapshot =
+        buildLunaConversationSnapshot([
+          ...chatMessages,
+          userMessage
+        ]);
+
       const response =
         await api.post(
           LUNA_DIALOGUE_ENDPOINT,
@@ -508,6 +662,15 @@ return (
             sessionId,
             conversationId: sessionId,
 
+            conversation:
+              conversationSnapshot,
+
+            history:
+              conversationSnapshot,
+
+            qsmContext:
+              lunaRuntimeContext,
+
             context: {
               path: currentPath,
               page: currentPath,
@@ -527,6 +690,24 @@ return (
                 Boolean(
                   core.authenticated
                 ),
+
+              user:
+                core.user ||
+                null,
+
+              qsm:
+                lunaRuntimeContext,
+
+              conversation:
+                conversationSnapshot,
+
+              memory: {
+                sessionId,
+
+                messageCount:
+                  conversationSnapshot
+                    .length
+              },
 
               conversationTopic:
                 conversationMemory.currentTopic,
@@ -569,13 +750,25 @@ return (
         "No fue posible comunicarse con LUNA.";
 
       const backendMessage =
-        humanizeLunaResponse({
-          response: rawBackendMessage,
-          question,
-          user: core.user || {}
-        });
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        error?.response?.data?.details ||
+        error?.message ||
+        "No fue posible comunicarse con LUNA.";
 
-      setChatError(backendMessage);
+      console.warn(
+        "LUNA dialogue error:",
+        backendMessage
+      );
+
+      const friendlyMessage =
+        core.authenticated
+          ? "Tuve un problema temporal consultando el motor inteligente. Tu conversación sigue aquí; intenta nuevamente en unos segundos."
+          : "Tuve un problema temporal consultando el motor inteligente de LUNA. Intenta nuevamente en unos segundos.";
+
+      setChatError(
+        "Conexión temporal con LUNA."
+      );
 
       setChatMessages((current) => [
         ...current,
@@ -584,7 +777,8 @@ return (
             `LUNA-ERROR-${Date.now()}`,
           role: "assistant",
           error: true,
-          text: backendMessage
+          text:
+            friendlyMessage
         }
       ]);
     } finally {
@@ -664,6 +858,64 @@ return (
     setChatQuestion("");
     setChatError("");
     setChatOpen(false);
+  };
+
+
+  const buildCurrentLunaContext = () => {
+    const storedUser =
+      getLunaUserFromStorage();
+
+    const runtimeStats = {
+      products:
+        Number(
+          storedUser?.dashboardStats
+            ?.products ??
+          0
+        ),
+
+      purchases:
+        Number(
+          storedUser?.dashboardStats
+            ?.purchases ??
+          0
+        ),
+
+      sales:
+        Number(
+          storedUser?.dashboardStats
+            ?.sales ??
+          0
+        ),
+
+      messages:
+        Number(
+          storedUser?.dashboardStats
+            ?.messages ??
+          0
+        ),
+
+      disputes:
+        Number(
+          storedUser?.dashboardStats
+            ?.disputes ??
+          0
+        )
+    };
+
+    return buildRuntimeLunaContext({
+      user:
+        storedUser,
+
+      stats:
+        runtimeStats,
+
+      verification:
+        storedUser
+          ?.verificationStatus,
+
+      unreadMessages:
+        runtimeStats.messages
+    });
   };
 
   return (
@@ -1302,7 +1554,7 @@ function GuideView({
   onNavigate
 }) {
   return (
-    <div className="qsm-ai-guide">
+    <div data-qsm-luna-root="true" className="qsm-ai-guide">
       <button
         type="button"
         className="qsm-ai-guide__back"

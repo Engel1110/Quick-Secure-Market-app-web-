@@ -21,6 +21,7 @@ import {
 import {
   useSettings
 } from "../context/SettingsContext";
+import "./Settings.layout-v2.css";
 
 const TEXT = {
   es: {
@@ -2440,11 +2441,23 @@ const main = {
 
 const hero = {
   display: "flex",
-  justifyContent:
-    "space-between",
+  justifyContent: "space-between",
   alignItems: "center",
-  gap: "24px",
-  margin: "22px 0"
+  gap: "28px",
+
+  margin: "24px 0 22px",
+  padding: "30px 32px",
+
+  background:
+    "linear-gradient(135deg, #020617 0%, #0b1328 100%)",
+
+  border:
+    "1px solid rgba(148, 163, 184, .18)",
+
+  borderRadius: "22px",
+
+  boxShadow:
+    "0 10px 28px rgba(0, 0, 0, .18)"
 };
 
 const label = {
@@ -2483,21 +2496,26 @@ const subtitle = {
 
 const heroBadge = {
   display: "flex",
-  alignItems:
-    "center",
+  alignItems: "center",
   gap: "14px",
-  minWidth:
-    "270px",
+
+  minWidth: "240px",
+
   background:
-    "var(--qsm-surface)",
+    "#0c1527",
+
   border:
-    "1px solid var(--qsm-border-accent)",
-  borderRadius:
-    "var(--qsm-radius-medium)",
-  padding:
-    "18px",
+    "1px solid rgba(var(--qsm-accent-rgb), .42)",
+
+  borderRadius: "16px",
+
+  padding: "16px 18px",
+
   color:
-    "var(--qsm-text)"
+    "var(--qsm-text)",
+
+  boxShadow:
+    "0 6px 18px rgba(0, 0, 0, .14)"
 };
 
 const heroBadgeIcon = {
@@ -2513,47 +2531,64 @@ const heroBadgeText = {
 
 const statsGrid = {
   display: "grid",
+
   gridTemplateColumns:
     "repeat(4, minmax(0, 1fr))",
-  gap:
-    "var(--qsm-space-md)",
-  marginBottom:
-    "20px"
+
+  gap: "14px",
+
+  marginBottom: "22px"
 };
 
 const statCard = {
   display: "flex",
-  alignItems:
-    "center",
+  alignItems: "center",
+
   gap: "14px",
+
   minWidth: 0,
+  minHeight: "92px",
+
   background:
-    "var(--qsm-surface)",
+    "#0b1328",
+
   border:
-    "1px solid var(--qsm-border)",
+    "1px solid rgba(148, 163, 184, .17)",
+
   borderRadius:
-    "var(--qsm-radius-medium)",
+    "16px",
+
   padding:
-    "20px",
+    "18px",
+
   color:
-    "var(--qsm-text)"
+    "var(--qsm-text)",
+
+  boxShadow:
+    "0 5px 15px rgba(0, 0, 0, .12)"
 };
 
 const statIcon = {
-  width: "52px",
-  height: "52px",
+  width: "50px",
+  height: "50px",
+
   flexShrink: 0,
+
   borderRadius:
-    "17px",
+    "14px",
+
   background:
-    "rgba(var(--qsm-accent-rgb), .14)",
+    "rgba(var(--qsm-accent-rgb), .13)",
+
+  border:
+    "1px solid rgba(var(--qsm-accent-rgb), .14)",
+
   display: "flex",
-  alignItems:
-    "center",
-  justifyContent:
-    "center",
+  alignItems: "center",
+  justifyContent: "center",
+
   fontSize:
-    "24px"
+    "23px"
 };
 
 const statText = {
@@ -2570,77 +2605,115 @@ const mutedSmall = {
 
 const settingsLayout = {
   display: "grid",
+
   gridTemplateColumns:
-    "270px minmax(0, 1fr)",
+    "245px minmax(0, 1fr)",
+
   gap:
-    "20px"
+    "18px",
+
+  alignItems:
+    "start"
 };
 
 const sideNav = {
   position: "sticky",
   top: "20px",
+
   background:
-    "var(--qsm-surface)",
+    "#0b1220",
+
   border:
-    "1px solid var(--qsm-border)",
+    "1px solid rgba(148, 163, 184, .17)",
+
   borderRadius:
-    "var(--qsm-radius-large)",
+    "18px",
+
   padding:
-    "16px",
+    "10px",
+
   alignSelf:
     "start",
+
   display: "grid",
-  gap: "10px"
+
+  gap:
+    "5px",
+
+  boxShadow:
+    "0 8px 20px rgba(0, 0, 0, .14)"
 };
 
 const sideTab = {
   width: "100%",
+
   display: "flex",
-  alignItems:
-    "center",
-  gap: "12px",
+  alignItems: "center",
+
+  gap:
+    "12px",
+
   padding:
-    "14px",
+    "13px 14px",
+
   borderRadius:
-    "15px",
+    "11px",
+
   background:
-    "var(--qsm-surface-soft)",
+    "transparent",
+
   border:
-    "1px solid var(--qsm-border)",
+    "1px solid transparent",
+
   color:
     "var(--qsm-text-secondary)",
+
   cursor:
     "pointer",
+
   fontWeight:
-    "900",
+    "800",
+
   textAlign:
     "left"
 };
 
 const activeSideTab = {
   ...sideTab,
+
   background:
-    "linear-gradient(135deg, rgba(var(--qsm-accent-rgb), .20), rgba(139, 92, 246, .18))",
+    "rgba(var(--qsm-accent-rgb), .11)",
+
   border:
-    "1px solid var(--qsm-border-accent)",
+    "1px solid rgba(var(--qsm-accent-rgb), .28)",
+
   color:
-    "var(--qsm-text)"
+    "var(--qsm-text)",
+
+  boxShadow:
+    "inset 3px 0 0 var(--qsm-accent)"
 };
 
 const panel = {
   minWidth: 0,
+
   background:
-    "var(--qsm-surface)",
+    "#0b1328",
+
   border:
-    "1px solid var(--qsm-border)",
+    "1px solid rgba(148, 163, 184, .17)",
+
   borderRadius:
-    "var(--qsm-radius-large)",
+    "20px",
+
   padding:
-    "var(--qsm-space-lg)",
-  animation:
-    "qsmSettingsFadeUp .35s ease",
+    "26px",
+
   color:
-    "var(--qsm-text)"
+    "var(--qsm-text)",
+
+  boxShadow:
+    "0 8px 22px rgba(0, 0, 0, .14)"
 };
 
 const panelHeader = {
@@ -2650,46 +2723,69 @@ const panelHeader = {
 
 const themeGrid = {
   display: "grid",
+
   gridTemplateColumns:
     "repeat(2, minmax(0, 1fr))",
-  gap: "14px",
+
+  gap:
+    "14px",
+
   marginBottom:
-    "22px"
+    "26px"
 };
 
 const themeCard = {
   textAlign:
     "left",
+
   minHeight:
-    "150px",
-  display: "grid",
+    "132px",
+
+  display:
+    "grid",
+
   alignContent:
     "start",
-  gap: "10px",
+
+  gap:
+    "9px",
+
   background:
-    "var(--qsm-surface-soft)",
+    "#0c1527",
+
   border:
-    "1px solid var(--qsm-border)",
+    "1px solid rgba(148, 163, 184, .16)",
+
   borderRadius:
-    "var(--qsm-radius-medium)",
+    "15px",
+
   padding:
-    "20px",
+    "18px",
+
   color:
     "var(--qsm-text-secondary)",
+
   cursor:
-    "pointer"
+    "pointer",
+
+  boxShadow:
+    "0 4px 12px rgba(0, 0, 0, .10)"
 };
 
 const activeThemeCard = {
   ...themeCard,
+
   background:
-    "linear-gradient(135deg, rgba(var(--qsm-accent-rgb), .16), rgba(139, 92, 246, .16))",
+    "rgba(var(--qsm-accent-rgb), .10)",
+
   border:
-    "1px solid var(--qsm-border-accent)",
+    "1px solid rgba(var(--qsm-accent-rgb), .55)",
+
   color:
     "var(--qsm-text)",
+
   boxShadow:
-    "0 18px 45px rgba(var(--qsm-accent-rgb), .10)"
+    "inset 0 0 0 1px rgba(var(--qsm-accent-rgb), .08)"
 };
 
 const themeIcon = {
@@ -2699,11 +2795,15 @@ const themeIcon = {
 
 const colorGrid = {
   display: "grid",
+
   gridTemplateColumns:
     "repeat(3, minmax(0, 1fr))",
-  gap: "12px",
+
+  gap:
+    "10px",
+
   marginBottom:
-    "22px"
+    "26px"
 };
 
 const colorButton = (
@@ -2769,24 +2869,40 @@ const twoColumns = {
 
 const settingBox = {
   minHeight:
-    "126px",
-  minWidth: 0,
+    "118px",
+
+  minWidth:
+    0,
+
   background:
-    "var(--qsm-surface-soft)",
+    "#0c1527",
+
   border:
-    "1px solid var(--qsm-border)",
+    "1px solid rgba(148, 163, 184, .15)",
+
   borderRadius:
-    "var(--qsm-radius-medium)",
+    "15px",
+
   padding:
     "18px",
-  display: "flex",
+
+  display:
+    "flex",
+
   flexDirection:
     "column",
+
   justifyContent:
     "space-between",
-  gap: "12px",
+
+  gap:
+    "12px",
+
   color:
-    "var(--qsm-text)"
+    "var(--qsm-text)",
+
+  boxShadow:
+    "0 4px 12px rgba(0, 0, 0, .08)"
 };
 
 const settingTitleRow = {

@@ -9,176 +9,145 @@ datasource db {
 }
 
 model User {
-  id            Int     @id @default(autoincrement())
-  legacyMongoId String? @unique // Datos personales
-
-  // Registro obligatorio en dos pasos
-  registrationCompleted   Boolean   @default(true)
-  registrationCompletedAt DateTime?
-  onboardingStatus        String    @default("COMPLETED")
-  firstName               String
-  lastName                String
-  email                   String    @unique
-  password                String
-  phone                   String?
-  documentId              String?
-
-  documentType String    @default("CEDULA_RD")
-  dateOfBirth  DateTime?
-  gender       String    @default("PREFER_NOT_TO_SAY")
-
-  country  String @default("Rep?blica Dominicana")
-  province String @default("")
-  city     String @default("")
-  address  String @default("")
-
-  // Perfil
-  profilePhoto                String    @default("")
-  profilePhotoPublicId        String    @default("")
-  profilePhotoUploadedAt      DateTime?
-  pendingProfilePhoto         String    @default("")
-  pendingProfilePhotoPublicId String    @default("")
-  profilePhotoStatus          String    @default("NOT_STARTED")
-  profilePhotoRejectedReason  String    @default("")
-  profilePhotoApprovedAt      DateTime?
-  profilePhotoApprovedById    Int?
-
-  // Cuenta y permisos
-  accountType String @default("CUSTOMER")
-  role        String @default("USER")
-  department  String @default("CUSTOMER")
-
-  departments  String[] @default([])
-  permissions  String[] @default([])
-  employeeCode String   @default("")
-
-  buyerEnabled       Boolean @default(true)
-  sellerEnabled      Boolean @default(false)
-  mustChangePassword Boolean @default(false)
-
-  createdById      Int?
-  lastModifiedById Int?
-
-  // Verificaci?n KYC
-  isVerified         Boolean @default(false)
-  verificationStatus String  @default("NOT_STARTED")
-  identityLevel      String  @default("LEVEL_0")
-
-  cedulaFront         String @default("")
-  cedulaFrontPublicId String @default("")
-  cedulaBack          String @default("")
-  cedulaBackPublicId  String @default("")
-  selfie              String @default("")
-  selfiePublicId      String @default("")
-
-  identitySubmittedAt       DateTime?
-  identityReviewStartedAt   DateTime?
-  identityReviewedAt        DateTime?
-  identityReviewedById      Int?
-  identityRejectionReason   String    @default("")
-  identityResubmissionCount Int       @default(0)
-
-  dailyVerificationPhoto String    @default("")
-  faceMatchScore         Int       @default(0)
-  lastFaceVerification   DateTime?
-
-  verifiedAt        DateTime?
-  verifiedById      Int?
-  verificationNotes String    @default("")
-
-  // Reputaci?n
-  trustScore         Int @default(50)
-  completedPurchases Int @default(0)
-  completedSales     Int @default(0)
-  cancelledOrders    Int @default(0)
-  disputesOpened     Int @default(0)
-  fraudReports       Int @default(0)
-
-  // Seguridad
-  securityLevel        String    @default("NORMAL")
-  requireFaceCheck     Boolean   @default(false)
-  twoFactorEnabled     Boolean   @default(false)
-  twoFactorSecret      String    @default("")
-  failedLoginAttempts  Int       @default(0)
-  suspiciousLoginCount Int       @default(0)
-  accountLockedUntil   DateTime?
-  activeSessions       Int       @default(0)
-  lastLoginAt          DateTime?
-  lastLoginIp          String    @default("")
-  lastLoginDevice      String    @default("")
-
-  // Estado
-  status           String    @default("PENDING")
-  suspensionReason String    @default("")
-  suspendedAt      DateTime?
-  suspendedById    Int?
-  bannedAt         DateTime?
-  bannedById       Int?
-  deletionReason   String    @default("")
-  deletedAt        DateTime?
-  deletedById      Int?
-
-  // Recuperación y contraseña
+  id                               Int                           @id @default(autoincrement())
+  firstName                        String
+  lastName                         String
+  email                            String                        @unique
+  password                         String
+  phone                            String?
+  documentId                       String?
+  role                             String                        @default("USER")
+  buyerEnabled                     Boolean                       @default(true)
+  sellerEnabled                    Boolean                       @default(false)
+  isVerified                       Boolean                       @default(false)
+  trustScore                       Int                           @default(50)
+  status                           String                        @default("PENDING")
+  createdAt                        DateTime                      @default(now())
+  accountLockedUntil               DateTime?
+  accountType                      String                        @default("CUSTOMER")
+  activeSessions                   Int                           @default(0)
+  address                          String                        @default("")
+  bannedAt                         DateTime?
+  bannedById                       Int?
+  cancelledOrders                  Int                           @default(0)
+  cedulaBack                       String                        @default("")
+  cedulaBackPublicId               String                        @default("")
+  cedulaFront                      String                        @default("")
+  cedulaFrontPublicId              String                        @default("")
+  city                             String                        @default("")
+  completedPurchases               Int                           @default(0)
+  completedSales                   Int                           @default(0)
+  country                          String                        @default("Rep?blica Dominicana")
+  createdById                      Int?
+  dailyVerificationPhoto           String                        @default("")
+  dateOfBirth                      DateTime?
+  deletedAt                        DateTime?
+  deletedById                      Int?
+  deletionReason                   String                        @default("")
+  department                       String                        @default("CUSTOMER")
+  departments                      String[]                      @default([])
+  disputesOpened                   Int                           @default(0)
+  documentType                     String                        @default("CEDULA_RD")
+  emailNotificationsEnabled        Boolean                       @default(true)
+  employeeCode                     String                        @default("")
+  faceMatchScore                   Int                           @default(0)
+  failedLoginAttempts              Int                           @default(0)
+  fraudReports                     Int                           @default(0)
+  gender                           String                        @default("PREFER_NOT_TO_SAY")
+  identityLevel                    String                        @default("LEVEL_0")
+  identityRejectionReason          String                        @default("")
+  identityResubmissionCount        Int                           @default(0)
+  identityReviewStartedAt          DateTime?
+  identityReviewedAt               DateTime?
+  identityReviewedById             Int?
+  identitySubmittedAt              DateTime?
+  language                         String                        @default("es")
+  lastFaceVerification             DateTime?
+  lastLoginAt                      DateTime?
+  lastLoginDevice                  String                        @default("")
+  lastLoginIp                      String                        @default("")
+  lastModifiedById                 Int?
+  legacyMongoId                    String?                       @unique
+  mustChangePassword               Boolean                       @default(false)
+  notificationsEnabled             Boolean                       @default(true)
+  passwordChangedAt                DateTime?
+  passwordVersion                  Int                           @default(0)
+  pendingProfilePhoto              String                        @default("")
+  pendingProfilePhotoPublicId      String                        @default("")
+  permissions                      String[]                      @default([])
+  profilePhoto                     String                        @default("")
+  profilePhotoApprovedAt           DateTime?
+  profilePhotoApprovedById         Int?
+  profilePhotoPublicId             String                        @default("")
+  profilePhotoRejectedReason       String                        @default("")
+  profilePhotoStatus               String                        @default("NOT_STARTED")
+  profilePhotoUploadedAt           DateTime?
+  province                         String                        @default("")
+  requireFaceCheck                 Boolean                       @default(false)
+  resetPasswordExpires             DateTime?
+  resetPasswordToken               String?
+  securityLevel                    String                        @default("NORMAL")
+  selfie                           String                        @default("")
+  selfiePublicId                   String                        @default("")
+  suspendedAt                      DateTime?
+  suspendedById                    Int?
+  suspensionReason                 String                        @default("")
+  suspiciousLoginCount             Int                           @default(0)
+  timezone                         String                        @default("America/Santo_Domingo")
+  twoFactorEnabled                 Boolean                       @default(false)
+  twoFactorSecret                  String                        @default("")
+  updatedAt                        DateTime                      @default(now()) @updatedAt
+  verificationNotes                String                        @default("")
+  verificationStatus               String                        @default("NOT_STARTED")
+  verifiedAt                       DateTime?
+  verifiedById                     Int?
+  onboardingStatus                 String                        @default("COMPLETED")
+  registrationCompleted            Boolean                       @default(true)
+  registrationCompletedAt          DateTime?
   recoveryEmail                    String?
   pendingRecoveryEmail             String?
   recoveryEmailVerifiedAt          DateTime?
-  recoveryEmailVerificationToken   String?   @unique
+  recoveryEmailVerificationToken   String?                       @unique
   recoveryEmailVerificationExpires DateTime?
   recoveryEmailUpdatedAt           DateTime?
-
-  resetPasswordToken   String?
-  resetPasswordExpires DateTime?
-  passwordChangedAt    DateTime?
-  passwordVersion      Int       @default(0)
-
-  // Preferencias
-  language                  String  @default("es")
-  timezone                  String  @default("America/Santo_Domingo")
-  notificationsEnabled      Boolean @default(true)
-  emailNotificationsEnabled Boolean @default(true)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
-
-  products                   Product[]
-  buyerOrders                Order[]                       @relation("BuyerOrders")
-  sellerOrders               Order[]                       @relation("SellerOrders")
-  warehouseAgentOrders       Order[]                       @relation("WarehouseAgentOrders")
-  deliveryAgentOrders        Order[]                       @relation("DeliveryAgentOrders")
-  paymentConfirmedOrders     Order[]                       @relation("PaymentConfirmedBy")
-  pinVerifiedOrders          Order[]                       @relation("DeliveryPinVerifiedBy")
-  cancelledOrdersRelation    Order[]                       @relation("CancelledBy")
-  disputeOpenedOrders        Order[]                       @relation("DisputeOpenedBy")
-  buyerPayments              Payment[]                     @relation("BuyerPayments")
-  sellerPayments             Payment[]                     @relation("SellerPayments")
-  reviewsGiven               Review[]                      @relation("ReviewsGiven")
-  reviewsReceived            Review[]                      @relation("ReviewsReceived")
-  notifications              Notification[]
-  securityAlerts             SecurityAlert[]
-  sessionLogs                SessionLog[]
-  auditLogs                  AuditLog[]                    @relation("AuditLogActor")
-  supportTicketsCreated      SupportTicket[]               @relation("SupportTicketRequester")
-  supportTicketsAssigned     SupportTicket[]               @relation("SupportTicketAgent")
-  supportMessages            SupportMessage[]              @relation("SupportMessageAuthor")
-  favorites                  Favorite[]
-  disputesAsBuyer            Dispute[]                     @relation("DisputeBuyer")
-  disputesAsSeller           Dispute[]                     @relation("DisputeSeller")
-  assignedDisputes           Dispute[]                     @relation("AssignedDisputeAdmin")
-  warehouseDisputes          Dispute[]                     @relation("AssignedDisputeWarehouse")
-  conversationMemberships    ConversationParticipant[]
-  sentMessages               Message[]                     @relation("MessageSender")
-  receivedMessages           Message[]                     @relation("MessageReceiver")
-  lastMessageConversations   Conversation[]                @relation("ConversationLastMessageSender")
-  ownedConversationLabels    ConversationLabel[]           @relation("ConversationLabelOwner")
-  assignedConversationLabels ConversationLabelAssignment[] @relation("ConversationLabelAssignedBy")
-  pinnedConversationMessages ConversationPinnedMessage[]   @relation("ConversationPinnedBy")
-  kycVerification            KycVerification?              @relation("KycVerificationOwner")
-
-  reviewedKycVerifications KycVerification[] @relation("KycVerificationReviewer")
-  userSetting              UserSetting?
-  vehicleReports           VehicleReport[]
-  shippingsAsBuyer         Shipping[]        @relation("ShippingBuyer")
-  shippingsAsSeller        Shipping[]        @relation("ShippingSeller")
+  auditLogs                        AuditLog[]                    @relation("AuditLogActor")
+  lastMessageConversations         Conversation[]                @relation("ConversationLastMessageSender")
+  ownedConversationLabels          ConversationLabel[]           @relation("ConversationLabelOwner")
+  assignedConversationLabels       ConversationLabelAssignment[] @relation("ConversationLabelAssignedBy")
+  conversationMemberships          ConversationParticipant[]
+  pinnedConversationMessages       ConversationPinnedMessage[]   @relation("ConversationPinnedBy")
+  assignedDisputes                 Dispute[]                     @relation("AssignedDisputeAdmin")
+  warehouseDisputes                Dispute[]                     @relation("AssignedDisputeWarehouse")
+  disputesAsBuyer                  Dispute[]                     @relation("DisputeBuyer")
+  disputesAsSeller                 Dispute[]                     @relation("DisputeSeller")
+  favorites                        Favorite[]
+  reviewedKycVerifications         KycVerification[]             @relation("KycVerificationReviewer")
+  kycVerification                  KycVerification?              @relation("KycVerificationOwner")
+  receivedMessages                 Message[]                     @relation("MessageReceiver")
+  sentMessages                     Message[]                     @relation("MessageSender")
+  notifications                    Notification[]
+  buyerOrders                      Order[]                       @relation("BuyerOrders")
+  cancelledOrdersRelation          Order[]                       @relation("CancelledBy")
+  deliveryAgentOrders              Order[]                       @relation("DeliveryAgentOrders")
+  pinVerifiedOrders                Order[]                       @relation("DeliveryPinVerifiedBy")
+  disputeOpenedOrders              Order[]                       @relation("DisputeOpenedBy")
+  paymentConfirmedOrders           Order[]                       @relation("PaymentConfirmedBy")
+  sellerOrders                     Order[]                       @relation("SellerOrders")
+  warehouseAgentOrders             Order[]                       @relation("WarehouseAgentOrders")
+  buyerPayments                    Payment[]                     @relation("BuyerPayments")
+  sellerPayments                   Payment[]                     @relation("SellerPayments")
+  products                         Product[]
+  reviewsReceived                  Review[]                      @relation("ReviewsReceived")
+  reviewsGiven                     Review[]                      @relation("ReviewsGiven")
+  securityAlerts                   SecurityAlert[]
+  sessionLogs                      SessionLog[]
+  shippingsAsBuyer                 Shipping[]                    @relation("ShippingBuyer")
+  shippingsAsSeller                Shipping[]                    @relation("ShippingSeller")
+  supportMessages                  SupportMessage[]              @relation("SupportMessageAuthor")
+  supportTicketsAssigned           SupportTicket[]               @relation("SupportTicketAgent")
+  supportTicketsCreated            SupportTicket[]               @relation("SupportTicketRequester")
+  userSetting                      UserSetting?
+  vehicleReports                   VehicleReport[]
 
   @@index([accountType, status])
   @@index([role, status])
@@ -192,56 +161,42 @@ model User {
 }
 
 model KycVerification {
-  id        Int    @id @default(autoincrement())
-  reference String @unique
-
-  userId       Int  @unique
-  reviewedById Int?
-
-  status String @default("NOT_STARTED")
-
-  firstName String @default("")
-  lastName  String @default("")
-  phone     String @default("")
-
-  documentType   String @default("CEDULA")
-  documentNumber String @default("")
-
-  address  String @default("")
-  city     String @default("")
-  province String @default("")
-  country  String @default("Rep?blica Dominicana")
-
-  gender    String    @default("PREFER_NOT_TO_SAY")
-  birthDate DateTime?
-
-  profilePhotoUrl  String @default("")
-  documentFrontUrl String @default("")
-  documentBackUrl  String @default("")
-  selfieUrl        String @default("")
-
-  fieldStatuses Json @default("{}")
-  fieldReasons  Json @default("{}")
-
-  rejectionReason String @default("")
-  reviewNotes     String @default("")
-
-  trustScore        Int @default(50)
-  resubmissionCount Int @default(0)
-
-  submittedAt     DateTime?
-  reviewStartedAt DateTime?
-  reviewedAt      DateTime?
-  approvedAt      DateTime?
-  rejectedAt      DateTime?
-  resubmittedAt   DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
-
-  user User @relation("KycVerificationOwner", fields: [userId], references: [id], onDelete: Cascade)
-
-  reviewedBy User? @relation("KycVerificationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  id                Int       @id @default(autoincrement())
+  reference         String    @unique
+  userId            Int       @unique
+  reviewedById      Int?
+  status            String    @default("NOT_STARTED")
+  firstName         String    @default("")
+  lastName          String    @default("")
+  phone             String    @default("")
+  documentType      String    @default("CEDULA")
+  documentNumber    String    @default("")
+  address           String    @default("")
+  city              String    @default("")
+  province          String    @default("")
+  country           String    @default("Rep?blica Dominicana")
+  gender            String    @default("PREFER_NOT_TO_SAY")
+  birthDate         DateTime?
+  profilePhotoUrl   String    @default("")
+  documentFrontUrl  String    @default("")
+  documentBackUrl   String    @default("")
+  selfieUrl         String    @default("")
+  fieldStatuses     Json      @default("{}")
+  fieldReasons      Json      @default("{}")
+  rejectionReason   String    @default("")
+  reviewNotes       String    @default("")
+  trustScore        Int       @default(50)
+  resubmissionCount Int       @default(0)
+  submittedAt       DateTime?
+  reviewStartedAt   DateTime?
+  reviewedAt        DateTime?
+  approvedAt        DateTime?
+  rejectedAt        DateTime?
+  resubmittedAt     DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @default(now()) @updatedAt
+  reviewedBy        User?     @relation("KycVerificationReviewer", fields: [reviewedById], references: [id])
+  user              User      @relation("KycVerificationOwner", fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([status, submittedAt])
   @@index([reviewedById, status])
@@ -249,98 +204,71 @@ model KycVerification {
 }
 
 model Product {
-  id Int @id @default(autoincrement())
-
-  // Información principal
-  title       String
-  description String
-  price       Float
-  category    String
-  condition   String @default("USED_GOOD")
-  quality     String @default("UNKNOWN")
-
-  // Identidad técnica
-  brand               String @default("")
-  model               String @default("")
-  serialNumber        String @default("")
-  imei                String @default("")
-  storageCapacity     String @default("")
-  ramMemory           String @default("")
-  batteryHealth       String @default("")
-  dimensions          String @default("")
-  accessoriesIncluded String @default("")
-
-  // Detalles variables por categoría
-  vehicleDetails  Json @default("{}")
-  clothingDetails Json @default("{}")
-
-  // Evidencias
-  evidence         Json     @default("{}")
-  evidenceRequired String[] @default([])
-
-  // Ubicación y entrega
-  location       String @default("")
-  warranty       String @default("")
-  deliveryMethod String @default("")
-
-  // Precio especial
-  specialPriceReason      String @default("NONE")
-  specialPriceExplanation String @default("")
-
-  // Multimedia
-  imageUrl  String?
-  images    String[] @default([])
-  video     Json     @default("{}")
-  photoHash String?  @unique
-
-  // Identidad y trazabilidad QSM
-  qsmCode            String  @unique
-  verificationStatus String  @default("PENDING")
-  verificationMode   String  @default("PENDING")
-  cameraRequired     Boolean @default(false)
-  resaleAllowed      Boolean @default(false)
-  previousQsmCode    String?
-  certified          Boolean @default(false)
-  isQsmVerified      Boolean @default(false)
-
-  // Estado operativo
-  status String @default("PENDING")
-
-  // Riesgo
-  riskLevel String @default("UNCLASSIFIED")
-  riskLabel String @default("Riesgo por determinar")
-  riskScore Int    @default(0)
-
-  // Calidad y análisis
-  publicationScore  Int    @default(0)
-  publicationLevel  String @default("Sin clasificar")
-  confidenceScore   Int    @default(0)
-  saleProbability   Int    @default(0)
-  estimatedSaleTime String @default("No estimado")
-  aiAnalysis        Json   @default("{}")
-
-  // Auditoría y eliminación lógica
-  lastEditedAt DateTime?
-  lastEditedBy Int?
-  deletedAt    DateTime?
-  deletedBy    Int?
-
-  sellerId Int
-  seller   User @relation(fields: [sellerId], references: [id])
-
-  orders           Order[]
-  warehouse        Warehouse?
-  fraudAlerts      FraudAlert[]
-  fraudExplanation FraudExplanation?
-  favorites        Favorite[]
-  disputes         Dispute[]
-
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @default(now()) @updatedAt
-  conversations Conversation[]
-  messages      Message[]
-  reviews       Review[]
-  shippings     Shipping[]
+  id                      Int               @id @default(autoincrement())
+  title                   String
+  description             String
+  price                   Float
+  category                String
+  condition               String            @default("USED_GOOD")
+  quality                 String            @default("UNKNOWN")
+  brand                   String            @default("")
+  model                   String            @default("")
+  serialNumber            String            @default("")
+  imei                    String            @default("")
+  storageCapacity         String            @default("")
+  ramMemory               String            @default("")
+  batteryHealth           String            @default("")
+  dimensions              String            @default("")
+  accessoriesIncluded     String            @default("")
+  vehicleDetails          Json              @default("{}")
+  clothingDetails         Json              @default("{}")
+  evidence                Json              @default("{}")
+  evidenceRequired        String[]          @default([])
+  location                String            @default("")
+  warranty                String            @default("")
+  deliveryMethod          String            @default("")
+  specialPriceReason      String            @default("NONE")
+  specialPriceExplanation String            @default("")
+  imageUrl                String?
+  images                  String[]          @default([])
+  video                   Json              @default("{}")
+  photoHash               String?           @unique
+  qsmCode                 String            @unique
+  verificationStatus      String            @default("PENDING")
+  verificationMode        String            @default("PENDING")
+  cameraRequired          Boolean           @default(false)
+  resaleAllowed           Boolean           @default(false)
+  previousQsmCode         String?
+  certified               Boolean           @default(false)
+  isQsmVerified           Boolean           @default(false)
+  status                  String            @default("PENDING")
+  riskLevel               String            @default("UNCLASSIFIED")
+  riskLabel               String            @default("Riesgo por determinar")
+  riskScore               Int               @default(0)
+  publicationScore        Int               @default(0)
+  publicationLevel        String            @default("Sin clasificar")
+  confidenceScore         Int               @default(0)
+  saleProbability         Int               @default(0)
+  estimatedSaleTime       String            @default("No estimado")
+  aiAnalysis              Json              @default("{}")
+  lastEditedAt            DateTime?
+  lastEditedBy            Int?
+  deletedAt               DateTime?
+  deletedBy               Int?
+  sellerId                Int
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @default(now()) @updatedAt
+  conversations           Conversation[]
+  disputes                Dispute[]
+  favorites               Favorite[]
+  fraudAlerts             FraudAlert[]
+  fraudExplanation        FraudExplanation?
+  messages                Message[]
+  orders                  Order[]
+  seller                  User              @relation(fields: [sellerId], references: [id])
+  reviews                 Review[]
+  shippings               Shipping[]
+  warehouse               Warehouse?
 
   @@index([status, createdAt])
   @@index([category, riskLevel, status])
@@ -350,138 +278,96 @@ model Product {
 }
 
 model Order {
-  id        Int     @id @default(autoincrement())
-  orderCode String? @unique
-
-  productId Int
-  buyerId   Int
-  sellerId  Int
-
-  warehouseAgentId Int?
-  deliveryAgentId  Int?
-
-  // Montos
-  price         Float @default(0)
-  protectionFee Float @default(0)
-  shippingFee   Float @default(0)
-  totalAmount   Float @default(0)
-
-  // Campo heredado para no perder información durante la migración
-  reserveFee Float @default(0)
-
-  // Reserva o depósito
-  depositPercentage Float  @default(0)
-  depositAmount     Float  @default(0)
-  remainingAmount   Float  @default(0)
-  depositStatus     String @default("NOT_REQUIRED")
-
-  // Estado general
-  status String @default("PENDING")
-
-  // Pago y escrow
-  paymentMethod String @default("QSM_ESCROW")
-  paymentStatus String @default("HELD")
-  escrowStatus  String @default("NOT_FUNDED")
-
-  // Entrega
-  deliveryMethod  String @default("DIRECT_DELIVERY")
-  deliveryStatus  String @default("PENDING")
-  warehouseStatus String @default("NOT_REQUIRED")
-
-  // Transferencia bancaria
-  bankName                String    @default("")
-  bankAccountLast4        String    @default("")
-  transferReference       String    @default("")
-  transferProofUrl        String    @default("")
-  transferProofUploadedAt DateTime?
-
-  // Tarjeta demostrativa
-  cardBrand            String @default("")
-  cardLast4            String @default("")
-  paymentTransactionId String @default("")
-
-  // Confirmaciones
-  paymentConfirmedAt   DateTime?
-  paymentConfirmedById Int?
-
-  sellerConfirmedPayment   Boolean   @default(false)
-  sellerConfirmedPaymentAt DateTime?
-
-  buyerConfirmedReceipt   Boolean   @default(false)
-  buyerConfirmedReceiptAt DateTime?
-
-  warehouseConfirmedDelivery   Boolean   @default(false)
+  id                           Int            @id @default(autoincrement())
+  orderCode                    String?        @unique
+  productId                    Int
+  buyerId                      Int
+  sellerId                     Int
+  warehouseAgentId             Int?
+  deliveryAgentId              Int?
+  price                        Float          @default(0)
+  protectionFee                Float          @default(0)
+  shippingFee                  Float          @default(0)
+  totalAmount                  Float          @default(0)
+  reserveFee                   Float          @default(0)
+  depositPercentage            Float          @default(0)
+  depositAmount                Float          @default(0)
+  remainingAmount              Float          @default(0)
+  depositStatus                String         @default("NOT_REQUIRED")
+  status                       String         @default("PENDING")
+  paymentMethod                String         @default("QSM_ESCROW")
+  paymentStatus                String         @default("HELD")
+  escrowStatus                 String         @default("NOT_FUNDED")
+  deliveryMethod               String         @default("DIRECT_DELIVERY")
+  deliveryStatus               String         @default("PENDING")
+  warehouseStatus              String         @default("NOT_REQUIRED")
+  bankName                     String         @default("")
+  bankAccountLast4             String         @default("")
+  transferReference            String         @default("")
+  transferProofUrl             String         @default("")
+  transferProofUploadedAt      DateTime?
+  cardBrand                    String         @default("")
+  cardLast4                    String         @default("")
+  paymentTransactionId         String         @default("")
+  paymentConfirmedAt           DateTime?
+  paymentConfirmedById         Int?
+  sellerConfirmedPayment       Boolean        @default(false)
+  sellerConfirmedPaymentAt     DateTime?
+  buyerConfirmedReceipt        Boolean        @default(false)
+  buyerConfirmedReceiptAt      DateTime?
+  warehouseConfirmedDelivery   Boolean        @default(false)
   warehouseConfirmedDeliveryAt DateTime?
-
-  deliveryConfirmedByAgent   Boolean   @default(false)
-  deliveryConfirmedByAgentAt DateTime?
-
-  // PIN
-  deliveryPin             String
-  deliveryPinVerified     Boolean   @default(false)
-  deliveryPinVerifiedAt   DateTime?
-  deliveryPinVerifiedById Int?
-
-  // Seguimiento logístico
-  trackingNumber  String @default("")
-  trackingCompany String @default("")
-  pickupAddress   String @default("")
-  deliveryAddress String @default("")
-
-  pickupScheduledAt   DateTime?
-  productCollectedAt  DateTime?
-  warehouseReceivedAt DateTime?
-  warehouseApprovedAt DateTime?
-  readyForPickupAt    DateTime?
-  outForDeliveryAt    DateTime?
-  deliveredAt         DateTime?
-  completedAt         DateTime?
-  releasedAt          DateTime?
-  refundedAt          DateTime?
-
-  // Notas
-  warehouseNotes  String @default("")
-  deliveryNotes   String @default("")
-  inspectionNotes String @default("")
-  buyerNotes      String @default("")
-  sellerNotes     String @default("")
-
-  // Cancelación
-  cancellationReason      String    @default("")
-  cancellationRequestedBy String    @default("NONE")
-  cancelledById           Int?
-  cancelledAt             DateTime?
-  refundAmount            Float     @default(0)
-
-  // Reclamos
-  disputeReason     String    @default("")
-  disputeOpenedById Int?
-  disputeOpenedAt   DateTime?
-
-  // Línea de tiempo embebida
-  timeline Json @default("[]")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
-
-  product Product @relation(fields: [productId], references: [id])
-  buyer   User    @relation("BuyerOrders", fields: [buyerId], references: [id])
-  seller  User    @relation("SellerOrders", fields: [sellerId], references: [id])
-
-  warehouseAgent User? @relation("WarehouseAgentOrders", fields: [warehouseAgentId], references: [id], onDelete: SetNull)
-  deliveryAgent  User? @relation("DeliveryAgentOrders", fields: [deliveryAgentId], references: [id], onDelete: SetNull)
-
-  paymentConfirmedBy    User? @relation("PaymentConfirmedBy", fields: [paymentConfirmedById], references: [id], onDelete: SetNull)
-  deliveryPinVerifiedBy User? @relation("DeliveryPinVerifiedBy", fields: [deliveryPinVerifiedById], references: [id], onDelete: SetNull)
-  cancelledBy           User? @relation("CancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
-  disputeOpenedBy       User? @relation("DisputeOpenedBy", fields: [disputeOpenedById], references: [id], onDelete: SetNull)
-
-  payments      Payment[]
-  dispute       Dispute?
-  conversations Conversation[]
-  messages      Message[]
-  reviews       Review[]
-  shipping      Shipping?
+  deliveryConfirmedByAgent     Boolean        @default(false)
+  deliveryConfirmedByAgentAt   DateTime?
+  deliveryPin                  String
+  deliveryPinVerified          Boolean        @default(false)
+  deliveryPinVerifiedAt        DateTime?
+  deliveryPinVerifiedById      Int?
+  trackingNumber               String         @default("")
+  trackingCompany              String         @default("")
+  pickupAddress                String         @default("")
+  deliveryAddress              String         @default("")
+  pickupScheduledAt            DateTime?
+  productCollectedAt           DateTime?
+  warehouseReceivedAt          DateTime?
+  warehouseApprovedAt          DateTime?
+  readyForPickupAt             DateTime?
+  outForDeliveryAt             DateTime?
+  deliveredAt                  DateTime?
+  completedAt                  DateTime?
+  releasedAt                   DateTime?
+  refundedAt                   DateTime?
+  warehouseNotes               String         @default("")
+  deliveryNotes                String         @default("")
+  inspectionNotes              String         @default("")
+  buyerNotes                   String         @default("")
+  sellerNotes                  String         @default("")
+  cancellationReason           String         @default("")
+  cancellationRequestedBy      String         @default("NONE")
+  cancelledById                Int?
+  cancelledAt                  DateTime?
+  refundAmount                 Float          @default(0)
+  disputeReason                String         @default("")
+  disputeOpenedById            Int?
+  disputeOpenedAt              DateTime?
+  timeline                     Json           @default("[]")
+  createdAt                    DateTime       @default(now())
+  updatedAt                    DateTime       @default(now()) @updatedAt
+  conversations                Conversation[]
+  dispute                      Dispute?
+  messages                     Message[]
+  buyer                        User           @relation("BuyerOrders", fields: [buyerId], references: [id])
+  cancelledBy                  User?          @relation("CancelledBy", fields: [cancelledById], references: [id])
+  deliveryAgent                User?          @relation("DeliveryAgentOrders", fields: [deliveryAgentId], references: [id])
+  deliveryPinVerifiedBy        User?          @relation("DeliveryPinVerifiedBy", fields: [deliveryPinVerifiedById], references: [id])
+  disputeOpenedBy              User?          @relation("DisputeOpenedBy", fields: [disputeOpenedById], references: [id])
+  paymentConfirmedBy           User?          @relation("PaymentConfirmedBy", fields: [paymentConfirmedById], references: [id])
+  product                      Product        @relation(fields: [productId], references: [id])
+  seller                       User           @relation("SellerOrders", fields: [sellerId], references: [id])
+  warehouseAgent               User?          @relation("WarehouseAgentOrders", fields: [warehouseAgentId], references: [id])
+  payments                     Payment[]
+  reviews                      Review[]
+  shipping                     Shipping?
 
   @@index([buyerId, createdAt])
   @@index([sellerId, createdAt])
@@ -505,10 +391,9 @@ model Payment {
   notes           String   @default("")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @default(now()) @updatedAt
-
-  order  Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  buyer  User  @relation("BuyerPayments", fields: [buyerId], references: [id])
-  seller User  @relation("SellerPayments", fields: [sellerId], references: [id])
+  buyer           User     @relation("BuyerPayments", fields: [buyerId], references: [id])
+  order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  seller          User     @relation("SellerPayments", fields: [sellerId], references: [id])
 
   @@index([orderId])
   @@index([buyerId, createdAt])
@@ -526,33 +411,25 @@ model Warehouse {
   shipped   Boolean  @default(false)
   notes     String?
   createdAt DateTime @default(now())
-
-  product Product @relation(fields: [productId], references: [id])
+  product   Product  @relation(fields: [productId], references: [id])
 }
 
 model Review {
-  id Int @id @default(autoincrement())
-
-  orderId   Int?
-  productId Int?
-
-  rating  Int
-  comment String?
-
-  reviewerId Int
-  reviewedId Int
-
-  sentimentScore Int    @default(50)
-  sentimentLabel String @default("NEUTRAL")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
-
-  reviewer User @relation("ReviewsGiven", fields: [reviewerId], references: [id])
-  reviewed User @relation("ReviewsReceived", fields: [reviewedId], references: [id])
-
-  order   Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  id             Int      @id @default(autoincrement())
+  rating         Int
+  comment        String?
+  reviewerId     Int
+  reviewedId     Int
+  createdAt      DateTime @default(now())
+  orderId        Int?
+  productId      Int?
+  sentimentLabel String   @default("NEUTRAL")
+  sentimentScore Int      @default(50)
+  updatedAt      DateTime @default(now()) @updatedAt
+  order          Order?   @relation(fields: [orderId], references: [id])
+  product        Product? @relation(fields: [productId], references: [id])
+  reviewed       User     @relation("ReviewsReceived", fields: [reviewedId], references: [id])
+  reviewer       User     @relation("ReviewsGiven", fields: [reviewerId], references: [id])
 
   @@index([orderId])
   @@index([productId])
@@ -561,67 +438,50 @@ model Review {
 }
 
 model Dispute {
-  id          Int     @id @default(autoincrement())
-  disputeCode String? @unique
-
-  orderId   Int  @unique
-  productId Int?
-  buyerId   Int?
-  sellerId  Int?
-
+  id                      Int       @id @default(autoincrement())
+  disputeCode             String?   @unique
+  orderId                 Int       @unique
+  productId               Int?
+  buyerId                 Int?
+  sellerId                Int?
   assignedAdminId         Int?
   assignedWarehouseUserId Int?
-
-  reason      String
-  description String   @default("")
-  evidence    String[] @default([])
-
-  attachments Json @default("[]")
-  messages    Json @default("[]")
-  timeline    Json @default("[]")
-  auditLog    Json @default("[]")
-
-  status   String @default("OPEN")
-  priority String @default("MEDIUM")
-
-  adminNotes    String @default("")
-  internalNotes String @default("")
-
-  protectedAmount Float  @default(0)
-  currency        String @default("DOP")
-
-  // Se conserva la columna anterior para no perder los datos restaurados.
-  resolution     String?
-  resolutionData Json    @default("{}")
-  aiAnalysis     Json    @default("{}")
-
-  lastMessageAt      DateTime?
-  lastActivityAt     DateTime  @default(now())
-  responseDeadline   DateTime?
-  resolutionDeadline DateTime?
-  escalatedAt        DateTime?
-  resolvedAt         DateTime?
-  closedAt           DateTime?
-
-  buyerUnreadCount  Int @default(0)
-  sellerUnreadCount Int @default(0)
-  adminUnreadCount  Int @default(0)
-
-  isArchived Boolean   @default(false)
-  archivedAt DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
-
-  order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
-
-  buyer  User? @relation("DisputeBuyer", fields: [buyerId], references: [id], onDelete: SetNull)
-  seller User? @relation("DisputeSeller", fields: [sellerId], references: [id], onDelete: SetNull)
-
-  assignedAdmin User? @relation("AssignedDisputeAdmin", fields: [assignedAdminId], references: [id], onDelete: SetNull)
-
-  assignedWarehouseUser User? @relation("AssignedDisputeWarehouse", fields: [assignedWarehouseUserId], references: [id], onDelete: SetNull)
+  reason                  String
+  description             String    @default("")
+  evidence                String[]  @default([])
+  attachments             Json      @default("[]")
+  messages                Json      @default("[]")
+  timeline                Json      @default("[]")
+  auditLog                Json      @default("[]")
+  status                  String    @default("OPEN")
+  priority                String    @default("MEDIUM")
+  adminNotes              String    @default("")
+  internalNotes           String    @default("")
+  protectedAmount         Float     @default(0)
+  currency                String    @default("DOP")
+  resolution              String?
+  resolutionData          Json      @default("{}")
+  aiAnalysis              Json      @default("{}")
+  lastMessageAt           DateTime?
+  lastActivityAt          DateTime  @default(now())
+  responseDeadline        DateTime?
+  resolutionDeadline      DateTime?
+  escalatedAt             DateTime?
+  resolvedAt              DateTime?
+  closedAt                DateTime?
+  buyerUnreadCount        Int       @default(0)
+  sellerUnreadCount       Int       @default(0)
+  adminUnreadCount        Int       @default(0)
+  isArchived              Boolean   @default(false)
+  archivedAt              DateTime?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @default(now()) @updatedAt
+  assignedAdmin           User?     @relation("AssignedDisputeAdmin", fields: [assignedAdminId], references: [id])
+  assignedWarehouseUser   User?     @relation("AssignedDisputeWarehouse", fields: [assignedWarehouseUserId], references: [id])
+  buyer                   User?     @relation("DisputeBuyer", fields: [buyerId], references: [id])
+  order                   Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product                 Product?  @relation(fields: [productId], references: [id])
+  seller                  User?     @relation("DisputeSeller", fields: [sellerId], references: [id])
 
   @@index([buyerId, createdAt])
   @@index([sellerId, createdAt])
@@ -639,8 +499,7 @@ model FraudAlert {
   level     String
   message   String
   createdAt DateTime @default(now())
-
-  product Product @relation(fields: [productId], references: [id])
+  product   Product  @relation(fields: [productId], references: [id])
 }
 
 model FraudExplanation {
@@ -649,59 +508,31 @@ model FraudExplanation {
   reason    String
   comment   String?
   createdAt DateTime @default(now())
-
-  product Product @relation(fields: [productId], references: [id])
+  product   Product  @relation(fields: [productId], references: [id])
 }
 
-/**
- * |--------------------------------------------------------------------------
- * | Seguridad QSM
- * |--------------------------------------------------------------------------
- */
-
-/**
- * |--------------------------------------------------------------------------
- * | Auditor?a general QSM
- * |--------------------------------------------------------------------------
- */
-
-/**
- * |--------------------------------------------------------------------------
- * | Soporte QSM
- * |--------------------------------------------------------------------------
- */
-
 model SupportTicket {
-  id Int @id @default(autoincrement())
-
-  userId          Int
-  assignedAgentId Int?
-
-  subject     String
-  description String @default("")
-
-  category String @default("TECHNICAL")
-  status   String @default("OPEN")
-  priority String @default("NORMAL")
-  channel  String @default("WEB")
-
-  relatedEntityType String @default("")
-  relatedEntityId   String @default("")
-
-  unreadMessages Int @default(0)
-
-  firstResponseAt DateTime?
-  lastMessageAt   DateTime?
-  resolvedAt      DateTime?
-  closedAt        DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
-
-  user          User  @relation("SupportTicketRequester", fields: [userId], references: [id], onDelete: Restrict)
-  assignedAgent User? @relation("SupportTicketAgent", fields: [assignedAgentId], references: [id], onDelete: SetNull)
-
-  messages SupportMessage[]
+  id                Int              @id @default(autoincrement())
+  userId            Int
+  assignedAgentId   Int?
+  subject           String
+  description       String           @default("")
+  category          String           @default("TECHNICAL")
+  status            String           @default("OPEN")
+  priority          String           @default("NORMAL")
+  channel           String           @default("WEB")
+  relatedEntityType String           @default("")
+  relatedEntityId   String           @default("")
+  unreadMessages    Int              @default(0)
+  firstResponseAt   DateTime?
+  lastMessageAt     DateTime?
+  resolvedAt        DateTime?
+  closedAt          DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @default(now()) @updatedAt
+  messages          SupportMessage[]
+  assignedAgent     User?            @relation("SupportTicketAgent", fields: [assignedAgentId], references: [id])
+  user              User             @relation("SupportTicketRequester", fields: [userId], references: [id])
 
   @@index([userId, createdAt])
   @@index([assignedAgentId, status])
@@ -712,65 +543,49 @@ model SupportTicket {
 }
 
 model SupportMessage {
-  id Int @id @default(autoincrement())
-
-  ticketId Int
-  authorId Int?
-
-  authorName String @default("")
-  authorRole String @default("USER")
-
+  id         Int           @id @default(autoincrement())
+  ticketId   Int
+  authorId   Int?
+  authorName String        @default("")
+  authorRole String        @default("USER")
   message    String
-  isInternal Boolean @default(false)
-
-  readAt    DateTime?
-  createdAt DateTime  @default(now())
-
-  ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  author User?         @relation("SupportMessageAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  isInternal Boolean       @default(false)
+  readAt     DateTime?
+  createdAt  DateTime      @default(now())
+  author     User?         @relation("SupportMessageAuthor", fields: [authorId], references: [id])
+  ticket     SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
   @@index([ticketId, createdAt])
   @@index([authorId, createdAt])
 }
 
 model AuditLog {
-  id Int @id @default(autoincrement())
-
-  actorId   Int?
-  actorName String @default("")
-  actorRole String @default("")
-
-  module      String @default("SYSTEM")
-  action      String
-  description String
-
-  entityType String @default("SYSTEM")
-  entityId   String @default("")
-
-  method   String @default("")
-  endpoint String @default("")
-
-  ipAddress  String @default("")
-  deviceInfo String @default("")
-  requestId  String @default("")
-
-  severity String @default("LOW")
-  status   String @default("SUCCESS")
-
-  before   Json?
-  after    Json?
-  metadata Json  @default("{}")
-
-  reviewStatus String    @default("NOT_REQUIRED")
-  reviewedAt   DateTime?
-  reviewedById Int?
-
-  integrityHash String @default("")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
-
-  actor User? @relation("AuditLogActor", fields: [actorId], references: [id], onDelete: SetNull)
+  id            Int       @id @default(autoincrement())
+  actorId       Int?
+  actorName     String    @default("")
+  actorRole     String    @default("")
+  module        String    @default("SYSTEM")
+  action        String
+  description   String
+  entityType    String    @default("SYSTEM")
+  entityId      String    @default("")
+  method        String    @default("")
+  endpoint      String    @default("")
+  ipAddress     String    @default("")
+  deviceInfo    String    @default("")
+  requestId     String    @default("")
+  severity      String    @default("LOW")
+  status        String    @default("SUCCESS")
+  before        Json?
+  after         Json?
+  metadata      Json      @default("{}")
+  reviewStatus  String    @default("NOT_REQUIRED")
+  reviewedAt    DateTime?
+  reviewedById  Int?
+  integrityHash String    @default("")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @default(now()) @updatedAt
+  actor         User?     @relation("AuditLogActor", fields: [actorId], references: [id])
 
   @@index([actorId, createdAt])
   @@index([module, action])
@@ -781,27 +596,21 @@ model AuditLog {
 }
 
 model SecurityAlert {
-  id Int @id @default(autoincrement())
-
-  userId Int
-
-  type      String
-  riskLevel String @default("MEDIUM")
-  message   String
-
-  ipAddress  String @default("")
-  deviceInfo String @default("")
-
+  id              Int       @id @default(autoincrement())
+  userId          Int
+  type            String
+  riskLevel       String    @default("MEDIUM")
+  message         String
+  ipAddress       String    @default("")
+  deviceInfo      String    @default("")
   status          String    @default("OPEN")
   assignedToId    Int?
   resolutionNotes String    @default("")
   resolvedAt      DateTime?
   resolvedById    Int?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @default(now()) @updatedAt
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
   @@index([status, riskLevel])
@@ -809,35 +618,27 @@ model SecurityAlert {
 }
 
 model SessionLog {
-  id Int @id @default(autoincrement())
-
-  userId Int
-
-  ipAddress  String @default("")
-  deviceInfo String @default("")
-
-  browser         String @default("")
-  operatingSystem String @default("")
-  country         String @default("")
-  city            String @default("")
-
-  loginStatus String @default("SUCCESS")
-  riskLevel   String @default("LOW")
-  notes       String @default("")
-
-  isActive      Boolean @default(true)
-  trustedDevice Boolean @default(false)
-  blockedDevice Boolean @default(false)
-
-  startedAt      DateTime  @default(now())
-  lastActivityAt DateTime  @default(now())
-  endedAt        DateTime?
-  endedById      Int?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id              Int       @id @default(autoincrement())
+  userId          Int
+  ipAddress       String    @default("")
+  deviceInfo      String    @default("")
+  browser         String    @default("")
+  operatingSystem String    @default("")
+  country         String    @default("")
+  city            String    @default("")
+  loginStatus     String    @default("SUCCESS")
+  riskLevel       String    @default("LOW")
+  notes           String    @default("")
+  isActive        Boolean   @default(true)
+  trustedDevice   Boolean   @default(false)
+  blockedDevice   Boolean   @default(false)
+  startedAt       DateTime  @default(now())
+  lastActivityAt  DateTime  @default(now())
+  endedAt         DateTime?
+  endedById       Int?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @default(now()) @updatedAt
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, isActive])
   @@index([loginStatus, riskLevel])
@@ -852,8 +653,7 @@ model Notification {
   message   String
   read      Boolean  @default(false)
   createdAt DateTime @default(now())
-
-  user User @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
 }
 
 model Favorite {
@@ -861,51 +661,37 @@ model Favorite {
   userId    Int
   productId Int
   createdAt DateTime @default(now())
-
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, productId])
   @@index([userId])
   @@index([productId])
 }
 
-/**
- * |--------------------------------------------------------------------------
- * | Messenger QSM
- * |--------------------------------------------------------------------------
- */
-
 model Conversation {
-  id            Int     @id @default(autoincrement())
-  legacyMongoId String?
-
-  productId Int?
-  orderId   Int?
-
-  lastMessageText     String    @default("")
+  id                  Int                           @id @default(autoincrement())
+  legacyMongoId       String?
+  productId           Int?
+  orderId             Int?
+  lastMessageText     String                        @default("")
   lastMessageSenderId Int?
   lastMessageAt       DateTime?
-
-  language           String  @default("es")
-  translationEnabled Boolean @default(false)
-  exportCount        Int     @default(0)
-
-  category String @default("GENERAL")
-  priority String @default("NORMAL")
-  status   String @default("ACTIVE")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
-
-  product           Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
-  order             Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  lastMessageSender User?    @relation("ConversationLastMessageSender", fields: [lastMessageSenderId], references: [id], onDelete: SetNull)
-
-  participants     ConversationParticipant[]
-  messages         Message[]
-  labelAssignments ConversationLabelAssignment[]
-  pinnedMessages   ConversationPinnedMessage[]
+  language            String                        @default("es")
+  translationEnabled  Boolean                       @default(false)
+  exportCount         Int                           @default(0)
+  category            String                        @default("GENERAL")
+  priority            String                        @default("NORMAL")
+  status              String                        @default("ACTIVE")
+  createdAt           DateTime                      @default(now())
+  updatedAt           DateTime                      @default(now()) @updatedAt
+  lastMessageSender   User?                         @relation("ConversationLastMessageSender", fields: [lastMessageSenderId], references: [id])
+  order               Order?                        @relation(fields: [orderId], references: [id])
+  product             Product?                      @relation(fields: [productId], references: [id])
+  labelAssignments    ConversationLabelAssignment[]
+  participants        ConversationParticipant[]
+  pinnedMessages      ConversationPinnedMessage[]
+  messages            Message[]
 
   @@index([productId, updatedAt])
   @@index([orderId, updatedAt])
@@ -914,25 +700,21 @@ model Conversation {
 }
 
 model ConversationParticipant {
-  id             Int @id @default(autoincrement())
+  id             Int          @id @default(autoincrement())
   conversationId Int
   userId         Int
-
-  unreadCount Int @default(0)
-
-  muted    Boolean @default(false)
-  archived Boolean @default(false)
-  blocked  Boolean @default(false)
-  favorite Boolean @default(false)
-  pinned   Boolean @default(false)
-
-  pinnedOrder Int?
-  joinedAt    DateTime  @default(now())
-  lastReadAt  DateTime?
-  updatedAt   DateTime  @default(now()) @updatedAt
-
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  unreadCount    Int          @default(0)
+  muted          Boolean      @default(false)
+  archived       Boolean      @default(false)
+  blocked        Boolean      @default(false)
+  favorite       Boolean      @default(false)
+  pinned         Boolean      @default(false)
+  pinnedOrder    Int?
+  joinedAt       DateTime     @default(now())
+  lastReadAt     DateTime?
+  updatedAt      DateTime     @default(now()) @updatedAt
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([conversationId, userId])
   @@index([userId, archived, updatedAt(sort: Desc)])
@@ -941,55 +723,43 @@ model ConversationParticipant {
 }
 
 model Message {
-  id            Int     @id @default(autoincrement())
-  legacyMongoId String? @unique
-
-  conversationId Int
-  orderId        Int?
-  senderId       Int
-  receiverId     Int
-  productId      Int?
-  replyToId      Int?
-
-  messageType String @default("TEXT")
-  content     String @default("")
-  text        String @default("")
-
-  attachments Json @default("[]")
-  reactions   Json @default("[]")
-  location    Json @default("{}")
-
-  voiceDuration Float @default(0)
-
-  isFlagged       Boolean  @default(false)
-  riskLevel       String   @default("LOW")
-  aiReason        String   @default("")
-  securityScore   Int      @default(0)
-  securityReasons String[] @default([])
-
-  isEdited Boolean   @default(false)
-  editedAt DateTime?
-
-  deletedForEveryone Boolean   @default(false)
+  id                 Int                         @id @default(autoincrement())
+  legacyMongoId      String?                     @unique
+  conversationId     Int
+  orderId            Int?
+  senderId           Int
+  receiverId         Int
+  productId          Int?
+  replyToId          Int?
+  messageType        String                      @default("TEXT")
+  content            String                      @default("")
+  text               String                      @default("")
+  attachments        Json                        @default("[]")
+  reactions          Json                        @default("[]")
+  location           Json                        @default("{}")
+  voiceDuration      Float                       @default(0)
+  isFlagged          Boolean                     @default(false)
+  riskLevel          String                      @default("LOW")
+  aiReason           String                      @default("")
+  securityScore      Int                         @default(0)
+  securityReasons    String[]                    @default([])
+  isEdited           Boolean                     @default(false)
+  editedAt           DateTime?
+  deletedForEveryone Boolean                     @default(false)
   deletedAt          DateTime?
-
-  status      String    @default("SENT")
-  deliveredAt DateTime?
-  readAt      DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
-
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  order        Order?       @relation(fields: [orderId], references: [id], onDelete: SetNull)
-  sender       User         @relation("MessageSender", fields: [senderId], references: [id])
-  receiver     User         @relation("MessageReceiver", fields: [receiverId], references: [id])
-  product      Product?     @relation(fields: [productId], references: [id], onDelete: SetNull)
-
-  replyTo Message?  @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
-  replies Message[] @relation("MessageReplies")
-
-  pins ConversationPinnedMessage[]
+  status             String                      @default("SENT")
+  deliveredAt        DateTime?
+  readAt             DateTime?
+  createdAt          DateTime                    @default(now())
+  updatedAt          DateTime                    @default(now()) @updatedAt
+  pins               ConversationPinnedMessage[]
+  conversation       Conversation                @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  order              Order?                      @relation(fields: [orderId], references: [id])
+  product            Product?                    @relation(fields: [productId], references: [id])
+  receiver           User                        @relation("MessageReceiver", fields: [receiverId], references: [id])
+  replyTo            Message?                    @relation("MessageReplies", fields: [replyToId], references: [id])
+  replies            Message[]                   @relation("MessageReplies")
+  sender             User                        @relation("MessageSender", fields: [senderId], references: [id])
 
   @@index([conversationId, createdAt])
   @@index([senderId, createdAt])
@@ -1001,23 +771,19 @@ model Message {
 }
 
 model ConversationLabel {
-  id            Int     @id @default(autoincrement())
-  legacyMongoId String? @unique
-
-  name  String
-  slug  String
-  color String @default("#8b5cf6")
-  icon  String @default("tag")
-
-  isSystem Boolean @default(false)
-  ownerId  Int?
-  isActive Boolean @default(true)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
-
-  owner       User?                         @relation("ConversationLabelOwner", fields: [ownerId], references: [id], onDelete: Cascade)
-  assignments ConversationLabelAssignment[]
+  id            Int                           @id @default(autoincrement())
+  legacyMongoId String?                       @unique
+  name          String
+  slug          String
+  color         String                        @default("#8b5cf6")
+  icon          String                        @default("tag")
+  isSystem      Boolean                       @default(false)
+  ownerId       Int?
+  isActive      Boolean                       @default(true)
+  createdAt     DateTime                      @default(now())
+  updatedAt     DateTime                      @default(now()) @updatedAt
+  owner         User?                         @relation("ConversationLabelOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  assignments   ConversationLabelAssignment[]
 
   @@unique([slug, ownerId])
   @@index([ownerId, isActive])
@@ -1025,15 +791,14 @@ model ConversationLabel {
 }
 
 model ConversationLabelAssignment {
-  id             Int      @id @default(autoincrement())
+  id             Int               @id @default(autoincrement())
   conversationId Int
   labelId        Int
   assignedById   Int
-  assignedAt     DateTime @default(now())
-
-  conversation Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  label        ConversationLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
-  assignedBy   User              @relation("ConversationLabelAssignedBy", fields: [assignedById], references: [id], onDelete: Cascade)
+  assignedAt     DateTime          @default(now())
+  assignedBy     User              @relation("ConversationLabelAssignedBy", fields: [assignedById], references: [id], onDelete: Cascade)
+  conversation   Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  label          ConversationLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
 
   @@unique([conversationId, labelId, assignedById])
   @@index([labelId])
@@ -1041,15 +806,14 @@ model ConversationLabelAssignment {
 }
 
 model ConversationPinnedMessage {
-  id             Int      @id @default(autoincrement())
+  id             Int          @id @default(autoincrement())
   conversationId Int
   messageId      Int
   pinnedById     Int
-  pinnedAt       DateTime @default(now())
-
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  message      Message      @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  pinnedBy     User         @relation("ConversationPinnedBy", fields: [pinnedById], references: [id], onDelete: Cascade)
+  pinnedAt       DateTime     @default(now())
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  message        Message      @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  pinnedBy       User         @relation("ConversationPinnedBy", fields: [pinnedById], references: [id], onDelete: Cascade)
 
   @@unique([conversationId, messageId, pinnedById])
   @@index([messageId])
@@ -1057,62 +821,49 @@ model ConversationPinnedMessage {
 }
 
 model UserSetting {
-  id     Int @id @default(autoincrement())
-  userId Int @unique
-
-  data Json @default("{}")
-
+  id        Int      @id @default(autoincrement())
+  userId    Int      @unique
+  data      Json     @default("{}")
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([updatedAt])
 }
 
 model SystemSetting {
-  id  Int    @id @default(autoincrement())
-  key String @unique @default("GLOBAL_SYSTEM_SETTINGS")
-
-  data Json @default("{}")
-
+  id            Int       @id @default(autoincrement())
+  key           String    @unique @default("GLOBAL_SYSTEM_SETTINGS")
+  data          Json      @default("{}")
   updatedById   Int?
   lastResetById Int?
   lastResetAt   DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @default(now()) @updatedAt
 
   @@index([updatedAt])
 }
 
 model VehicleReport {
-  id       Int @id @default(autoincrement())
-  sellerId Int
-
-  vin   String
-  plate String @default("")
-  brand String @default("")
-  model String @default("")
-  year  Int?
-
-  carfaxStatus String @default("PENDING")
-
-  accidentReported Boolean @default(false)
-  salvageTitle     Boolean @default(false)
-  ownersCount      Int     @default(0)
-  mileageStatus    String  @default("UNKNOWN")
-
-  vehicleScore Int    @default(70)
-  riskLevel    String @default("LOW")
-
-  reportSummary String @default("")
-  rawCarfaxData Json   @default("{}")
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
-
-  seller User @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  id               Int      @id @default(autoincrement())
+  sellerId         Int
+  vin              String
+  plate            String   @default("")
+  brand            String   @default("")
+  model            String   @default("")
+  year             Int?
+  carfaxStatus     String   @default("PENDING")
+  accidentReported Boolean  @default(false)
+  salvageTitle     Boolean  @default(false)
+  ownersCount      Int      @default(0)
+  mileageStatus    String   @default("UNKNOWN")
+  vehicleScore     Int      @default(70)
+  riskLevel        String   @default("LOW")
+  reportSummary    String   @default("")
+  rawCarfaxData    Json     @default("{}")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @default(now()) @updatedAt
+  seller           User     @relation(fields: [sellerId], references: [id], onDelete: Cascade)
 
   @@index([sellerId, createdAt])
   @@index([vin])
@@ -1134,10 +885,10 @@ model Shipping {
   deliveredAt     DateTime?
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @default(now()) @updatedAt
-  order           Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
   buyer           User      @relation("ShippingBuyer", fields: [buyerId], references: [id])
-  seller          User      @relation("ShippingSeller", fields: [sellerId], references: [id])
+  order           Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product         Product   @relation(fields: [productId], references: [id])
+  seller          User      @relation("ShippingSeller", fields: [sellerId], references: [id])
 
   @@index([buyerId, createdAt])
   @@index([sellerId, createdAt])
