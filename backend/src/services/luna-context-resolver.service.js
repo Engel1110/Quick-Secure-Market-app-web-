@@ -2,6 +2,43 @@
 
 /*
 |--------------------------------------------------------------------------
+| QSM_BLOQUE8_CONTEXT_PRESERVE
+|--------------------------------------------------------------------------
+*/
+
+function normalizeBlock8Text(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[¿?¡!.,;:]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isBlock8GenericMarketplaceFollowup(
+  value
+) {
+  const text =
+    normalizeBlock8Text(value);
+
+  return [
+    "dime que modelos tienes",
+    "que modelos tienes",
+    "cuales modelos tienes",
+    "cuales tienes",
+    "muestrame los modelos",
+    "muestrame opciones",
+    "dame opciones",
+    "que opciones tienes",
+    "hay mas",
+    "tienes mas"
+  ].includes(text);
+}
+
+/*
+|--------------------------------------------------------------------------
 | QSM - LUNA CONTEXT RESOLVER
 |--------------------------------------------------------------------------
 | FASE 17.5 BLOQUE B
@@ -467,6 +504,18 @@ function resolveContextualMessage({
       resolveProduct(
         message
       );
+
+    if (
+      product &&
+      isBlock8GenericMarketplaceFollowup(
+        product
+      )
+    ) {
+      return {
+        resolved: false,
+        preserveExistingContext: true
+      };
+    }
 
     if (product) {
       return {

@@ -1,3 +1,15 @@
+/*
+|--------------------------------------------------------------------------
+| QSM_BLOQUE9_6_1_MESSAGE_NOTIFY_IMPORT
+|--------------------------------------------------------------------------
+*/
+
+const {
+  notifySecurityTeam:
+    notifyFraudSecurityTeam
+} =
+  require("../fraudSecurityNotification.service");
+
 // backend/src/services/messages/message.service.js
 // QSM Messenger core migrated to Prisma/PostgreSQL.
 
@@ -888,34 +900,333 @@ const markConversationAsRead = async ({
 
 const createFraudAlertSafely = async ({
   productId,
+  senderId = null,
+  conversationId = null,
   securityAnalysis,
   context = "MESSAGE_SECURITY"
 }) => {
-  if (!productId || !securityAnalysis?.flagged) {
+
+  /*
+  |--------------------------------------------------------------------------
+  | QSM_BLOQUE9_3_V2_FRAUDSHIELD_ESCALATION
+  |--------------------------------------------------------------------------
+  */
+
+  if (
+    !productId ||
+    !securityAnalysis?.flagged
+  ) {
     return null;
   }
 
   try {
-    return await prisma.fraudAlert.create({
-      data: {
-        productId,
-        type: context,
-        level: String(
-          securityAnalysis.riskLevel || "HIGH"
-        ).toUpperCase(),
-        message: securityAnalysis.reasonText
-      }
+
+    const riskLevel =
+      String(
+        securityAnalysis.riskLevel ||
+        "HIGH"
+      ).toUpperCase();
+
+    const currentScore =
+      Number(
+        securityAnalysis.score ||
+        0
+      );
+
+    /* Alerta individual */
+
+    const baseAlert =
+      await prisma.fraudAlert.create({
+        data: {
+          productId,
+          type: context,
+          level: riskLevel,
+          message:
+            securityAnalysis.reasonText ||
+            "Mensaje marcado por LUNA Security."
+        }
+      });
+
+    /*
+    |--------------------------------------------------------------------------
+    | QSM_BLOQUE9_6_1_BASE_ALERT_NOTIFY
+    |--------------------------------------------------------------------------
+    */
+
+    await notifyFraudSecurityTeam({
+      alertId:
+        baseAlert.id,
+
+      riskLevel,
+
+      conversationId,
+
+      message:
+        securityAnalysis.reasonText ||
+        "Mensaje marcado por LUNA Security."
     });
+
+    /* Analizar reincidencia del mismo emisor/conversación */
+
+    let recentFlagged = [];
+
+    if (
+      conversationId &&
+      senderId
+    ) {
+
+      const thirtyMinutesAgo =
+        new Date(
+          Date.now() -
+          30 * 60 * 1000
+        );
+
+      recentFlagged =
+        await prisma.message.findMany({
+          where: {
+            conversationId,
+            senderId,
+            isFlagged: true,
+            deletedForEveryone: false,
+            createdAt: {
+              gte:
+                thirtyMinutesAgo
+            }
+          },
+          select: {
+            id: true,
+            riskLevel: true,
+            securityScore: true,
+            securityReasons: true,
+            createdAt: true
+          },
+          orderBy: {
+            createdAt: "desc"
+          },
+          take: 20
+        });
+    }
+
+    const flaggedCount =
+      recentFlagged.length;
+
+    const highCount =
+      recentFlagged.filter(
+        (message) =>
+          [
+            "HIGH",
+            "CRITICAL"
+          ].includes(
+            String(
+              message.riskLevel ||
+              ""
+            ).toUpperCase()
+          )
+      ).length;
+
+    const criticalCount =
+      recentFlagged.filter(
+        (message) =>
+          String(
+            message.riskLevel ||
+            ""
+          ).toUpperCase() ===
+          "CRITICAL"
+      ).length;
+
+    const maxRecentScore =
+      recentFlagged.reduce(
+        (maximum, message) =>
+          Math.max(
+            maximum,
+            Number(
+              message.securityScore ||
+              0
+            )
+          ),
+        currentScore
+      );
+
+    const immediateCritical =
+      riskLevel === "CRITICAL" ||
+      currentScore >= 70;
+
+    const repeatedHigh =
+      highCount >= 2;
+
+    const repeatedRisk =
+      flaggedCount >= 3;
+
+    const shouldEscalate =
+      immediateCritical ||
+      repeatedHigh ||
+      repeatedRisk;
+
+    if (!shouldEscalate) {
+      return {
+        baseAlert,
+        escalated: false,
+        metrics: {
+          flaggedCount,
+          highCount,
+          criticalCount,
+          maxRecentScore
+        }
+      };
+    }
+
+    const escalationLevel =
+      immediateCritical ||
+      criticalCount > 0 ||
+      flaggedCount >= 4
+        ? "CRITICAL"
+        : "HIGH";
+
+    /* Evitar una lluvia de alertas repetidas */
+
+    const fifteenMinutesAgo =
+      new Date(
+        Date.now() -
+        15 * 60 * 1000
+      );
+
+    const existingEscalation =
+      await prisma.fraudAlert.findFirst({
+        where: {
+          productId,
+          type:
+            "MESSAGE_SECURITY_ESCALATED",
+          createdAt: {
+            gte:
+              fifteenMinutesAgo
+          }
+        },
+        orderBy: {
+          createdAt: "desc"
+        }
+      });
+
+    if (existingEscalation) {
+      return {
+        baseAlert,
+        escalated: true,
+        escalationAlert:
+          existingEscalation,
+        deduplicated: true,
+        metrics: {
+          flaggedCount,
+          highCount,
+          criticalCount,
+          maxRecentScore
+        }
+      };
+    }
+
+    const reasonParts = [];
+
+    if (immediateCritical) {
+      reasonParts.push(
+        "riesgo crítico inmediato"
+      );
+    }
+
+    if (repeatedHigh) {
+      reasonParts.push(
+        String(highCount) +
+        " mensajes de riesgo alto"
+      );
+    }
+
+    if (repeatedRisk) {
+      reasonParts.push(
+        String(flaggedCount) +
+        " intentos riesgosos en 30 minutos"
+      );
+    }
+
+    const escalationMessage =
+      [
+        "LUNA Security escaló automáticamente esta conversación a FraudShield.",
+        "Señales: " +
+          (reasonParts.join(", ") ||
+          "actividad sospechosa") +
+          ".",
+        "Puntuación máxima: " +
+          String(maxRecentScore) +
+          "/100.",
+        conversationId
+          ? "Conversación interna: " +
+            String(conversationId) +
+            "."
+          : "",
+        senderId
+          ? "Usuario emisor interno: " +
+            String(senderId) +
+            "."
+          : "",
+        "Requiere revisión del equipo de Seguridad/FraudShield."
+      ]
+        .filter(Boolean)
+        .join(" ");
+
+    const escalationAlert =
+      await prisma.fraudAlert.create({
+        data: {
+          productId,
+          type:
+            "MESSAGE_SECURITY_ESCALATED",
+          level:
+            escalationLevel,
+          message:
+            escalationMessage
+        }
+      });
+
+    /*
+    |--------------------------------------------------------------------------
+    | QSM_BLOQUE9_6_1_ESCALATION_ALERT_NOTIFY
+    |--------------------------------------------------------------------------
+    */
+
+    await notifyFraudSecurityTeam({
+      alertId:
+        escalationAlert.id,
+
+      riskLevel:
+        escalationLevel,
+
+      conversationId,
+
+      message:
+        escalationMessage,
+
+      force:
+        true
+    });
+
+    return {
+      baseAlert,
+      escalated: true,
+      escalationAlert,
+      deduplicated: false,
+      metrics: {
+        flaggedCount,
+        highCount,
+        criticalCount,
+        maxRecentScore
+      }
+    };
+
   } catch (error) {
+
     console.error(
-      "No se pudo registrar la alerta antifraude del mensaje:",
+      "No se pudo registrar o escalar la alerta antifraude del mensaje:",
       error.message
     );
 
     return null;
   }
 };
-
 const sendMessage = async ({
   io,
   userId: userReference,
@@ -928,7 +1239,7 @@ const sendMessage = async ({
     body.text || body.content || ""
   );
 
-  if (
+if (
     !finalContent &&
     safeAttachments.length === 0 &&
     !body.location
@@ -1089,7 +1400,12 @@ const sendMessage = async ({
 
   await createFraudAlertSafely({
     productId,
-    securityAnalysis
+    senderId: userId,
+    conversationId:
+      conversation.id,
+    securityAnalysis,
+    context:
+      "MESSAGE_SECURITY"
   });
 
   if (securityAnalysis.flagged) {
@@ -1258,9 +1574,15 @@ const editMessage = async ({
   await recalculateConversationLastMessage(current.conversationId);
 
   await createFraudAlertSafely({
-    productId: current.productId,
+    productId:
+      current.productId,
+    senderId:
+      current.senderId,
+    conversationId:
+      current.conversationId,
     securityAnalysis,
-    context: "MESSAGE_EDIT_SECURITY"
+    context:
+      "MESSAGE_EDIT_SECURITY"
   });
 
   const serialized =

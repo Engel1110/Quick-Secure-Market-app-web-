@@ -635,9 +635,17 @@ function ModerationDashboard() {
             ? "DISMISSED"
             : action === "RESOLVE_REPORT"
               ? "RESOLVED"
-              : "ACTION_TAKEN",
+              : action === "REQUEST_CORRECTION"
+                ? "IN_REVIEW"
+                : "ACTION_TAKEN",
         moderationAction: action,
-        actionReason: additionalData.reason || null
+        actionReason: additionalData.reason || null,
+        correctionRequested:
+          action === "REQUEST_CORRECTION",
+        correctionRequestedAt:
+          action === "REQUEST_CORRECTION"
+            ? new Date().toISOString()
+            : report.correctionRequestedAt || null
       };
 
       if (action === "SUSPEND_USER") {
@@ -673,6 +681,29 @@ function ModerationDashboard() {
           ...report.target,
           status: "ACTIVE"
         };
+      }
+
+      if (action === "REQUEST_CORRECTION") {
+        reportChanges.target = {
+          ...report.target,
+          status: "UNDER_REVIEW"
+        };
+      }
+
+      if (action === "RESOLVE_REPORT") {
+        reportChanges.target = {
+          ...report.target,
+          status: "ACTIVE"
+        };
+
+        reportChanges.correctionRequested =
+          false;
+
+        reportChanges.correctionApproved =
+          true;
+
+        reportChanges.correctionApprovedAt =
+          new Date().toISOString();
       }
 
       if (action === "WARN_USER") {
@@ -1111,6 +1142,33 @@ function ModerationModal({
   const [selectedModerator, setSelectedModerator] =
     useState(report.assignedModerator?.id || "");
 
+  const [correctionReason, setCorrectionReason] =
+    useState("");
+
+  /*
+  |--------------------------------------------------------------------------
+  | QSM_BLOQUE6_MODERATION_FINAL_REVIEW
+  |--------------------------------------------------------------------------
+  */
+
+  const moderationState =
+    report?.aiAnalysis?.moderation &&
+    typeof report.aiAnalysis.moderation === "object"
+      ? report.aiAnalysis.moderation
+      : {};
+
+  const correctionSubmitted =
+    moderationState.correctionSubmitted === true;
+
+  const correctionRequested =
+    moderationState.correctionRequested === true ||
+    report.correctionRequested === true;
+
+  const submittedAt =
+    moderationState.correctionSubmittedAt ||
+    moderationState.sellerLastEditAt ||
+    null;
+
   const moderator = moderators.find(
     (item) => item.id === selectedModerator
   );
@@ -1472,7 +1530,116 @@ function ModerationModal({
 
           <hr />
 
+          {correctionSubmitted && (
+            <div
+              className="moderation-final-review-box"
+            >
+              <div
+                className="moderation-final-review-title"
+              >
+                ✅ Corrección enviada por el vendedor
+              </div>
+
+              <div
+                className="moderation-final-review-text"
+              >
+                El vendedor realizó cambios en esta
+                publicación y la envió nuevamente a
+                revisión.
+              </div>
+
+              {submittedAt && (
+                <div
+                  className="moderation-final-review-date"
+                >
+                  Enviada:
+                  {" "}
+                  {new Date(
+                    submittedAt
+                  ).toLocaleString("es-DO")}
+                </div>
+              )}
+
+              <button
+                type="button"
+                className="moderation-button moderation-button-success"
+                disabled={isSaving}
+                onClick={() =>
+                  onAction(
+                    report,
+                    "RESOLVE_REPORT",
+                    {
+                      reason:
+                        "Corrección revisada y aprobada por Moderación."
+                    }
+                  )
+                }
+              >
+                ✅ Aprobar corrección
+              </button>
+            </div>
+          )}
+
           <h3>Aplicar moderación</h3>
+
+          
+          {(report.type === "PRODUCT" ||
+            relatedEntities.productId) && (
+            <div
+              className="moderation-correction-box"
+            >
+              <label
+                className="moderation-correction-label"
+              >
+                Corrección requerida al vendedor
+              </label>
+
+              <textarea
+                className="moderation-select moderation-correction-textarea"
+                rows={4}
+                value={correctionReason}
+                disabled={isSaving}
+                placeholder="Indica claramente qué debe corregir el vendedor."
+                onChange={(event) =>
+                  setCorrectionReason(
+                    event.target.value
+                  )
+                }
+              />
+
+              <button
+                type="button"
+                className="moderation-button moderation-button-warning"
+                disabled={
+                  isSaving ||
+                  correctionReason.trim().length < 5
+                }
+                onClick={async () => {
+                  const reason =
+                    correctionReason.trim();
+
+                  if (reason.length < 5) {
+                    window.alert(
+                      "Debes indicar qué debe corregir el vendedor."
+                    );
+                    return;
+                  }
+
+                  await onAction(
+                    report,
+                    "REQUEST_CORRECTION",
+                    {
+                      reason
+                    }
+                  );
+
+                  setCorrectionReason("");
+                }}
+              >
+                📝 Solicitar corrección
+              </button>
+            </div>
+          )}
 
           <div className="moderation-actions">
             <button
@@ -1542,7 +1709,9 @@ function ModerationModal({
                 onAction(report, "RESOLVE_REPORT")
               }
             >
-              ✅ Resolver reporte
+              {correctionSubmitted
+                ? "✅ Aprobar corrección"
+                : "✅ Resolver reporte"}
             </button>
 
             <button
@@ -2262,6 +2431,59 @@ const moderationStyles = `
     display: flex;
     flex-wrap: wrap;
     gap: 10px;
+  }
+
+  .moderation-correction-box {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 16px;
+    padding: 14px;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    border-radius: 12px;
+    background: rgba(245, 158, 11, 0.06);
+  }
+
+  .moderation-final-review-box {
+    margin-bottom: 16px;
+    padding: 16px;
+    border-radius: 12px;
+    border:
+      1px solid rgba(34, 197, 94, 0.35);
+    background:
+      rgba(34, 197, 94, 0.08);
+  }
+
+  .moderation-final-review-title {
+    margin-bottom: 7px;
+    font-weight: 800;
+    color: #86efac;
+  }
+
+  .moderation-final-review-text {
+    margin-bottom: 8px;
+    line-height: 1.5;
+  }
+
+  .moderation-final-review-date {
+    margin-bottom: 12px;
+    font-size: 12px;
+    opacity: 0.75;
+  }
+
+  .moderation-correction-label {
+    font-weight: 700;
+  }
+
+  .moderation-correction-textarea {
+    width: 100%;
+    min-height: 96px;
+    resize: vertical;
+    box-sizing: border-box;
+  }
+
+  .moderation-correction-box .moderation-button {
+    align-self: flex-start;
   }
 
   .moderation-actions .moderation-button {

@@ -2,192 +2,89 @@
 
 /*
 |--------------------------------------------------------------------------
-| QSM - LUNA PROVIDER ROUTER
+| QSM - LUNA AI PROVIDER ROUTER
 |--------------------------------------------------------------------------
-| Fase 17 Bloque 5
 |
-| Decide qué cerebro debe utilizar LUNA.
+| GEMINI   = inteligencia principal
+| INTERNAL = fallback local
 |--------------------------------------------------------------------------
 */
 
 const {
+
   PROVIDERS,
+
   getLunaProviderConfig,
+
   isExternalKnowledgeAvailable
+
 } = require(
   "../config/luna-provider.config"
 );
 
+
 const {
+
   executeInternalProvider,
+
   getInternalProviderStatus
+
 } = require(
   "../providers/luna-internal.provider"
 );
 
+
 const {
+
   executeGeminiProvider,
+
   getGeminiProviderStatus
+
 } = require(
   "../providers/luna-gemini.provider"
 );
 
+
 const ROUTES =
   Object.freeze({
+
+    GEMINI:
+      "GEMINI",
+
     INTERNAL:
       "INTERNAL",
 
-    EXTERNAL:
-      "EXTERNAL",
-
-    INTERNAL_THEN_EXTERNAL:
-      "INTERNAL_THEN_EXTERNAL",
-
     FALLBACK_INTERNAL:
       "FALLBACK_INTERNAL"
+
   });
 
-const INTERNAL_INTENTS =
-  new Set([
-    "TRUST",
-    "VERIFICATION",
-    "PURCHASES",
-    "SALES",
-    "PRODUCTS",
-    "DISPUTES",
-    "ACCOUNT_PRIORITY",
 
-    "MARKETPLACE_SEARCH",
-    "MARKETPLACE_AVAILABILITY",
-    "MARKETPLACE_PRICE",
-    "SELLER_TRUST",
-    "QSM_SECURITY",
-    "QSM_PROFILE",
-    "QSM_MESSAGES"
-  ]);
+function shouldUseGemini({
+  message = ""
+} = {}) {
 
-function normalizeText(
-  value
-) {
-  return String(
-    value || ""
-  )
-    .trim()
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(
-      /[\u0300-\u036f]/g,
+  return Boolean(
+    String(
+      message ||
       ""
-    );
-}
-
-/*
-|--------------------------------------------------------------------------
-| Detectar preguntas de conocimiento GENERAL.
-|--------------------------------------------------------------------------
-|
-| Importante:
-| detectar EXTERNAL no significa que Gemini será llamado.
-| En Etapa 1 simplemente queda registrado como una capacidad futura.
-|--------------------------------------------------------------------------
-*/
-
-function looksLikeExternalKnowledgeQuestion(
-  message
-) {
-  const text =
-    normalizeText(
-      message
-    );
-
-  if (!text) {
-    return false;
-  }
-
-  const patterns = [
-    "que es ",
-    "que significa ",
-    "para que sirve ",
-    "es bueno ",
-    "es buena ",
-    "que tan bueno ",
-    "que tan buena ",
-    "ventajas de ",
-    "desventajas de ",
-    "caracteristicas de ",
-    "especificaciones de ",
-    "comparame ",
-    "comparar ",
-    "diferencia entre ",
-    "cual es mejor ",
-    "recomiendame un ",
-    "recomiendame una "
-  ];
-
-  return patterns.some(
-    (pattern) =>
-      text.includes(
-        pattern
-      )
+    ).trim()
   );
 }
 
-/*
-|--------------------------------------------------------------------------
-| Determinar ruta
-|--------------------------------------------------------------------------
-*/
 
 function decideLunaProviderRoute({
-  message = "",
-  intent = null,
-  internalAnswerAvailable = false,
-  qsmDataAvailable = false
+  message = ""
 } = {}) {
-  const config =
-    getLunaProviderConfig();
 
-  const normalizedIntent =
-    String(
-      intent || ""
-    )
-      .trim()
-      .toUpperCase();
-
-  /*
-    PRIORIDAD ABSOLUTA:
-    la información privada QSM nunca debe depender
-    de un proveedor externo.
-  */
   if (
-    INTERNAL_INTENTS.has(
-      normalizedIntent
-    ) ||
-    internalAnswerAvailable ||
-    qsmDataAvailable
-  ) {
-    return {
-      route:
-        ROUTES.INTERNAL,
-
-      provider:
-        PROVIDERS.INTERNAL,
-
-      reason:
-        "QSM_INTERNAL_DATA_PRIORITY",
-
-      externalAllowed:
-        false
-    };
-  }
-
-  const externalQuestion =
-    looksLikeExternalKnowledgeQuestion(
+    !shouldUseGemini({
       message
-    );
+    })
+  ) {
 
-  if (!externalQuestion) {
     return {
+
       route:
         ROUTES.INTERNAL,
 
@@ -195,251 +92,233 @@ function decideLunaProviderRoute({
         PROVIDERS.INTERNAL,
 
       reason:
-        "DEFAULT_INTERNAL",
+        "EMPTY_REQUEST"
 
-      externalAllowed:
-        false
     };
   }
 
-  /*
-    Detectamos que sería útil conocimiento externo,
-    pero todavía estamos en Etapa 1.
-  */
-  if (
-    !config
-      .externalKnowledgeEnabled
-  ) {
-    return {
-      route:
-        ROUTES.FALLBACK_INTERNAL,
-
-      provider:
-        PROVIDERS.INTERNAL,
-
-      futureProvider:
-        config
-          .externalProvider,
-
-      reason:
-        "EXTERNAL_KNOWLEDGE_DISABLED",
-
-      externalAllowed:
-        false,
-
-      externalCandidate:
-        true
-    };
-  }
 
   if (
     !isExternalKnowledgeAvailable()
   ) {
+
     return {
+
       route:
         ROUTES.FALLBACK_INTERNAL,
 
       provider:
         PROVIDERS.INTERNAL,
 
-      futureProvider:
-        config
-          .externalProvider,
+      preferredProvider:
+        PROVIDERS.GEMINI,
 
       reason:
-        "EXTERNAL_PROVIDER_NOT_READY",
+        "GEMINI_NOT_AVAILABLE",
 
-      externalAllowed:
-        false,
-
-      externalCandidate:
+      fallback:
         true
+
     };
   }
 
+
   return {
+
     route:
-      ROUTES.EXTERNAL,
+      ROUTES.GEMINI,
 
     provider:
-      config
-        .externalProvider,
+      PROVIDERS.GEMINI,
 
     reason:
-      "GENERAL_KNOWLEDGE_REQUIRED",
+      "GEMINI_PRIMARY",
 
     externalAllowed:
-      true,
-
-    externalCandidate:
       true
+
   };
 }
 
-/*
-|--------------------------------------------------------------------------
-| Ejecución
-|--------------------------------------------------------------------------
-*/
 
 async function routeLunaRequest({
+
   message,
+
   intent = null,
 
   internalAnswer = null,
+
   internalContext = null,
 
   qsmDataAvailable = false,
 
   conversation = [],
 
-  metadata = null
+  metadata = null,
+
+  systemPrompt = null
+
 } = {}) {
+
+
   const decision =
     decideLunaProviderRoute({
-      message,
-      intent,
-
-      internalAnswerAvailable:
-        Boolean(
-          String(
-            internalAnswer ||
-            ""
-          ).trim()
-        ),
-
-      qsmDataAvailable
+      message
     });
 
-  /*
-    Etapa 1:
-    INTERNAL siempre será el destino efectivo.
-  */
+
   if (
-    decision
-      .provider ===
-        PROVIDERS.INTERNAL
+    decision.provider ===
+      PROVIDERS.GEMINI
   ) {
-    const result =
-      await executeInternalProvider({
-        answer:
-          internalAnswer,
 
-        context:
+    try {
+
+      const result =
+        await executeGeminiProvider({
+
+          message,
+
           internalContext,
 
-        intent,
+          conversation,
 
-        metadata: {
-          ...(metadata || {}),
+          systemPrompt
 
-          router:
-            decision
-        }
-      });
+        });
 
-    return {
-      ...result,
 
-      router:
-        decision
-    };
-  }
+      return {
 
-  /*
-    Esta rama queda preparada para Etapa 2.
-  */
-  try {
-    const externalResult =
-      await executeGeminiProvider({
-        message,
+        ...result,
 
-        internalContext,
+        router:
+          decision
 
-        conversation
-      });
+      };
 
-    return {
-      ...externalResult,
 
-      router:
-        decision
-    };
-  } catch (error) {
+    } catch (error) {
 
-    /*
-      Si Gemini llegara a fallar en Etapa 2,
-      LUNA vuelve automáticamente al motor interno.
-    */
 
-    const fallback =
-      await executeInternalProvider({
-        answer:
-          internalAnswer,
+      const fallback =
+        await executeInternalProvider({
 
-        context:
-          internalContext,
+          answer:
+            internalAnswer,
 
-        intent,
+          context:
+            internalContext,
 
-        metadata: {
-          ...(metadata || {}),
+          intent,
 
-          externalFailure: {
-            provider:
-              error?.provider ||
-              decision.provider,
+          metadata: {
 
-            code:
-              error?.code ||
-              "UNKNOWN_EXTERNAL_ERROR"
+            ...(metadata || {}),
+
+            externalFailure: {
+
+              provider:
+                "GEMINI",
+
+              code:
+                error?.code ||
+                "GEMINI_UNKNOWN_ERROR",
+
+              message:
+                error?.message ||
+                null
+
+            }
+
           }
-        }
-      });
 
-    return {
-      ...fallback,
+        });
 
-      provider:
-        PROVIDERS.INTERNAL,
 
-      router: {
-        ...decision,
+      return {
 
-        route:
-          ROUTES.FALLBACK_INTERNAL,
+        ...fallback,
 
         provider:
           PROVIDERS.INTERNAL,
 
-        fallback:
-          true
-      }
-    };
+        router: {
+
+          ...decision,
+
+          route:
+            ROUTES.FALLBACK_INTERNAL,
+
+          provider:
+            PROVIDERS.INTERNAL,
+
+          fallback:
+            true
+
+        }
+
+      };
+    }
   }
+
+
+  const internal =
+    await executeInternalProvider({
+
+      answer:
+        internalAnswer,
+
+      context:
+        internalContext,
+
+      intent,
+
+      metadata
+
+    });
+
+
+  return {
+
+    ...internal,
+
+    router:
+      decision
+
+  };
 }
 
+
 function getLunaProviderCapabilities() {
+
   const config =
     getLunaProviderConfig();
 
+
   return {
+
     version:
-      "17.5",
+      "18.1",
 
     stage:
-      1,
+      "GEMINI_PRIMARY",
 
     router:
       "ACTIVE",
 
     primary:
-      getInternalProviderStatus(),
+      getGeminiProviderStatus(),
 
     external:
       getGeminiProviderStatus(),
 
+    fallback:
+      getInternalProviderStatus(),
+
     configuration: {
+
       externalKnowledgeEnabled:
         config
           .externalKnowledgeEnabled,
@@ -451,26 +330,52 @@ function getLunaProviderCapabilities() {
       externalTimeoutMs:
         config
           .externalTimeoutMs
+
+    },
+
+    architecture: {
+
+      geminiPrimary:
+        true,
+
+      internalFallback:
+        true,
+
+      openaiPrimary:
+        false,
+
+      fraudShieldReady:
+        true
+
     },
 
     futureReady: {
-      gemini:
+
+      fraudShield:
         true,
 
-      webKnowledge:
+      structuredOutputs:
         true,
 
-      marketplaceFusion:
+      imageAnalysis:
         true
+
     }
+
   };
 }
 
+
 module.exports = {
+
   ROUTES,
 
   decideLunaProviderRoute,
+
   routeLunaRequest,
+
   getLunaProviderCapabilities,
-  looksLikeExternalKnowledgeQuestion
+
+  shouldUseGemini
+
 };

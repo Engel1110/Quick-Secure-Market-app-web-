@@ -2,14 +2,12 @@
 
 /*
 |--------------------------------------------------------------------------
-| QSM - LUNA PROVIDER CONFIG
+| QSM - AI PROVIDER CONFIG
 |--------------------------------------------------------------------------
-| Fase 17 Bloque 5
 |
-| IMPORTANTE:
-| - INTERNAL es el proveedor obligatorio.
-| - GEMINI queda preparado pero DESACTIVADO.
-| - Nunca colocar claves en este archivo.
+| GEMINI   = inteligencia principal
+| INTERNAL = fallback local
+| OPENAI   = preparado para uso futuro
 |--------------------------------------------------------------------------
 */
 
@@ -17,6 +15,7 @@ const parseBoolean = (
   value,
   fallback = false
 ) => {
+
   if (
     value === undefined ||
     value === null ||
@@ -37,12 +36,14 @@ const parseBoolean = (
   );
 };
 
+
 const clampNumber = (
   value,
   min,
   max,
   fallback
 ) => {
+
   const parsed =
     Number(value);
 
@@ -61,21 +62,29 @@ const clampNumber = (
   );
 };
 
+
 const PROVIDERS =
   Object.freeze({
+
     INTERNAL:
       "INTERNAL",
 
     GEMINI:
-      "GEMINI"
+      "GEMINI",
+
+    OPENAI:
+      "OPENAI"
+
   });
+
 
 const externalKnowledgeEnabled =
   parseBoolean(
     process.env
       .LUNA_EXTERNAL_KNOWLEDGE_ENABLED,
-    false
+    true
   );
+
 
 const requestedExternalProvider =
   String(
@@ -86,6 +95,7 @@ const requestedExternalProvider =
     .trim()
     .toUpperCase();
 
+
 const externalProvider =
   Object.values(
     PROVIDERS
@@ -95,12 +105,17 @@ const externalProvider =
     ? requestedExternalProvider
     : PROVIDERS.GEMINI;
 
+
 const configuration =
   Object.freeze({
+
     version:
-      "17.5",
+      "18.1",
 
     primaryProvider:
+      PROVIDERS.GEMINI,
+
+    fallbackProvider:
       PROVIDERS.INTERNAL,
 
     externalKnowledgeEnabled,
@@ -112,8 +127,8 @@ const configuration =
         process.env
           .LUNA_EXTERNAL_TIMEOUT_MS,
         1000,
-        30000,
-        7000
+        60000,
+        15000
       ),
 
     maxExternalPromptLength:
@@ -121,11 +136,12 @@ const configuration =
         process.env
           .LUNA_EXTERNAL_MAX_PROMPT_LENGTH,
         250,
-        10000,
-        3000
+        20000,
+        6000
       ),
 
     gemini: {
+
       enabled:
         externalKnowledgeEnabled &&
         externalProvider ===
@@ -135,8 +151,8 @@ const configuration =
         String(
           process.env
             .LUNA_GEMINI_MODEL ||
-          "gemini-placeholder"
-        ),
+          "gemini-3.5-flash-lite"
+        ).trim(),
 
       hasApiKey:
         Boolean(
@@ -146,20 +162,53 @@ const configuration =
             ""
           ).trim()
         )
+    },
+
+    openai: {
+
+      enabled:
+        false,
+
+      model:
+        String(
+          process.env
+            .LUNA_OPENAI_MODEL ||
+          "gpt-5-mini"
+        ).trim(),
+
+      hasApiKey:
+        Boolean(
+          String(
+            process.env
+              .OPENAI_API_KEY ||
+            ""
+          ).trim()
+        )
     }
+
   });
 
+
 function getLunaProviderConfig() {
+
   return {
+
     ...configuration,
 
     gemini: {
       ...configuration.gemini
+    },
+
+    openai: {
+      ...configuration.openai
     }
+
   };
 }
 
+
 function isExternalKnowledgeAvailable() {
+
   if (
     !configuration
       .externalKnowledgeEnabled
@@ -172,6 +221,7 @@ function isExternalKnowledgeAvailable() {
       .externalProvider ===
         PROVIDERS.GEMINI
   ) {
+
     return Boolean(
       configuration
         .gemini
@@ -185,8 +235,13 @@ function isExternalKnowledgeAvailable() {
   return false;
 }
 
+
 module.exports = {
+
   PROVIDERS,
+
   getLunaProviderConfig,
+
   isExternalKnowledgeAvailable
+
 };

@@ -2,6 +2,18 @@
 
 /*
 |--------------------------------------------------------------------------
+| QSM_BLOQUE8_SMART_ROUTER
+|--------------------------------------------------------------------------
+*/
+
+const {
+  routeLunaRequest
+} = require(
+  "./luna-provider-router.service"
+);
+
+/*
+|--------------------------------------------------------------------------
 | QSM - LUNA MARKETPLACE GUIDE
 |--------------------------------------------------------------------------
 | FASE 17 BLOQUE 13 LOCAL
@@ -33,6 +45,94 @@ const MAX_DATABASE_RESULTS =
 
 const MAX_VISIBLE_OPTIONS =
   6;
+
+function normalizeSmartText(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[¿?¡!.,;:]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isGeneralKnowledgeQuestion(value) {
+  const text =
+    normalizeSmartText(value);
+
+  return (
+    /^(que|qué) es\b/i.test(
+      String(value || "").trim()
+    ) ||
+    text.startsWith("que es ") ||
+    text.startsWith("quien es ") ||
+    text.startsWith("quienes son ") ||
+    text.startsWith("como funciona ") ||
+    text.startsWith("como funciona un ") ||
+    text.startsWith("para que sirve ") ||
+    text.startsWith("explicame ") ||
+    text.startsWith("define ") ||
+    text.startsWith("cual es la diferencia entre ")
+  );
+}
+
+function isMarketplaceContinuation(value) {
+  const text =
+    normalizeSmartText(value);
+
+  return [
+    "dime que modelos tienes",
+    "que modelos tienes",
+    "cuales modelos tienes",
+    "cuales tienes",
+    "que tienes",
+    "muestrame los modelos",
+    "muestrame opciones",
+    "dame opciones",
+    "que opciones tienes",
+    "hay mas",
+    "tienes mas"
+  ].includes(text);
+}
+
+function cleanMarketplaceQuery(value) {
+  let text =
+    normalizeSmartText(value);
+
+  text = text
+    .replace(
+      /^(hola|buenas|hey|ey)\s+/,
+      ""
+    )
+    .replace(
+      /^(quiero|busco|necesito|deseo)\s+(un|una|unos|unas)?\s*/,
+      ""
+    )
+    .replace(
+      /^(me gustaria|me gustaría)\s+(un|una)?\s*/,
+      ""
+    )
+    .replace(
+      /^(tienes|tienen|hay)\s+/,
+      ""
+    )
+    .replace(
+      /^(buscame|búscame|buscar)\s+/,
+      ""
+    )
+    .replace(
+      /\b(disponible|disponibles|en venta)\b/g,
+      ""
+    )
+    .replace(
+      /\s+/g,
+      " "
+    )
+    .trim();
+
+  return text;
+}
 
 /* ========================================================================
    NORMALIZACIÓN
@@ -1241,10 +1341,47 @@ function buildMarketplaceGuidedAnswer({
 async function buildGuidedMarketplaceResult(
   state
 ) {
+  const rawQuery =
+    state?.product?.query;
+
+  if (
+    rawQuery &&
+    isGeneralKnowledgeQuestion(
+      rawQuery
+    )
+  ) {
+    const providerResult =
+      await routeLunaRequest({
+        message:
+          String(rawQuery),
+        internalAnswer:
+          "No tengo una respuesta externa disponible en este momento."
+      });
+
+    return {
+      ready: true,
+      answer:
+        providerResult?.text ||
+        providerResult?.message ||
+        "No pude generar una respuesta.",
+      options: [],
+      total: 0,
+      source:
+        providerResult?.provider ||
+        "INTERNAL",
+      route:
+        providerResult?.router?.route ||
+        null,
+      externalKnowledge:
+        providerResult?.provider ===
+        "GEMINI"
+    };
+  }
+
   const query =
-    state
-      ?.product
-      ?.query;
+    cleanMarketplaceQuery(
+      rawQuery
+    );
 
   const preferences =
     state

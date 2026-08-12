@@ -123,7 +123,108 @@ const DEFAULT_RULES = [
       /\blicencia\s+de\s+conducir\b/i,
       /\bfoto\s+del\s+documento\b/i
     ]
-  }
+  },
+  /*
+  |--------------------------------------------------------------------------
+  | QSM_BLOQUE9_LUNA_SECURITY_MESSENGER
+  |--------------------------------------------------------------------------
+  */
+
+  {
+    code: "EXTERNAL_PAYMENT",
+    level: "HIGH",
+    weight: 38,
+    title:
+      "Solicitud de pago fuera de QSM",
+    recommendation:
+      "No realices depósitos, transferencias ni pagos fuera de QSM.",
+    patterns: [
+      /\bdepositame\b/i,
+      /\bdep[oó]sitame\b/i,
+      /\bdeposito\s+(directo|por fuera)\b/i,
+      /\btransfi[eé]reme\b/i,
+      /\btransferencia\s+(directa|por fuera)\b/i,
+      /\bp[aá]game\s+por\s+fuera\b/i,
+      /\bpago\s+por\s+fuera\b/i,
+      /\bfuera\s+de\s+qsm\b/i,
+      /\bpor\s+fuera\s+de\s+la\s+plataforma\b/i,
+      /\benv[ií]ame\s+el\s+dinero\b/i
+    ]
+  },
+
+  {
+    code: "BANK_ACCOUNT_SHARING",
+    level: "HIGH",
+    weight: 34,
+    title:
+      "Posible intercambio de datos bancarios",
+    recommendation:
+      "No compartas ni utilices cuentas bancarias personales para pagar fuera de QSM.",
+    patterns: [
+      /\bcuenta\s+bancaria\b/i,
+      /\bn[uú]mero\s+de\s+cuenta\b/i,
+      /\bcuenta\s+de\s+ahorro\b/i,
+      /\bcuenta\s+corriente\b/i,
+      /\biban\b/i,
+      /\bswift\b/i,
+      /\bbanco\s+(popular|reservas|banreservas|bhd|scotiabank|santa\s+cruz)\b/i
+    ]
+  },
+
+  {
+    code: "PAYMENT_PRESSURE",
+    level: "MEDIUM",
+    weight: 20,
+    title:
+      "Presión para completar un pago",
+    recommendation:
+      "No realices pagos bajo presión. Verifica la operación dentro de QSM.",
+    patterns: [
+      /\bhazlo\s+ahora\b/i,
+      /\bpaga\s+ahora\b/i,
+      /\bdeposita\s+ahora\b/i,
+      /\btransfiere\s+ahora\b/i,
+      /\bsi\s+no\s+pagas\s+ahora\b/i,
+      /\bsolo\s+hoy\b/i,
+      /\b[uú]ltima\s+oportunidad\b/i
+    ]
+  },
+
+  {
+    code: "EXTERNAL_CONTACT_REQUEST",
+    level: "MEDIUM",
+    weight: 24,
+    title:
+      "Solicitud de contacto fuera de QSM",
+    recommendation:
+      "Mantén toda la conversación dentro del Messenger de QSM.",
+    patterns: [
+      /\bvamos\s+a\s+whats\s*app\b/i,
+      /\bvamos\s+por\s+whats\s*app\b/i,
+      /\bp[aá]same\s+tu\s+whats\s*app\b/i,
+      /\bdame\s+tu\s+whats\s*app\b/i,
+      /\bte\s+escribo\s+por\s+whats\s*app\b/i,
+      /\bescr[ií]beme\s+por\s+whats\s*app\b/i,
+      /\bvamos\s+a\s+telegram\b/i,
+      /\bescr[ií]beme\s+por\s+telegram\b/i
+    ]
+  },
+
+  {
+    code: "SUSPICIOUS_PAYMENT_COMBINATION",
+    level: "HIGH",
+    weight: 42,
+    title:
+      "Combinación de señales de pago riesgoso",
+    recommendation:
+      "Detén la operación y continúa únicamente mediante los mecanismos protegidos de QSM.",
+    patterns: [
+      /\b(whats\s*app|telegram).{0,60}(deposit|transfer|paga|pago)\b/i,
+      /\b(deposit|transfer|paga|pago).{0,60}(whats\s*app|telegram)\b/i,
+      /\b(cuenta|banco).{0,60}(deposit|transfer|paga|pago)\b/i
+    ]
+  },
+
 ];
 
 const LEVEL_VALUES = {
@@ -140,6 +241,12 @@ function normalizeText(value) {
 }
 
 function analyzeMessageSecurity(text, customRules = []) {
+
+  /*
+  |--------------------------------------------------------------------------
+  | LUNA Security Messenger
+  |--------------------------------------------------------------------------
+  */
   const content = normalizeText(text);
 
   if (!content) {
@@ -155,6 +262,17 @@ function analyzeMessageSecurity(text, customRules = []) {
   const rules = [...DEFAULT_RULES, ...customRules];
   const reasons = [];
   let score = 0;
+
+  /*
+  |--------------------------------------------------------------------------
+  | QSM_BLOQUE9_2_RULE_DEDUPLICATION
+  |--------------------------------------------------------------------------
+  | Una misma categoría de riesgo solo puede sumar una vez por mensaje.
+  |--------------------------------------------------------------------------
+  */
+
+  const matchedRuleCodes =
+    new Set();
   let highestLevel = "LOW";
 
   rules.forEach((rule) => {
@@ -163,6 +281,25 @@ function analyzeMessageSecurity(text, customRules = []) {
     if (!matched) {
       return;
     }
+
+    
+    const ruleCode =
+      String(
+        rule.code ||
+        "UNKNOWN"
+      );
+
+    if (
+      matchedRuleCodes.has(
+        ruleCode
+      )
+    ) {
+      return;
+    }
+
+    matchedRuleCodes.add(
+      ruleCode
+    );
 
     score += Number(rule.weight || 0);
 

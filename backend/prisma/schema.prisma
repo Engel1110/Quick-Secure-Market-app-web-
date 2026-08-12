@@ -493,13 +493,44 @@ model Dispute {
 }
 
 model FraudAlert {
-  id        Int      @id @default(autoincrement())
+  // QSM_BLOQUE9_5_1_HUMAN_MANAGEMENT
+  id        Int    @id @default(autoincrement())
   productId Int
   type      String
   level     String
   message   String
+
+  // QSM_BLOQUE9_5_FRAUD_HUMAN_MANAGEMENT
+
+  status String @default("NEW")
+
+  assignedToId   Int?
+  assignedToName String @default("")
+
+  reviewedById   Int?
+  reviewedByName String @default("")
+
+  reviewNotes String @default("")
+
+  resolution     String?
+  resolutionNote String  @default("")
+
+  lastAction String @default("DETECTED")
+
+  reviewHistory Json @default("[]")
+
+  reviewedAt  DateTime?
+  resolvedAt  DateTime?
+  dismissedAt DateTime?
+
   createdAt DateTime @default(now())
-  product   Product  @relation(fields: [productId], references: [id])
+  updatedAt DateTime @default(now()) @updatedAt
+
+  product Product @relation(fields: [productId], references: [id])
+
+  @@index([status, level, createdAt])
+  @@index([assignedToId, status])
+  @@index([productId, createdAt])
 }
 
 model FraudExplanation {

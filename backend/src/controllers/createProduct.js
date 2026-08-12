@@ -1,3 +1,15 @@
+/*
+|--------------------------------------------------------------------------
+| QSM_BLOQUE9_6_1_REUSED_IMAGE_NOTIFY_IMPORT
+|--------------------------------------------------------------------------
+*/
+
+const {
+  notifySecurityTeam:
+    notifyFraudSecurityTeam
+} =
+  require("../services/fraudSecurityNotification.service");
+
 const photoHash = imageUrl ? generatePhotoHash(imageUrl) : null;
 
 if (photoHash) {

@@ -70,6 +70,46 @@ function ProductDetails() {
 
   const risk = useMemo(() => getRiskLevel(product), [product]);
 
+  const specialPriceReason =
+    String(
+      product?.specialPriceReason || ""
+    )
+      .trim()
+      .toUpperCase();
+
+  const specialPriceExplanation =
+    String(
+      product?.specialPriceExplanation || ""
+    ).trim();
+
+  const hasSpecialPrice =
+    Boolean(
+      specialPriceExplanation
+    ) ||
+    (
+      specialPriceReason &&
+      specialPriceReason !== "NONE"
+    );
+
+  const productStatus =
+    String(
+      product?.status || ""
+    ).toUpperCase();
+
+  const productRiskLevel =
+    String(
+      product?.riskLevel || ""
+    ).toUpperCase();
+
+  const isSecurityReview =
+    productStatus === "UNDER_REVIEW" ||
+    productRiskLevel === "HIGH" ||
+    productRiskLevel === "CRITICAL";
+
+  const canBuyProduct =
+    productStatus === "ACTIVE" &&
+    !isSecurityReview;
+
   useEffect(() => {
     loadProduct();
     loadSettings();
@@ -227,6 +267,16 @@ function ProductDetails() {
   };
 
   const buyProduct = () => {
+
+    if (!canBuyProduct) {
+
+      setError(
+        "Esta publicación está en revisión de seguridad QSM. La compra estará disponible cuando finalice la revisión."
+      );
+
+      return;
+    }
+
     navigate(`/checkout/${id}`);
   };
 
@@ -347,7 +397,7 @@ function ProductDetails() {
               <p style={label(accent)}>DETALLE DEL PRODUCTO</p>
               <h1 style={title(isLight)}>{product.title || "Producto QSM"}</h1>
               <p style={muted(isLight)}>
-                Revisa la información, vendedor, riesgo y opciones de compra segura.
+                Revisa la información del vendedor, el nivel de riesgo y las opciones de compra segura.
               </p>
             </div>
 
@@ -429,7 +479,7 @@ function ProductDetails() {
                   disabled={actionLoading === "favorite"}
                   style={favoriteButton(favorite)}
                 >
-                  {favorite ? "❤️" : "🤍"}
+                  {favorite ? "\u2764\uFE0F" : "\u2661"}
                 </button>
               </div>
 
@@ -471,16 +521,113 @@ function ProductDetails() {
                 </div>
               </div>
 
-              <div style={riskBox(risk)}>
-                <strong>{risk.icon} {risk.label}</strong>
-                <p>{risk.text}</p>
+              {hasSpecialPrice && (
+                <div style={specialPriceBox(isLight)}>
+                  <div style={specialPriceHeader}>
+                    <span style={specialPriceIcon}>💡</span>
+
+                    <div>
+                      <span style={specialPriceEyebrow}>
+                        PRECIO ESPECIAL DECLARADO
+                      </span>
+
+                      <strong style={specialPriceTitle}>
+                        El vendedor explicó el precio reducido
+                      </strong>
+                    </div>
+                  </div>
+
+                  <p style={specialPriceText(isLight)}>
+                    {specialPriceExplanation ||
+                      getSpecialPriceReasonLabel(
+                        specialPriceReason
+                      )}
+                  </p>
+
+                  <div style={specialPriceNotice(isLight)}>
+                    QSM tendrá en cuenta esta explicación junto
+                    con la condición, fotografías y evidencias
+                    del producto. La justificación no elimina
+                    automáticamente el nivel de riesgo.
+                  </div>
+
+                  <div style={specialPriceProtection}>
+                    🛡️ Pago Protegido QSM obligatorio
+                  </div>
+                </div>
+              )}
+
+              <div style={fraudShieldBox(risk, isSecurityReview, isLight)}>
+
+                <div style={fraudShieldHeader}>
+
+                  <span style={fraudShieldIcon(isSecurityReview)}>
+                    {isSecurityReview ? "🔒" : "🛡️"}
+                  </span>
+
+                  <div>
+
+                    <span style={fraudShieldBrand}>
+                      QSM FRAUDSHIELD
+                    </span>
+
+                    <strong style={fraudShieldTitle}>
+                      {isSecurityReview
+                        ? productRiskLevel === "CRITICAL"
+                          ? "Revisión prioritaria de seguridad"
+                          : "En revisión de seguridad"
+                        : productRiskLevel === "MEDIUM"
+                        ? "Disponible con advertencia"
+                        : "Publicación verificada"}
+                    </strong>
+
+                  </div>
+
+                </div>
+
+                <p style={fraudShieldText(isLight)}>
+                  {isSecurityReview
+                    ? productRiskLevel === "CRITICAL"
+                      ? "FraudShield detectó señales críticas. La publicación fue retenida para una revisión prioritaria antes de permitir cualquier compra."
+                      : "QSM está verificando esta publicación. La compra permanecerá temporalmente bloqueada hasta completar la revisión."
+                    : productRiskLevel === "MEDIUM"
+                    ? "QSM detectó señales moderadas. Puedes continuar, pero recomendamos revisar cuidadosamente la descripción y las evidencias."
+                    : "No se detectaron señales relevantes que impidan continuar con la operación."}
+                </p>
+
+                <div style={fraudShieldChecks}>
+                  <span>✓ Operación dentro de QSM</span>
+                  <span>✓ Pago Protegido QSM</span>
+
+                  <span>
+                    {isSecurityReview
+                      ? "🔒 Compra temporalmente bloqueada"
+                      : "✓ Compra disponible"}
+                  </span>
+                </div>
+
               </div>
 
               <div className="actions-row" style={actionsRow}>
+
                 {!isOwner && (
-                  <button onClick={buyProduct} style={primaryButton(accent)}>
-                    Comprar ahora
+
+                  <button
+                    onClick={buyProduct}
+                    disabled={!canBuyProduct}
+                    style={
+                      canBuyProduct
+                        ? primaryButton(accent)
+                        : blockedBuyButton
+                    }
+                  >
+                    {canBuyProduct
+                      ? "🛡️ Comprar ahora"
+                      : productRiskLevel === "CRITICAL"
+                      ? "🔒 Revisión prioritaria"
+                      : "🔒 En revisión de seguridad"}
                   </button>
+
                 )}
 
                 {!isOwner && (
@@ -505,7 +652,7 @@ function ProductDetails() {
               </div>
 
               <div style={escrowBox(isLight, accent)}>
-                <strong>🛡 Pago Protegido QSM</strong>
+                <strong>🛡️ Pago Protegido QSM</strong>
                 <p>
                   QSM protege la operación y permite dar seguimiento al producto dentro de la plataforma.
                 </p>
@@ -549,7 +696,7 @@ function ProductDetails() {
             {activeTab === "security" && (
               <div className="benefits-grid" style={benefitsGrid}>
                 <Benefit icon="🧾" title="Producto trazable" text="El producto queda asociado a esta publicación." isLight={isLight} />
-                <Benefit icon="🛡" title="Pago protegido" text="La compra puede manejarse dentro de QSM." isLight={isLight} />
+                <Benefit icon="🛡️" title="Pago protegido" text="La compra puede manejarse dentro de QSM." isLight={isLight} />
                 <Benefit icon="⚖️" title="Reclamos" text="Puedes abrir un reclamo si hay algún problema." isLight={isLight} />
                 <Benefit icon="🤖" title="QSM AI" text="El asistente puede orientar sobre señales de riesgo." isLight={isLight} />
               </div>
@@ -580,9 +727,7 @@ function ProductDetails() {
 
       {imageModalOpen && activeImage && (
         <div style={modalOverlay} onClick={() => setImageModalOpen(false)}>
-          <button style={modalClose} onClick={() => setImageModalOpen(false)}>
-            ×
-          </button>
+          <button style={modalClose} onClick={() => setImageModalOpen(false)}>×</button>
 
           <img
             src={activeImage}
@@ -662,6 +807,7 @@ function formatProductStatus(status) {
     SOLD: "Vendido",
     RESERVED: "Reservado",
     PENDING: "Pendiente",
+    UNDER_REVIEW: "En revisión de seguridad",
     DISABLED: "Desactivado",
     BLOCKED: "Bloqueado"
   };
@@ -726,6 +872,33 @@ function getProductImage(product) {
   if (product.imageUrl) return getImageUrl(product.imageUrl);
 
   return "";
+}
+
+function getSpecialPriceReasonLabel(reason) {
+  const map = {
+    DAMAGED:
+      "El vendedor declaró que el producto presenta daños.",
+    USED_DETAILS:
+      "El vendedor declaró detalles de uso o desgaste.",
+    FOR_PARTS:
+      "El producto fue publicado para piezas o reparación.",
+    URGENT_SALE:
+      "El vendedor indicó que se trata de una venta urgente.",
+    LIQUIDATION:
+      "El vendedor indicó que se trata de una liquidación.",
+    PROMOTION:
+      "El vendedor declaró un precio promocional.",
+    OTHER:
+      "El vendedor declaró una razón especial para el precio."
+  };
+
+  return (
+    map[
+      String(reason || "")
+        .toUpperCase()
+    ] ||
+    "El vendedor declaró una condición especial para justificar el precio."
+  );
 }
 
 function getRiskLevel(product) {
@@ -969,6 +1142,159 @@ const summaryPanel = (isLight, settings) => ({
   alignSelf: "start"
 });
 
+const specialPriceBox = (isLight) => ({
+  margin: "18px 0",
+  padding: "18px",
+  borderRadius: "20px",
+  background: isLight
+    ? "rgba(255,251,235,.96)"
+    : "linear-gradient(135deg, rgba(120,53,15,.22), rgba(69,26,3,.14))",
+  border: "1px solid rgba(245,158,11,.35)",
+  boxShadow: "0 14px 40px rgba(245,158,11,.06)"
+});
+
+const specialPriceHeader = {
+  display: "flex",
+  alignItems: "center",
+  gap: "13px"
+};
+
+const specialPriceIcon = {
+  width: "46px",
+  height: "46px",
+  borderRadius: "15px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: "22px",
+  background: "rgba(245,158,11,.15)",
+  flexShrink: 0
+};
+
+const specialPriceEyebrow = {
+  display: "block",
+  fontSize: "10px",
+  letterSpacing: "1.4px",
+  fontWeight: "950",
+  color: "#f59e0b",
+  marginBottom: "3px"
+};
+
+const specialPriceTitle = {
+  display: "block",
+  fontSize: "16px",
+  fontWeight: "950"
+};
+
+const specialPriceText = (isLight) => ({
+  margin: "14px 0 10px",
+  lineHeight: 1.6,
+  color: isLight ? "#475569" : "#e2e8f0"
+});
+
+const specialPriceNotice = (isLight) => ({
+  padding: "12px 13px",
+  borderRadius: "14px",
+  background: isLight
+    ? "rgba(255,255,255,.7)"
+    : "rgba(2,6,23,.30)",
+  color: isLight ? "#64748b" : "#cbd5e1",
+  fontSize: "12px",
+  lineHeight: 1.55
+});
+
+const specialPriceProtection = {
+  marginTop: "12px",
+  fontSize: "13px",
+  fontWeight: "900",
+  color: "#fbbf24"
+};
+
+const fraudShieldBox = (risk, blocked, isLight) => ({
+  margin: "18px 0",
+  padding: "18px",
+  borderRadius: "20px",
+  background: blocked
+    ? isLight
+      ? "rgba(254,242,242,.96)"
+      : "linear-gradient(135deg, rgba(127,29,29,.30), rgba(69,10,10,.18))"
+    : String(risk?.label || "").toLowerCase().includes("medio")
+    ? isLight
+      ? "rgba(255,251,235,.96)"
+      : "linear-gradient(135deg, rgba(120,53,15,.26), rgba(69,26,3,.16))"
+    : isLight
+    ? "rgba(240,253,244,.96)"
+    : "linear-gradient(135deg, rgba(20,83,45,.24), rgba(5,46,22,.16))",
+  border: blocked
+    ? "1px solid rgba(239,68,68,.38)"
+    : String(risk?.label || "").toLowerCase().includes("medio")
+    ? "1px solid rgba(245,158,11,.38)"
+    : "1px solid rgba(34,197,94,.34)",
+  boxShadow: blocked
+    ? "0 14px 40px rgba(239,68,68,.08)"
+    : "0 14px 40px rgba(15,23,42,.08)"
+});
+
+const fraudShieldHeader = {
+  display: "flex",
+  alignItems: "center",
+  gap: "13px"
+};
+
+const fraudShieldIcon = (blocked) => ({
+  width: "46px",
+  height: "46px",
+  borderRadius: "15px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: "22px",
+  flexShrink: 0,
+  background: blocked
+    ? "rgba(239,68,68,.16)"
+    : "rgba(34,197,94,.14)"
+});
+
+const fraudShieldBrand = {
+  display: "block",
+  fontSize: "11px",
+  fontWeight: "950",
+  letterSpacing: "1.5px",
+  opacity: 0.72,
+  marginBottom: "3px"
+};
+
+const fraudShieldTitle = {
+  display: "block",
+  fontSize: "17px",
+  fontWeight: "950"
+};
+
+const fraudShieldText = (isLight) => ({
+  margin: "14px 0",
+  lineHeight: 1.6,
+  fontSize: "14px",
+  color: isLight ? "#475569" : "#cbd5e1"
+});
+
+const fraudShieldChecks = {
+  display: "grid",
+  gap: "7px",
+  fontSize: "13px",
+  fontWeight: "800"
+};
+
+const blockedBuyButton = {
+  width: "100%",
+  border: "1px solid rgba(239,68,68,.30)",
+  borderRadius: "16px",
+  padding: "14px 18px",
+  background: "rgba(239,68,68,.12)",
+  color: "#fca5a5",
+  fontWeight: "950",
+  cursor: "not-allowed",
+  opacity: 0.88
+};
 const priceRow = {
   display: "flex",
   justifyContent: "space-between",
@@ -1272,3 +1598,5 @@ const modalClose = {
 };
 
 export default ProductDetails;
+
+

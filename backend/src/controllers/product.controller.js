@@ -1609,8 +1609,12 @@ const createProduct = async (
 
     const status =
       conflicts.length > 0 ||
-      risk.riskLevel ===
+      [
+        "HIGH",
         "CRITICAL"
+      ].includes(
+        risk.riskLevel
+      )
         ? "UNDER_REVIEW"
         : "ACTIVE";
 

@@ -566,6 +566,17 @@ export default function useMessages({ adminMode = false } = {}) {
     setNotice
   ] = useState("");
 
+  /*
+  |--------------------------------------------------------------------------
+  | QSM_BLOQUE9_2_SECURITY_ALERT_STATE
+  |--------------------------------------------------------------------------
+  */
+
+  const [
+    securityAlert,
+    setSecurityAlert
+  ] = useState(null);
+
   const [
     socketConnected,
     setSocketConnected
@@ -2104,6 +2115,52 @@ export default function useMessages({ adminMode = false } = {}) {
               serviceOptions
             );
 
+        /*
+        |--------------------------------------------------------------------------
+        | QSM_BLOQUE9_2_SECURITY_RESPONSE
+        |--------------------------------------------------------------------------
+        */
+
+        const messageBlocked =
+          Boolean(
+            created?.isFlagged
+          ) ||
+          String(
+            created?.status || ""
+          ).toUpperCase() ===
+            "BLOCKED";
+
+        if (messageBlocked) {
+
+          setSecurityAlert({
+            riskLevel:
+              String(
+                created?.riskLevel ||
+                "HIGH"
+              ).toUpperCase(),
+
+            score:
+              Number(
+                created?.securityScore ||
+                0
+              ),
+
+            reason:
+              created?.aiReason ||
+              "LUNA detectó contenido potencialmente riesgoso.",
+
+            reasons:
+              Array.isArray(
+                created?.securityReasons
+              )
+                ? created.securityReasons
+                : []
+          });
+
+        } else {
+          setSecurityAlert(null);
+        }
+
         setMessages(
           (current) =>
             dedupeMessages([
@@ -2124,7 +2181,9 @@ export default function useMessages({ adminMode = false } = {}) {
         stopTyping();
 
         setNotice(
-          "Mensaje enviado."
+          messageBlocked
+            ? "LUNA Security bloqueó este mensaje para proteger la conversación."
+            : "Mensaje enviado."
         );
       } catch (
         requestError
@@ -2627,6 +2686,7 @@ export default function useMessages({ adminMode = false } = {}) {
         clearFile();
         setError("");
         setNotice("");
+        setSecurityAlert(null);
       },
       [
         clearFile,
@@ -2682,6 +2742,9 @@ export default function useMessages({ adminMode = false } = {}) {
 
     error,
     notice,
+
+    securityAlert,
+    setSecurityAlert,
 
     loadConversations,
     createConversationWithUser,

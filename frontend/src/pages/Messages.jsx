@@ -315,6 +315,110 @@ export default function Messages({
             </div>
           )}
 
+          {/* QSM_BLOQUE9_2_LUNA_SECURITY_BANNER */}
+          {chat.securityAlert && (
+            <div
+              className="qsm-chat-alert is-error"
+              style={{
+                border:
+                  "1px solid rgba(239, 68, 68, 0.55)",
+                background:
+                  "rgba(127, 29, 29, 0.22)",
+                padding: "16px",
+                borderRadius: "14px"
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: "12px"
+                }}
+              >
+                <span
+                  aria-hidden="true"
+                  style={{
+                    fontSize: "24px",
+                    lineHeight: 1
+                  }}
+                >
+                  🛡️
+                </span>
+
+                <div
+                  style={{
+                    flex: 1
+                  }}
+                >
+                  <strong
+                    style={{
+                      display: "block",
+                      marginBottom: "6px"
+                    }}
+                  >
+                    LUNA Security bloqueó un mensaje riesgoso
+                  </strong>
+
+                  <div>
+                    {chat.securityAlert.reason}
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: "8px",
+                      fontSize: "12px",
+                      opacity: 0.85
+                    }}
+                  >
+                    Riesgo:{" "}
+                    {({
+                      LOW: "Bajo",
+                      MEDIUM: "Medio",
+                      HIGH: "Alto",
+                      CRITICAL: "Crítico"
+                    })[
+                      chat.securityAlert.riskLevel
+                    ] ||
+                      chat.securityAlert.riskLevel}
+                    {chat.securityAlert.score > 0
+                      ? ` · Puntuación: ${chat.securityAlert.score}/100`
+                      : ""}
+                  </div>
+
+                  <div
+                    style={{
+                      marginTop: "7px",
+                      fontSize: "12px"
+                    }}
+                  >
+                    Mantén la conversación, los acuerdos y
+                    cualquier pago dentro de QSM.
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  aria-label="Cerrar alerta"
+                  onClick={() =>
+                    chat.setSecurityAlert?.(
+                      null
+                    )
+                  }
+                  style={{
+                    border: 0,
+                    background:
+                      "transparent",
+                    color: "inherit",
+                    cursor: "pointer",
+                    fontSize: "18px"
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          )}
+
           <section
             className={`qsm-messages-layout ${
               detailsOpen &&

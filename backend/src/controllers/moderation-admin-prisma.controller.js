@@ -34,7 +34,8 @@ const VALID_ACTIONS = [
   "BAN_USER",
   "RESTORE_USER",
   "HIDE_CONTENT",
-  "RESTORE_CONTENT"
+  "RESTORE_CONTENT",
+  "REQUEST_CORRECTION"
 ];
 
 function normalize(value) {
@@ -698,6 +699,19 @@ async function applyModerationAction(req, res) {
       req.body?.reason || ""
     ).trim();
 
+    if (
+      action === "REQUEST_CORRECTION" &&
+      reason.length < 5
+    ) {
+
+      return res.status(400).json({
+        success: false,
+        message:
+          "Debes indicar qué debe corregir el vendedor."
+      });
+
+    }
+
     const moderatorId =
       req.prismaUser?.id ||
       req.user?.id ||
@@ -739,11 +753,58 @@ async function applyModerationAction(req, res) {
     };
 
     if (action === "DISMISS_REPORT") {
+
       moderation.status = "DISMISSED";
+
+      if (
+        moderation.correctionRequested === true
+      ) {
+        moderation.correctionRequested = false;
+        moderation.correctionCancelled = true;
+        moderation.correctionCancelledAt =
+          new Date().toISOString();
+      }
     } else if (action === "RESOLVE_REPORT") {
+
       moderation.status = "RESOLVED";
+
+      /*
+      |--------------------------------------------------------------------------
+      | QSM_BLOQUE6_FINAL_CORRECTION_REVIEW
+      |--------------------------------------------------------------------------
+      */
+
+      if (
+        moderation.correctionRequested === true ||
+        moderation.correctionSubmitted === true
+      ) {
+        moderation.correctionRequested = false;
+        moderation.correctionApproved = true;
+        moderation.correctionApprovedAt =
+          new Date().toISOString();
+
+        moderation.correctionResolvedById =
+          moderatorId;
+
+        moderation.correctionResolvedByName =
+          personName(
+            req.prismaUser ||
+            req.user
+          );
+      }
+    } else if (action === "REQUEST_CORRECTION") {
+
+      moderation.status = "IN_REVIEW";
+
+      moderation.correctionRequested = true;
+
+      moderation.correctionRequestedAt =
+        new Date().toISOString();
+
     } else {
+
       moderation.status = "ACTION_TAKEN";
+
     }
 
     if (action === "WARN_USER") {
@@ -766,7 +827,15 @@ async function applyModerationAction(req, res) {
       }
 
       if (action === "RESTORE_CONTENT") {
+
         productData.status = "ACTIVE";
+
+      }
+
+      if (action === "REQUEST_CORRECTION") {
+
+        productData.status = "UNDER_REVIEW";
+
       }
 
       if (action === "DISMISS_REPORT") {

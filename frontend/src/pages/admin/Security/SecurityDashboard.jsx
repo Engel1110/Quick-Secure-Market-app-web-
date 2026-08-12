@@ -1,3 +1,5 @@
+/* QSM_BLOQUE9_8_POLISH_CSS */
+import "./SecurityFraudPolish.css";
 import { API_BASE_URL as QSM_RUNTIME_API_URL } from "../../../config/runtime";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -164,6 +166,454 @@ export default function SecurityDashboard() {
   const [result, setResult] = useState("ALL");
   const [selectedUser, setSelectedUser] = useState(null);
   const [selectedLogin, setSelectedLogin] = useState(null);
+
+  /*
+  |--------------------------------------------------------------------------
+  | QSM_BLOQUE9_4_FRAUDSHIELD_DASHBOARD
+  |--------------------------------------------------------------------------
+  */
+
+  const [fraudData, setFraudData] =
+    useState({
+      summary: {
+        total: 0,
+        critical: 0,
+        high: 0,
+        medium: 0,
+        low: 0,
+        escalated: 0,
+        messageSecurity: 0
+      },
+      alerts: []
+    });
+
+  const [fraudLoading, setFraudLoading] =
+    useState(false);
+
+  const [fraudError, setFraudError] =
+    useState("");
+
+  const [fraudSearch, setFraudSearch] =
+    useState("");
+
+  const [fraudRisk, setFraudRisk] =
+    useState("ALL");
+
+  const [fraudType, setFraudType] =
+    useState("ALL");
+
+  const [selectedFraud, setSelectedFraud] =
+    useState(null);
+
+  /*
+  |--------------------------------------------------------------------------
+  | QSM_BLOQUE9_5_FRAUD_HUMAN_UI
+  |--------------------------------------------------------------------------
+  */
+
+  const [fraudActionLoading, setFraudActionLoading] =
+    useState(false);
+
+  const [fraudHumanNote, setFraudHumanNote] =
+    useState("");
+
+  const [fraudResolution, setFraudResolution] =
+    useState("TRUE_POSITIVE");
+
+  const [fraudHumanMessage, setFraudHumanMessage] =
+    useState("");
+
+  const [fraudHumanError, setFraudHumanError] =
+    useState("");
+
+
+  /*
+|--------------------------------------------------------------------------
+| QSM_BLOQUE9_8_ACTION_LABELS
+|--------------------------------------------------------------------------
+*/
+
+  const fraudActionLabel = (action) => {
+
+    const map = {
+
+      DETECTED:
+        "Detectada por LUNA Security",
+
+      TAKE_OWNERSHIP:
+        "Caso tomado",
+
+      START_REVIEW:
+        "Revisión iniciada",
+
+      ADD_NOTE:
+        "Nota interna agregada",
+
+      ESCALATE:
+        "Escalada a Seguridad",
+
+      RESOLVE:
+        "Alerta resuelta",
+
+      DISMISS:
+        "Descartada como falso positivo",
+
+      REOPEN:
+        "Caso reabierto"
+    };
+
+
+    return (
+      map[
+        String(
+          action || ""
+        ).toUpperCase()
+      ] ||
+      action ||
+      "Actualización"
+    );
+  };
+
+
+  const fraudRiskLabel = (risk) => {
+
+    const map = {
+      LOW:
+        "Bajo",
+
+      MEDIUM:
+        "Medio",
+
+      HIGH:
+        "Alto",
+
+      CRITICAL:
+        "Crítico"
+    };
+
+
+    return (
+      map[
+        String(
+          risk || ""
+        ).toUpperCase()
+      ] ||
+      risk ||
+      "Sin clasificar"
+    );
+  };
+
+
+  const fraudStatusLabel = (status) => {
+
+    const map = {
+      NEW: "Nueva",
+      IN_REVIEW: "En revisión",
+      ESCALATED: "Escalada",
+      RESOLVED: "Resuelta",
+      DISMISSED: "Descartada"
+    };
+
+    return (
+      map[
+        String(
+          status || "NEW"
+        ).toUpperCase()
+      ] ||
+      status ||
+      "Nueva"
+    );
+  };
+
+
+  const fraudResolutionLabel = (value) => {
+
+    const map = {
+      TRUE_POSITIVE:
+        "Fraude o riesgo confirmado",
+
+      FALSE_POSITIVE:
+        "Falso positivo",
+
+      MITIGATED:
+        "Riesgo mitigado",
+
+      USER_WARNED:
+        "Usuario advertido",
+
+      NO_ACTION_REQUIRED:
+        "Sin acción adicional"
+    };
+
+    return (
+      map[value] ||
+      value ||
+      "—"
+    );
+  };
+
+
+  const manageFraudAlert = async (
+    action
+  ) => {
+
+    if (!selectedFraud?.id) {
+      return;
+    }
+
+    setFraudActionLoading(true);
+    setFraudHumanError("");
+    setFraudHumanMessage("");
+
+    try {
+
+      const token =
+        localStorage.getItem("qsm_admin_token") ||
+        sessionStorage.getItem("qsm_admin_token") ||
+        localStorage.getItem("qsm_token") ||
+        sessionStorage.getItem("qsm_token") ||
+        localStorage.getItem("token") ||
+        sessionStorage.getItem("token") ||
+        "";
+
+      const response =
+        await fetch(
+          `${QSM_RUNTIME_API_URL}/fraud/alerts/` +
+            selectedFraud.id +
+            "/manage",
+          {
+            method:
+              "PATCH",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+
+              ...(token
+                ? {
+                    Authorization:
+                      "Bearer " +
+                      token
+                  }
+                : {})
+            },
+
+            body:
+              JSON.stringify({
+                action,
+                note:
+                  fraudHumanNote,
+                resolution:
+                  fraudResolution
+              })
+          }
+        );
+
+
+      const payload =
+        await response.json();
+
+
+      if (
+        !response.ok ||
+        !payload?.success
+      ) {
+        throw new Error(
+          payload?.message ||
+          "No fue posible actualizar la alerta."
+        );
+      }
+
+
+      setFraudHumanMessage(
+        payload.message ||
+        "Alerta actualizada."
+      );
+
+      setFraudHumanNote("");
+
+      await loadFraudShield();
+
+
+      const updated =
+        {
+          ...selectedFraud,
+          ...payload.alert,
+
+          humanManagementStatus:
+            payload.alert?.status ||
+            selectedFraud
+              .humanManagementStatus
+        };
+
+
+      setSelectedFraud(
+        updated
+      );
+
+    } catch (error) {
+
+      setFraudHumanError(
+        error?.message ||
+        "No fue posible gestionar la alerta."
+      );
+
+    } finally {
+
+      setFraudActionLoading(false);
+    }
+  };
+
+
+  const loadFraudShield = async () => {
+
+    setFraudLoading(true);
+    setFraudError("");
+
+    try {
+
+      const token =
+        localStorage.getItem("qsm_admin_token") ||
+        sessionStorage.getItem("qsm_admin_token") ||
+        localStorage.getItem("qsm_token") ||
+        sessionStorage.getItem("qsm_token") ||
+        localStorage.getItem("token") ||
+        sessionStorage.getItem("token") ||
+        "";
+
+      const response =
+        await fetch(
+          `${QSM_RUNTIME_API_URL}/fraud/history`,
+          {
+            headers:
+              token
+                ? {
+                    Authorization:
+                      "Bearer " + token
+                  }
+                : {}
+          }
+        );
+
+      const payload =
+        await response.json();
+
+      if (
+        !response.ok ||
+        !payload?.success
+      ) {
+        throw new Error(
+          payload?.message ||
+          "No fue posible cargar FraudShield."
+        );
+      }
+
+      setFraudData({
+        summary:
+          payload.summary || {},
+        alerts:
+          Array.isArray(
+            payload.alerts
+          )
+            ? payload.alerts
+            : []
+      });
+
+    } catch (error) {
+
+      setFraudError(
+        error?.message ||
+        "No fue posible cargar las alertas."
+      );
+
+    } finally {
+
+      setFraudLoading(false);
+    }
+  };
+
+
+  useEffect(() => {
+
+    if (
+      tab === "fraudshield"
+    ) {
+      loadFraudShield();
+    }
+
+  }, [tab]);
+
+
+  const filteredFraudAlerts =
+    useMemo(() => {
+
+      const query =
+        fraudSearch
+          .trim()
+          .toLowerCase();
+
+      return fraudData.alerts.filter(
+        (alert) => {
+
+          const searchable =
+            [
+              alert.id,
+              alert.type,
+              alert.level,
+              alert.message,
+              alert.product?.name,
+              alert.product?.qsmCode,
+              alert.seller?.firstName,
+              alert.seller?.lastName,
+              alert.seller?.email,
+              alert.conversationId,
+              alert.senderId
+            ]
+              .filter(Boolean)
+              .join(" ")
+              .toLowerCase();
+
+          const searchMatch =
+            !query ||
+            searchable.includes(
+              query
+            );
+
+          const riskMatch =
+            fraudRisk === "ALL" ||
+            alert.level ===
+              fraudRisk;
+
+          const typeMatch =
+            fraudType === "ALL" ||
+            (
+              fraudType === "ESCALATED"
+                ? alert.escalated
+                : fraudType ===
+                    "MESSAGE"
+                  ? String(
+                      alert.type
+                    ).startsWith(
+                      "MESSAGE_"
+                    )
+                  : alert.type ===
+                    fraudType
+            );
+
+          return (
+            searchMatch &&
+            riskMatch &&
+            typeMatch
+          );
+        }
+      );
+
+    }, [
+      fraudData.alerts,
+      fraudSearch,
+      fraudRisk,
+      fraudType
+    ]);
 
   const getAdminToken = () => {
     return (
@@ -476,7 +926,7 @@ export default function SecurityDashboard() {
         <header className="sec-header">
           <div>
             <p className="sec-eyebrow">QSM SECURITY OPERATIONS CENTER</p>
-            <h1>🛡 Security Center</h1>
+            <h1>🛡 Centro de Seguridad</h1>
             <p>Centro de seguridad, sesiones, dispositivos, infraestructura e inteligencia de amenazas.</p>
           </div>
           <div className="sec-actions">
@@ -511,11 +961,11 @@ export default function SecurityDashboard() {
             <div className="sec-ring" style={{"--score":`${data.overview.score*3.6}deg`}}>
               <div><b>{data.overview.score}</b><span>/100</span></div>
             </div>
-            <div><span>Security Score</span><strong>Nivel {labels[data.overview.threat]}</strong><small>Último escaneo: {data.overview.lastScan}</small></div>
+            <div><span>Puntuación de seguridad</span><strong>Nivel {labels[data.overview.threat]}</strong><small>Último escaneo: {data.overview.lastScan}</small></div>
           </div>
           <div className="sec-health">
             <div><span>Uptime</span><strong>{data.overview.uptime}</strong></div>
-            <div><span>Threat Level</span><strong>{labels[data.overview.threat]}</strong></div>
+            <div><span>Nivel de amenaza</span><strong>{labels[data.overview.threat]}</strong></div>
           </div>
         </section>
 
@@ -523,11 +973,11 @@ export default function SecurityDashboard() {
           {[
             ["Incidentes hoy",data.kpis.incidents,"🚨"],
             ["Ataques bloqueados",data.kpis.blocked,"🧱"],
-            ["Intentos login",data.kpis.attempts,"🔐"],
-            ["Login fallidos",data.kpis.failed,"❌"],
+            ["Intentos de acceso",data.kpis.attempts,"🔐"],
+            ["Accesos fallidos",data.kpis.failed,"❌"],
             ["Usuarios bloqueados",data.kpis.blockedUsers,"⛔"],
             ["Bots detectados",data.kpis.bots,"🤖"],
-            ["Security Score",`${data.kpis.aiScore}%`,"🧠"],
+            ["Puntuación de seguridad",`${data.kpis.aiScore}%`,"🧠"],
             ["Servidores",data.kpis.servers,"🖥"]
           ].map(([t,v,i])=>(
             <div className="sec-card sec-kpi" key={t}>
@@ -538,7 +988,7 @@ export default function SecurityDashboard() {
 
         <nav className="sec-tabs">
           {[
-            ["overview","Resumen"],["logins","Login Security"],["users","Usuarios de riesgo"],
+            ["overview","Resumen"],["fraudshield","FraudShield"],["logins","Seguridad de acceso"],["users","Usuarios de riesgo"],
             ["firewall","Firewall"],["devices","Dispositivos"],["sessions","Sesiones"],
             ["threats","Threat Center"],["servers","Servidores"],["owasp","OWASP"],
             ["backups","Backups"],["settings","Configuración"]
@@ -550,7 +1000,7 @@ export default function SecurityDashboard() {
         {tab==="overview" && (
           <div className="sec-main">
             <section className="sec-card">
-              <div className="sec-section-title"><div><p className="sec-eyebrow">LIVE</p><h2>Security Feed</h2></div><span className="sec-live"><i/>Tiempo real</span></div>
+              <div className="sec-section-title"><div><p className="sec-eyebrow">LIVE</p><h2>Actividad de seguridad</h2></div><span className="sec-live"><i/>Tiempo real</span></div>
               <div className="sec-feed">
                 {data.events.slice(0,18).map(e=>(
                   <div className={`sec-event sev-${e.severity}`} key={e.id}>
@@ -582,9 +1032,312 @@ export default function SecurityDashboard() {
           </div>
         )}
 
+
+        {tab==="fraudshield" && (
+          <section className="sec-fraudshield">
+
+            <div className="sec-section-title">
+              <div>
+                <p className="sec-eyebrow">
+                  LUNA SECURITY · FRAUDSHIELD
+                </p>
+
+                <h2>
+                  Historial de alertas antifraude
+                </h2>
+
+                <p className="sec-muted">
+                  Alertas reales detectadas por los motores de seguridad de QSM.
+                </p>
+              </div>
+
+              <button
+                className="sec-btn"
+                onClick={loadFraudShield}
+                disabled={fraudLoading}
+              >
+                {fraudLoading
+                  ? "Actualizando..."
+                  : "Actualizar alertas"}
+              </button>
+            </div>
+
+
+            {fraudError && (
+              <div className="sec-fraud-error">
+                <strong>
+                  No se pudo cargar FraudShield.
+                </strong>
+                <span>{fraudError}</span>
+              </div>
+            )}
+
+
+            <div className="sec-fraud-kpis">
+
+              <article className="sec-card">
+                <span>Total de alertas</span>
+                <strong>
+                  {fraudData.summary.total || 0}
+                </strong>
+              </article>
+
+              <article className="sec-card">
+                <span>Críticas</span>
+                <strong>
+                  {fraudData.summary.critical || 0}
+                </strong>
+              </article>
+
+              <article className="sec-card">
+                <span>Riesgo alto</span>
+                <strong>
+                  {fraudData.summary.high || 0}
+                </strong>
+              </article>
+
+              <article className="sec-card">
+                <span>Escaladas</span>
+                <strong>
+                  {fraudData.summary.escalated || 0}
+                </strong>
+              </article>
+
+              <article className="sec-card">
+                <span>Mensajería</span>
+                <strong>
+                  {fraudData.summary.messageSecurity || 0}
+                </strong>
+              </article>
+
+            </div>
+
+
+            <section className="sec-card">
+
+              <div className="sec-toolbar">
+
+                <input
+                  value={fraudSearch}
+                  onChange={
+                    (event) =>
+                      setFraudSearch(
+                        event.target.value
+                      )
+                  }
+                  placeholder="Buscar alerta, producto, vendedor o conversación..."
+                />
+
+                <select
+                  value={fraudRisk}
+                  onChange={
+                    (event) =>
+                      setFraudRisk(
+                        event.target.value
+                      )
+                  }
+                >
+                  <option value="ALL">
+                    Todos los riesgos
+                  </option>
+
+                  <option value="LOW">
+                    Bajo
+                  </option>
+
+                  <option value="MEDIUM">
+                    Medio
+                  </option>
+
+                  <option value="HIGH">
+                    Alto
+                  </option>
+
+                  <option value="CRITICAL">
+                    Crítico
+                  </option>
+                </select>
+
+                <select
+                  value={fraudType}
+                  onChange={
+                    (event) =>
+                      setFraudType(
+                        event.target.value
+                      )
+                  }
+                >
+                  <option value="ALL">
+                    Todos los tipos
+                  </option>
+
+                  <option value="MESSAGE">
+                    Seguridad de mensajes
+                  </option>
+
+                  <option value="ESCALATED">
+                    Escaladas
+                  </option>
+                </select>
+
+              </div>
+
+
+              {fraudLoading ? (
+
+                <div className="sec-fraud-empty">
+                  Cargando alertas reales de FraudShield...
+                </div>
+
+              ) : filteredFraudAlerts.length === 0 ? (
+
+                <div className="sec-fraud-empty">
+                  No hay alertas que coincidan con los filtros seleccionados.
+                </div>
+
+              ) : (
+
+                <Table>
+
+                  <thead>
+                    <tr>
+                      <th>ID</th>
+                      <th>Fecha</th>
+                      <th>Producto</th>
+                      <th>Vendedor</th>
+                      <th>Tipo</th>
+                      <th>Riesgo</th>
+                      <th>Puntuación</th>
+                      <th>Estado</th>
+                      <th />
+                    </tr>
+                  </thead>
+
+                  <tbody>
+
+                    {filteredFraudAlerts.map(
+                      (alert) => (
+
+                        <tr key={alert.id}>
+
+                          <td>
+                            <strong>
+                              FA-{alert.id}
+                            </strong>
+                          </td>
+
+                          <td>
+                            {new Date(
+                              alert.createdAt
+                            ).toLocaleString(
+                              "es-DO"
+                            )}
+                          </td>
+
+                          <td>
+                            <strong>
+                              {alert.product?.name ||
+                                "Producto no disponible"}
+                            </strong>
+
+                            <small>
+                              {alert.product?.qsmCode ||
+                                "Sin código QSM"}
+                            </small>
+                          </td>
+
+                          <td>
+                            <strong>
+                              {[
+                                alert.seller?.firstName,
+                                alert.seller?.lastName
+                              ]
+                                .filter(Boolean)
+                                .join(" ") ||
+                                "No disponible"}
+                            </strong>
+
+                            <small>
+                              {alert.seller?.email ||
+                                ""}
+                            </small>
+                          </td>
+
+                          <td>
+                            {alert.escalated
+                              ? "Escalamiento de seguridad"
+                              : String(
+                                  alert.type ||
+                                  ""
+                                ).startsWith(
+                                  "MESSAGE_"
+                                )
+                                ? "Seguridad de mensajes"
+                                : alert.type}
+                          </td>
+
+                          <td>
+                            <Badge
+                              value={
+                                alert.level
+                              }
+                            />
+                          </td>
+
+                          <td>
+                            {alert.score !== null &&
+                            alert.score !== undefined
+                              ? alert.score + "/100"
+                              : "—"}
+                          </td>
+
+                          <td>
+                            <span
+                              className={
+                                alert.humanManagementStatus === "RESOLVED"
+                                  ? "sec-fraud-detected"
+                                  : alert.humanManagementStatus === "DISMISSED"
+                                    ? "sec-fraud-detected"
+                                    : "sec-fraud-escalated"
+                              }
+                            >
+                              {fraudStatusLabel(
+                                alert.humanManagementStatus
+                              )}
+                            </span>
+                          </td>
+
+                          <td>
+                            <button
+                              className="sec-btn"
+                              onClick={
+                                () =>
+                                  setSelectedFraud(
+                                    alert
+                                  )
+                              }
+                            >
+                              Ver detalle
+                            </button>
+                          </td>
+
+                        </tr>
+                      )
+                    )}
+
+                  </tbody>
+
+                </Table>
+              )}
+
+            </section>
+
+          </section>
+        )}
+
         {tab==="logins" && (
           <section className="sec-card">
-            <div className="sec-section-title"><div><p className="sec-eyebrow">AUTH</p><h2>Login Security</h2></div></div>
+            <div className="sec-section-title"><div><p className="sec-eyebrow">AUTH</p><h2>Seguridad de acceso</h2></div></div>
             <div className="sec-toolbar">
               <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Buscar usuario, email o IP..." />
               <select value={risk} onChange={e=>setRisk(e.target.value)}>
@@ -595,7 +1348,7 @@ export default function SecurityDashboard() {
               </select>
             </div>
             <Table>
-              <thead><tr><th>Usuario</th><th>País</th><th>IP</th><th>Dispositivo</th><th>Browser</th><th>VPN</th><th>TOR</th><th>Riesgo</th><th>Resultado</th><th>Hora</th><th/></tr></thead>
+              <thead><tr><th>Usuario</th><th>País</th><th>IP</th><th>Dispositivo</th><th>Navegador</th><th>VPN</th><th>TOR</th><th>Riesgo</th><th>Resultado</th><th>Hora</th><th/></tr></thead>
               <tbody>{filteredLogins.map(x=>(
                 <tr key={x.id}>
                   <td><strong>{x.user}</strong><small>{x.email}</small></td><td>{x.country}</td><td>{x.ip}</td><td>{x.device}</td><td>{x.browser}</td><td>{x.vpn?"Sí":"No"}</td><td>{x.tor?"Sí":"No"}</td>
@@ -635,13 +1388,13 @@ export default function SecurityDashboard() {
 
         {tab==="devices" && (
           <section className="sec-card">
-            <div className="sec-section-title"><div><p className="sec-eyebrow">ENDPOINTS</p><h2>Device Manager</h2></div></div>
+            <div className="sec-section-title"><div><p className="sec-eyebrow">ENDPOINTS</p><h2>Gestión de dispositivos</h2></div></div>
             <div className="sec-grid">
               {data.devices.map(d=>(
                 <article className="sec-device" key={d.id}>
                   <div className="sec-device-icon">{d.os==="Windows"?"🪟":d.os==="Android"?"🤖":d.os==="iPhone"?"📱":d.os==="Mac"?"💻":"🐧"}</div>
                   <h3>{d.os}</h3><p>{d.user}</p>
-                  <dl><div><dt>Browser</dt><dd>{d.browser}</dd></div><div><dt>IP</dt><dd>{d.ip}</dd></div><div><dt>Ubicación</dt><dd>{d.location}</dd></div><div><dt>Actividad</dt><dd>{d.activity}</dd></div></dl>
+                  <dl><div><dt>Navegador</dt><dd>{d.browser}</dd></div><div><dt>IP</dt><dd>{d.ip}</dd></div><div><dt>Ubicación</dt><dd>{d.location}</dd></div><div><dt>Actividad</dt><dd>{d.activity}</dd></div></dl>
                   <div className="sec-actions">
                     <button className="sec-btn" onClick={()=>updateDevice(d.id,{trusted:true,blocked:false})}>Confiar</button>
                     <button className="sec-btn danger" onClick={()=>updateDevice(d.id,{trusted:false,blocked:true})}>Bloquear</button>
@@ -667,7 +1420,7 @@ export default function SecurityDashboard() {
 
         {tab==="threats" && (
           <section className="sec-card">
-            <div className="sec-section-title"><div><p className="sec-eyebrow">AI ANALYSIS</p><h2>AI Threat Center</h2></div></div>
+            <div className="sec-section-title"><div><p className="sec-eyebrow">AI ANALYSIS</p><h2>Centro de amenazas con IA</h2></div></div>
             <div className="sec-grid">
               {data.threats.map(([name,value])=>(
                 <article className="sec-threat" key={name}><div>{value}%</div><h3>{name}</h3><div className="sec-progress large"><i style={{width:`${value}%`}}/></div><p>Detección y actividad calculada por inteligencia artificial.</p></article>
@@ -678,7 +1431,7 @@ export default function SecurityDashboard() {
 
         {tab==="servers" && (
           <section className="sec-card">
-            <div className="sec-section-title"><div><p className="sec-eyebrow">INFRASTRUCTURE</p><h2>Server Status</h2></div></div>
+            <div className="sec-section-title"><div><p className="sec-eyebrow">INFRASTRUCTURE</p><h2>Estado de servidores</h2></div></div>
             <div className="sec-grid">
               {data.servers.map(([name,type,use])=>(
                 <article className="sec-server" key={name}><div className="sec-server-top"><div><i/><strong>{name}</strong></div><Badge value="SUCCESS">Online</Badge></div><p>{type}</p><div className="sec-server-meter"><div><span>Uso</span><strong>{use}%</strong></div><div className="sec-progress"><i style={{width:`${use}%`}}/></div></div></article>
@@ -689,10 +1442,10 @@ export default function SecurityDashboard() {
 
         {tab==="owasp" && (
           <section className="sec-card">
-            <div className="sec-section-title"><div><p className="sec-eyebrow">APPLICATION SECURITY</p><h2>OWASP Security</h2></div></div>
+            <div className="sec-section-title"><div><p className="sec-eyebrow">APPLICATION SECURITY</p><h2>Seguridad OWASP</h2></div></div>
             <div className="sec-grid">
               {data.owasp.map((name,i)=>(
-                <article className="sec-owasp" key={name}><div>✓</div><h3>{name}</h3><Badge value="SUCCESS">Protegido</Badge><p>Último scan: {i+2} min</p></article>
+                <article className="sec-owasp" key={name}><div>✓</div><h3>{name}</h3><Badge value="SUCCESS">Protegido</Badge><p>Último análisis: {i+2} min</p></article>
               ))}
             </div>
           </section>
@@ -711,6 +1464,474 @@ export default function SecurityDashboard() {
 
         {tab==="settings" && <Settings />}
       </div>
+
+
+      {selectedFraud && (
+        <div
+          className="sec-modal-bg"
+          onClick={
+            (event) =>
+              event.target ===
+                event.currentTarget &&
+              setSelectedFraud(null)
+          }
+        >
+
+          <div className="sec-modal">
+
+            <header>
+
+              <div>
+                <p className="sec-eyebrow">
+                  FRAUDSHIELD · ALERTA
+                </p>
+
+                <h2>
+                  Alerta FA-{selectedFraud.id}
+                </h2>
+
+                <p>
+                  {new Date(
+                    selectedFraud.createdAt
+                  ).toLocaleString(
+                    "es-DO"
+                  )}
+                </p>
+              </div>
+
+              <button
+                className="sec-btn"
+                onClick={
+                  () =>
+                    setSelectedFraud(null)
+                }
+              >
+                ✕
+              </button>
+
+            </header>
+
+
+            <div className="sec-modal-body">
+
+              <div className="sec-summary">
+
+                <div>
+                  <span>Nivel de riesgo</span>
+                  <strong>
+                    {labels[
+                      selectedFraud.level
+                    ] ||
+                      selectedFraud.level}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>Puntuación</span>
+                  <strong>
+                    {selectedFraud.score !==
+                      null &&
+                    selectedFraud.score !==
+                      undefined
+                      ? selectedFraud.score +
+                        "/100"
+                      : "No disponible"}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>Producto</span>
+                  <strong>
+                    {selectedFraud.product
+                      ?.name ||
+                      "No disponible"}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>Código QSM</span>
+                  <strong>
+                    {selectedFraud.product
+                      ?.qsmCode ||
+                      "No disponible"}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>Conversación</span>
+                  <strong>
+                    {selectedFraud
+                      .conversationId ||
+                      "No disponible"}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>Usuario emisor</span>
+                  <strong>
+                    {selectedFraud.senderId ||
+                      "No disponible"}
+                  </strong>
+                </div>
+
+              </div>
+
+
+              <div className="sec-fraud-detail">
+
+                <h3>
+                  Motivo detectado
+                </h3>
+
+                <p>
+                  {selectedFraud.message}
+                </p>
+
+              </div>
+
+
+              <div className="sec-fraud-detail">
+
+                <h3>
+                  Vendedor relacionado
+                </h3>
+
+                <p>
+                  {[
+                    selectedFraud.seller
+                      ?.firstName,
+                    selectedFraud.seller
+                      ?.lastName
+                  ]
+                    .filter(Boolean)
+                    .join(" ") ||
+                    "No disponible"}
+                </p>
+
+                <small>
+                  {selectedFraud.seller
+                    ?.email || ""}
+                </small>
+
+              </div>
+
+
+              {selectedFraud.escalated && (
+
+                <div className="sec-fraud-critical">
+
+                  <strong>
+                    LUNA Security solicita revisión
+                  </strong>
+
+                  <p>
+                    LUNA Security detectó reincidencia o un nivel de riesgo suficiente para escalar esta conversación a FraudShield.
+                  </p>
+
+                </div>
+              )}
+
+
+              <section className="sec-fraud-human">
+
+                <div className="sec-fraud-human__header">
+
+                  <div>
+                    <p className="sec-eyebrow">
+                      REVISIÓN HUMANA DE SEGURIDAD
+                    </p>
+
+                    <h3>
+                      Gestión de alerta FraudShield
+                    </h3>
+                  </div>
+
+                  <strong>
+                    {fraudStatusLabel(
+                      selectedFraud.humanManagementStatus
+                    )}
+                  </strong>
+
+                </div>
+
+
+                <div className="sec-summary">
+
+                  <div>
+                    <span>Responsable</span>
+
+                    <strong>
+                      {selectedFraud.assignedToName ||
+                        "Sin asignar"}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>Última revisión</span>
+
+                    <strong>
+                      {selectedFraud.reviewedByName ||
+                        "Sin revisar"}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>Resolución</span>
+
+                    <strong>
+                      {fraudResolutionLabel(
+                        selectedFraud.resolution
+                      )}
+                    </strong>
+                  </div>
+
+                </div>
+
+
+                {fraudHumanMessage && (
+                  <div className="sec-fraud-human-success">
+                    {fraudHumanMessage}
+                  </div>
+                )}
+
+
+                {fraudHumanError && (
+                  <div className="sec-fraud-human-error">
+                    {fraudHumanError}
+                  </div>
+                )}
+
+
+                <label className="sec-fraud-human-field">
+
+                  <span>
+                    Nota interna
+                  </span>
+
+                  <textarea
+                    value={fraudHumanNote}
+                    onChange={
+                      (event) =>
+                        setFraudHumanNote(
+                          event.target.value
+                        )
+                    }
+                    maxLength={2000}
+                    placeholder="Describe la revisión realizada, la evidencia observada o el motivo de la decisión..."
+                  />
+
+                </label>
+
+
+                <label className="sec-fraud-human-field">
+
+                  <span>
+                    Resolución
+                  </span>
+
+                  <select
+                    value={fraudResolution}
+                    onChange={
+                      (event) =>
+                        setFraudResolution(
+                          event.target.value
+                        )
+                    }
+                  >
+
+                    <option value="TRUE_POSITIVE">
+                      Fraude o riesgo confirmado
+                    </option>
+
+                    <option value="FALSE_POSITIVE">
+                      Falso positivo
+                    </option>
+
+                    <option value="MITIGATED">
+                      Riesgo mitigado
+                    </option>
+
+                    <option value="USER_WARNED">
+                      Usuario advertido
+                    </option>
+
+                    <option value="NO_ACTION_REQUIRED">
+                      Sin acción adicional
+                    </option>
+
+                  </select>
+
+                </label>
+
+
+                <div className="sec-fraud-human-actions">
+
+                  {selectedFraud.humanManagementStatus ===
+                    "NEW" && (
+
+                    <button
+                      className="sec-btn"
+                      disabled={fraudActionLoading}
+                      onClick={() =>
+                        manageFraudAlert(
+                          "TAKE_OWNERSHIP"
+                        )
+                      }
+                    >
+                      Tomar caso
+                    </button>
+                  )}
+
+
+                  {selectedFraud.humanManagementStatus !==
+                    "RESOLVED" &&
+                    selectedFraud.humanManagementStatus !==
+                    "DISMISSED" && (
+
+                    <>
+                      <button
+                        className="sec-btn"
+                        disabled={fraudActionLoading}
+                        onClick={() =>
+                          manageFraudAlert(
+                            "ADD_NOTE"
+                          )
+                        }
+                      >
+                        Guardar nota
+                      </button>
+
+                      <button
+                        className="sec-btn warning"
+                        disabled={fraudActionLoading}
+                        onClick={() =>
+                          manageFraudAlert(
+                            "ESCALATE"
+                          )
+                        }
+                      >
+                        Escalar caso
+                      </button>
+
+                      <button
+                        className="sec-btn"
+                        disabled={fraudActionLoading}
+                        onClick={() =>
+                          manageFraudAlert(
+                            "RESOLVE"
+                          )
+                        }
+                      >
+                        Resolver alerta
+                      </button>
+
+                      <button
+                        className="sec-btn warning"
+                        disabled={fraudActionLoading}
+                        onClick={() =>
+                          manageFraudAlert(
+                            "DISMISS"
+                          )
+                        }
+                      >
+                        Descartar
+                      </button>
+                    </>
+                  )}
+
+
+                  {[
+                    "RESOLVED",
+                    "DISMISSED"
+                  ].includes(
+                    selectedFraud.humanManagementStatus
+                  ) && (
+
+                    <button
+                      className="sec-btn"
+                      disabled={fraudActionLoading}
+                      onClick={() =>
+                        manageFraudAlert(
+                          "REOPEN"
+                        )
+                      }
+                    >
+                      Reabrir caso
+                    </button>
+                  )}
+
+                </div>
+
+
+                {Array.isArray(
+                  selectedFraud.reviewHistory
+                ) &&
+                  selectedFraud.reviewHistory.length > 0 && (
+
+                  <div className="sec-fraud-history">
+
+                    <h4>
+                      Historial de seguridad
+                    </h4>
+
+                    {[...selectedFraud.reviewHistory]
+                      .reverse()
+                      .map(
+                        (
+                          event,
+                          index
+                        ) => (
+
+                          <article
+                            key={
+                              String(
+                                event.timestamp
+                              ) +
+                              "-" +
+                              index
+                            }
+                          >
+
+                            <strong>
+                              {event.actor ||
+                                "Personal QSM"}
+                            </strong>
+
+                            <span>
+                              {fraudActionLabel(event.action)}
+                            </span>
+
+                            {event.note && (
+                              <p>
+                                {event.note}
+                              </p>
+                            )}
+
+                            <small>
+                              {event.timestamp
+                                ? new Date(
+                                    event.timestamp
+                                  ).toLocaleString(
+                                    "es-DO"
+                                  )
+                                : ""}
+                            </small>
+
+                          </article>
+                        )
+                      )}
+
+                  </div>
+                )}
+
+              </section>
+
+            </div>
+
+          </div>
+
+        </div>
+      )}
 
       {selectedUser && (
         <div className="sec-modal-bg" onClick={e=>e.target===e.currentTarget&&setSelectedUser(null)}>
@@ -763,7 +1984,7 @@ export default function SecurityDashboard() {
           <div className="sec-modal small">
             <header><div><p className="sec-eyebrow">LOGIN EVENT</p><h2>{selectedLogin.user}</h2><p>{selectedLogin.email}</p></div><button className="sec-btn" onClick={()=>setSelectedLogin(null)}>✕</button></header>
             <div className="sec-modal-body"><div className="sec-summary">
-              {[["País",selectedLogin.country],["IP",selectedLogin.ip],["Dispositivo",selectedLogin.device],["Browser",selectedLogin.browser],["VPN",selectedLogin.vpn?"Sí":"No"],["TOR",selectedLogin.tor?"Sí":"No"],["Riesgo",labels[selectedLogin.risk]],["Resultado",labels[selectedLogin.result]],["Hora",selectedLogin.time]].map(([l,v])=><div key={l}><span>{l}</span><strong>{v}</strong></div>)}
+              {[["País",selectedLogin.country],["IP",selectedLogin.ip],["Dispositivo",selectedLogin.device],["Navegador",selectedLogin.browser],["VPN",selectedLogin.vpn?"Sí":"No"],["TOR",selectedLogin.tor?"Sí":"No"],["Riesgo",labels[selectedLogin.risk]],["Resultado",labels[selectedLogin.result]],["Hora",selectedLogin.time]].map(([l,v])=><div key={l}><span>{l}</span><strong>{v}</strong></div>)}
             </div></div>
           </div>
         </div>
@@ -842,5 +2063,270 @@ const styles = `
 .sec-settings{display:grid;grid-template-columns:1fr 1fr;gap:18px}.sec-toggle-list button{display:flex;justify-content:space-between;align-items:center;width:100%;min-height:54px;border:0;border-bottom:1px solid #19213d;color:#e8ebfa;background:transparent;cursor:pointer}.sec-toggle-list i{position:relative;width:48px;height:26px;border-radius:999px;background:#252e50}.sec-toggle-list i b{position:absolute;top:4px;left:4px;width:18px;height:18px;border-radius:50%;background:#8c95b4;transition:.2s}.sec-toggle-list i.on{background:linear-gradient(135deg,#5c63ff,#ce4c99)}.sec-toggle-list i.on b{transform:translateX(22px);background:#fff}
 .sec-modal-bg{position:fixed;z-index:5000;inset:0;display:grid;place-items:center;padding:20px;background:rgba(0,0,0,.8);backdrop-filter:blur(10px)}.sec-modal{width:min(980px,100%);max-height:94vh;overflow:auto;border:1px solid #29345e;border-radius:21px;background:linear-gradient(145deg,#0c1229,#080c1e)}.sec-modal.small{width:min(720px,100%)}.sec-modal header{display:flex;justify-content:space-between;padding:22px;border-bottom:1px solid #20284a}.sec-modal header h2{margin:0}.sec-modal header p:not(.sec-eyebrow){color:#7d87a7}.sec-modal-body{padding:22px}.sec-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.sec-summary>div{border:1px solid #20294a;border-radius:13px;padding:14px;background:#0b1127}.sec-summary span{display:block;color:#707a9b;font-size:9px;text-transform:uppercase}.sec-summary strong{display:block;margin-top:7px}.sec-modal-actions{display:flex;flex-wrap:wrap;gap:9px;margin-top:20px}
 @media(max-width:1500px){.sec-kpis{grid-template-columns:repeat(4,1fr)}}@media(max-width:1200px){.sec-overview{grid-template-columns:1fr 1fr}.sec-health{grid-column:1/-1}.sec-main{grid-template-columns:1fr}.sec-side{display:grid;grid-template-columns:1fr 1fr}.sec-grid{grid-template-columns:repeat(3,1fr)}}@media(max-width:900px){.sec-feature-grid,.sec-grid{grid-template-columns:repeat(2,1fr)}.sec-settings{grid-template-columns:1fr}.sec-toolbar{grid-template-columns:1fr}.sec-summary{grid-template-columns:1fr 1fr}}@media(max-width:700px){.sec-page{padding:18px 12px}.sec-header{flex-direction:column}.sec-overview{grid-template-columns:1fr}.sec-health{grid-column:auto}.sec-kpis{grid-template-columns:1fr 1fr}.sec-side,.sec-feature-grid,.sec-grid{grid-template-columns:1fr}.sec-summary{grid-template-columns:1fr}.sec-backups article{grid-template-columns:auto 1fr}.sec-backups article>.sec-badge,.sec-backups article>.sec-actions{grid-column:2}}@media(max-width:460px){.sec-kpis{grid-template-columns:1fr}.sec-status,.sec-score{flex-direction:column;align-items:flex-start}}
+
+/* QSM_BLOQUE9_4_FRAUDSHIELD_DASHBOARD */
+
+.sec-muted{
+  margin:7px 0 0;
+  color:#7f89aa;
+  font-size:12px;
+}
+
+.sec-fraudshield{
+  display:grid;
+  gap:18px;
+}
+
+.sec-fraud-kpis{
+  display:grid;
+  grid-template-columns:repeat(5,1fr);
+  gap:14px;
+}
+
+.sec-fraud-kpis .sec-card{
+  min-height:115px;
+}
+
+.sec-fraud-kpis span{
+  display:block;
+  color:#8993b4;
+  font-size:11px;
+}
+
+.sec-fraud-kpis strong{
+  display:block;
+  margin-top:13px;
+  font-size:29px;
+}
+
+.sec-fraud-error{
+  display:flex;
+  flex-direction:column;
+  gap:5px;
+  border:1px solid rgba(255,78,114,.38);
+  border-radius:14px;
+  padding:14px 16px;
+  color:#ff9aac;
+  background:rgba(255,78,114,.09);
+}
+
+.sec-fraud-empty{
+  padding:48px 20px;
+  color:#8993b4;
+  text-align:center;
+}
+
+.sec-fraud-escalated,
+.sec-fraud-detected{
+  display:inline-flex;
+  align-items:center;
+  min-height:28px;
+  border-radius:999px;
+  padding:4px 10px;
+  font-size:10px;
+  font-weight:800;
+}
+
+.sec-fraud-escalated{
+  color:#ff9aab;
+  border:1px solid rgba(255,78,114,.3);
+  background:rgba(255,78,114,.1);
+}
+
+.sec-fraud-detected{
+  color:#ffd179;
+  border:1px solid rgba(255,183,77,.3);
+  background:rgba(255,183,77,.09);
+}
+
+.sec-fraud-detail{
+  margin-top:16px;
+  border:1px solid #20294a;
+  border-radius:14px;
+  padding:16px;
+  background:#0b1026;
+}
+
+.sec-fraud-detail h3{
+  margin:0 0 9px;
+  font-size:13px;
+}
+
+.sec-fraud-detail p{
+  margin:0;
+  color:#b3bbd5;
+  line-height:1.7;
+}
+
+.sec-fraud-detail small{
+  display:block;
+  margin-top:6px;
+  color:#7882a4;
+}
+
+.sec-fraud-critical{
+  margin-top:16px;
+  border:1px solid rgba(255,78,114,.4);
+  border-radius:14px;
+  padding:16px;
+  color:#ffacb9;
+  background:rgba(255,78,114,.08);
+}
+
+.sec-fraud-critical p{
+  margin:7px 0 0;
+  line-height:1.6;
+}
+
+@media(max-width:1100px){
+  .sec-fraud-kpis{
+    grid-template-columns:repeat(2,1fr);
+  }
+}
+
+@media(max-width:650px){
+  .sec-fraud-kpis{
+    grid-template-columns:1fr;
+  }
+}
+
+
+
+/* QSM_BLOQUE9_5_FRAUD_HUMAN_UI */
+
+.sec-fraud-human{
+  margin-top:18px;
+  border:1px solid rgba(56,189,248,.22);
+  border-radius:18px;
+  padding:18px;
+  background:rgba(8,15,35,.72);
+}
+
+.sec-fraud-human__header{
+  display:flex;
+  justify-content:space-between;
+  gap:16px;
+  align-items:flex-start;
+  margin-bottom:16px;
+}
+
+.sec-fraud-human__header h3{
+  margin:4px 0 0;
+}
+
+.sec-fraud-human__header > strong{
+  border:1px solid rgba(56,189,248,.28);
+  border-radius:999px;
+  padding:7px 11px;
+  color:#7dd3fc;
+  font-size:11px;
+}
+
+.sec-fraud-human-field{
+  display:grid;
+  gap:7px;
+  margin-top:14px;
+}
+
+.sec-fraud-human-field > span{
+  color:#94a3b8;
+  font-size:11px;
+  font-weight:800;
+}
+
+.sec-fraud-human-field textarea,
+.sec-fraud-human-field select{
+  width:100%;
+  border:1px solid #293352;
+  border-radius:12px;
+  padding:12px 13px;
+  background:#080d20;
+  color:#e5e7eb;
+  outline:none;
+}
+
+.sec-fraud-human-field textarea{
+  min-height:105px;
+  resize:vertical;
+}
+
+.sec-fraud-human-actions{
+  display:flex;
+  flex-wrap:wrap;
+  gap:9px;
+  margin-top:16px;
+}
+
+.sec-fraud-human-success,
+.sec-fraud-human-error{
+  margin:12px 0;
+  border-radius:12px;
+  padding:11px 13px;
+  font-size:12px;
+}
+
+.sec-fraud-human-success{
+  color:#86efac;
+  background:rgba(34,197,94,.09);
+  border:1px solid rgba(34,197,94,.25);
+}
+
+.sec-fraud-human-error{
+  color:#fca5a5;
+  background:rgba(239,68,68,.09);
+  border:1px solid rgba(239,68,68,.25);
+}
+
+.sec-fraud-history{
+  display:grid;
+  gap:9px;
+  margin-top:20px;
+}
+
+.sec-fraud-history h4{
+  margin:0 0 4px;
+}
+
+.sec-fraud-history article{
+  border-left:3px solid rgba(56,189,248,.35);
+  border-radius:9px;
+  padding:10px 12px;
+  background:rgba(15,23,42,.55);
+}
+
+.sec-fraud-history article strong,
+.sec-fraud-history article span{
+  display:block;
+}
+
+.sec-fraud-history article span{
+  margin-top:3px;
+  color:#7dd3fc;
+  font-size:10px;
+}
+
+.sec-fraud-history article p{
+  margin:7px 0;
+  color:#cbd5e1;
+  line-height:1.5;
+}
+
+.sec-fraud-history article small{
+  color:#64748b;
+}
+
+@media(max-width:650px){
+  .sec-fraud-human__header{
+    flex-direction:column;
+  }
+
+  .sec-fraud-human-actions{
+    display:grid;
+    grid-template-columns:1fr;
+  }
+}
+
 `;
 
+
+/* QSM_BLOQUE9_8_FINAL_POLISH */

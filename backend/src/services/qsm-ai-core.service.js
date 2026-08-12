@@ -126,6 +126,51 @@ const analyzeProduct = ({ product = {}, legacyAnalysis = {}, duplicateMatches = 
   const images = Array.isArray(product.images) ? product.images.filter(Boolean) : [];
   const price = Number(product.price || 0);
   const category = String(product.category || "");
+
+  const specialPriceReason =
+    String(
+      product.specialPriceReason ||
+      "NONE"
+    )
+      .trim()
+      .toUpperCase();
+
+  const specialPriceExplanation =
+    String(
+      product.specialPriceExplanation ||
+      ""
+    ).trim();
+
+  const declaredCondition =
+    String(
+      product.condition ||
+      ""
+    )
+      .trim()
+      .toUpperCase();
+
+  const declaredQuality =
+    String(
+      product.quality ||
+      ""
+    )
+      .trim()
+      .toUpperCase();
+
+  const hasPriceJustification =
+    specialPriceReason !== "NONE" &&
+    specialPriceExplanation.length >= 20;
+
+  const hasDeclaredDamage =
+    [
+      "USED_DETAILS",
+      "FOR_PARTS"
+    ].includes(
+      declaredCondition
+    ) ||
+    declaredQuality ===
+      "DAMAGED";
+
   const confidence = clampNumber(
     legacyAnalysis.confidenceScore ?? product.confidenceScore,
     0,
@@ -171,10 +216,66 @@ const analyzeProduct = ({ product = {}, legacyAnalysis = {}, duplicateMatches = 
     price <= 10000 &&
     ["Gaming", "Tecnologia", "Tecnología", "Celulares", "Computadoras", "Laptops"].includes(category)
   ) {
-    riskScore += 20;
-    reasons.push("El precio es bajo para una categoria sensible.");
-    recommendations.push("Solicitar explicacion del precio y evidencia de funcionamiento.");
-    signals.push({ code: "LOW_PRICE_SENSITIVE_CATEGORY", severity: LEVELS.HIGH });
+    if (
+      hasPriceJustification
+    ) {
+
+      const contextualPenalty =
+        hasDeclaredDamage
+          ? 5
+          : 9;
+
+      riskScore +=
+        contextualPenalty;
+
+      reasons.push(
+        hasDeclaredDamage
+          ? "El precio es bajo, pero el vendedor declaró una condición o daño que puede justificarlo."
+          : "El vendedor proporcionó una explicación para el precio especial."
+      );
+
+      evidenceRequired.push(
+        hasDeclaredDamage
+          ? "Fotos claras del daño o condición especial declarada"
+          : "Evidencia que respalde el motivo del precio especial"
+      );
+
+      recommendations.push(
+        "Verificar que la explicación del precio coincida con las fotografías, descripción y evidencias."
+      );
+
+      signals.push({
+        code:
+          "LOW_PRICE_JUSTIFIED",
+        severity:
+          LEVELS.MEDIUM
+      });
+
+    }
+    else {
+
+      riskScore += 20;
+
+      reasons.push(
+        "El precio es bajo para una categoría sensible y no posee una justificación suficiente."
+      );
+
+      recommendations.push(
+        "Solicitar al vendedor una explicación del precio y evidencias del estado real del producto."
+      );
+
+      evidenceRequired.push(
+        "Explicación verificable del precio especial"
+      );
+
+      signals.push({
+        code:
+          "LOW_PRICE_UNJUSTIFIED",
+        severity:
+          LEVELS.HIGH
+      });
+
+    }
   }
 
   const matches = Array.isArray(duplicateMatches) ? duplicateMatches : [];
@@ -202,7 +303,9 @@ const analyzeProduct = ({ product = {}, legacyAnalysis = {}, duplicateMatches = 
       ...(Array.isArray(legacyAnalysis.evidenceRequired) ? legacyAnalysis.evidenceRequired : [])
     ],
     signals,
-    humanReviewRequired: matches.length > 0 || normalizedRisk >= 70,
+    humanReviewRequired:
+      matches.length > 0 ||
+      normalizedRisk >= 65,
     source: "QSM_PRODUCT_CORE_V1",
     metadata: {
       publicationScore: legacyAnalysis.publicationScore ?? product.publicationScore ?? 0,
