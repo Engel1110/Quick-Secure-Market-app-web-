@@ -600,7 +600,7 @@ const INTENT_CATALOG =
       examples: [
         "comparame esos productos",
         "cual tiene mejores caracteristicas",
-        "que diferencia hay",
+        "comparame esos dos productos",
         "comparar las opciones",
         "cual tiene mas almacenamiento",
         "cual tiene mejor procesador"

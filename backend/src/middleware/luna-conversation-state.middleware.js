@@ -763,6 +763,219 @@ function mergePreferences(
 }
 
 
+/*
+|--------------------------------------------------------------------------
+| QSM_BLOQUE10_2_INTENT_SWITCH
+|--------------------------------------------------------------------------
+|
+| Decide si el mensaje actual realmente continúa
+| un flujo Marketplace anterior.
+|
+| Ejemplos que SÍ continúan:
+| - "30 mil"
+| - "nuevo"
+| - "16 gb"
+| - "para juegos"
+|
+| Ejemplos que NO continúan:
+| - "¿Cuál es la capital de Japón?"
+| - "¿Qué diferencia hay entre Samsung y Apple?"
+| - "¿Qué es una nevera inverter?"
+|--------------------------------------------------------------------------
+*/
+
+function shouldContinueMarketplace({
+  message,
+  semanticIntent,
+  currentState,
+  incomingPreferences,
+  newProductQuery
+}) {
+
+  if (
+    currentState?.topic !==
+    "MARKETPLACE"
+  ) {
+
+    return false;
+
+  }
+
+
+  /*
+  |--------------------------------------------------------------------------
+  | Una nueva búsqueda Marketplace continúa o reemplaza el producto.
+  |--------------------------------------------------------------------------
+  */
+
+  if (
+    newProductQuery ||
+    String(
+      semanticIntent ||
+      ""
+    ).startsWith(
+      "MARKETPLACE"
+    )
+  ) {
+
+    return true;
+
+  }
+
+
+  /*
+  |--------------------------------------------------------------------------
+  | Si el motor semántico detectó otra intención,
+  | abandonamos Marketplace.
+  |--------------------------------------------------------------------------
+  */
+
+  if (
+    semanticIntent &&
+    ![
+      "UNKNOWN",
+      "GENERAL",
+      "GENERAL_KNOWLEDGE",
+      "CONVERSATION"
+    ].includes(
+      semanticIntent
+    )
+  ) {
+
+    return false;
+
+  }
+
+
+  /*
+  |--------------------------------------------------------------------------
+  | Una respuesta que aporta exactamente el dato esperado
+  | sí continúa el flujo.
+  |--------------------------------------------------------------------------
+  */
+
+  const waitingFor =
+    currentState
+      ?.waitingFor ||
+    null;
+
+
+  if (
+    waitingFor === "budget" &&
+    Number.isFinite(
+      Number(
+        incomingPreferences
+          ?.budgetMax
+      )
+    ) &&
+    Number(
+      incomingPreferences
+        ?.budgetMax
+    ) > 0
+  ) {
+
+    return true;
+
+  }
+
+
+  if (
+    waitingFor === "ram" &&
+    Number.isFinite(
+      Number(
+        incomingPreferences
+          ?.ramGb
+      )
+    )
+  ) {
+
+    return true;
+
+  }
+
+
+  if (
+    waitingFor === "storage" &&
+    Number.isFinite(
+      Number(
+        incomingPreferences
+          ?.storageGb
+      )
+    )
+  ) {
+
+    return true;
+
+  }
+
+
+  if (
+    waitingFor === "useCase" &&
+    incomingPreferences
+      ?.useCase
+  ) {
+
+    return true;
+
+  }
+
+
+  if (
+    waitingFor === "condition" &&
+    incomingPreferences
+      ?.condition
+  ) {
+
+    return true;
+
+  }
+
+
+  /*
+  |--------------------------------------------------------------------------
+  | Preguntas completas normalmente representan
+  | una intención nueva, no una respuesta al formulario.
+  |--------------------------------------------------------------------------
+  */
+
+  const normalized =
+    String(
+      message ||
+      ""
+    )
+      .trim()
+      .toLowerCase();
+
+
+  const looksLikeQuestion =
+    normalized.includes("?") ||
+    /^(que|qué|cual|cuál|como|cómo|por que|por qué|quien|quién|donde|dónde|cuando|cuándo)/
+      .test(
+        normalized
+      );
+
+
+  if (
+    looksLikeQuestion
+  ) {
+
+    return false;
+
+  }
+
+
+  /*
+  |--------------------------------------------------------------------------
+  | Por seguridad conversacional:
+  | si no hay evidencia de continuidad, liberamos el contexto.
+  |--------------------------------------------------------------------------
+  */
+
+  return false;
+
+}
+
+
 /* ========================================================================
    WAITING FOR
 ======================================================================== */
@@ -914,8 +1127,24 @@ function lunaConversationState(
             topic:
               null,
 
+            /*
+              QSM_BLOQUE10_2_CONTEXT_RESET
+
+              Un cambio explícito de tema debe abandonar
+              completamente el flujo Marketplace.
+
+              No debemos dejar waitingFor="product",
+              porque eso haría que el siguiente mensaje
+              vuelva a interpretarse como una búsqueda.
+            */
+            product:
+              {},
+
+            preferences:
+              {},
+
             waitingFor:
-              "product",
+              null,
 
             lastUserMessage:
               message,
@@ -1213,14 +1442,65 @@ function lunaConversationState(
       NO cambia el topic anterior.
     */
 
+    const continueMarketplace =
+      shouldContinueMarketplace({
+
+        message:
+          interpretedMessage,
+
+        semanticIntent,
+
+        currentState:
+          current,
+
+        incomingPreferences,
+
+        newProductQuery
+
+      });
+
+
     if (
       current?.topic ===
         "MARKETPLACE" &&
-      !newProductQuery
+      !continueMarketplace
+    ) {
+
+      /*
+      |--------------------------------------------------------------------------
+      | La intención cambió.
+      | Soltar completamente el contexto Marketplace anterior.
+      |--------------------------------------------------------------------------
+      */
+
+      topic =
+        null;
+
+      Object.keys(
+        mergedProduct
+      ).forEach(
+        key =>
+          delete mergedProduct[key]
+      );
+
+      Object.keys(
+        mergedPreferences
+      ).forEach(
+        key =>
+          delete mergedPreferences[key]
+      );
+
+    }
+
+    else if (
+      current?.topic ===
+        "MARKETPLACE" &&
+      continueMarketplace
     ) {
 
       topic =
         "MARKETPLACE";
+
     }
 
     /*
@@ -1414,3 +1694,4 @@ module.exports = {
   mergePreferences,
   determineWaitingFor
 };
+

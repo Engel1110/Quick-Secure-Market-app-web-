@@ -186,7 +186,7 @@ function detectCompareIntent(message) {
       "comparame",
       "compara",
       "comparar",
-      "diferencia",
+      "diferencia entre estas opciones",
       "cual conviene mas",
       "cual me conviene",
       "cual tiene mejor",
