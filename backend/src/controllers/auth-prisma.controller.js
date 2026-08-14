@@ -294,6 +294,9 @@ const register = async (
       lastName,
       email,
       phone,
+      dateOfBirth,
+      recoveryEmail,
+      confirmRecoveryEmail,
       password,
       confirmPassword
     } = req.body || {};
@@ -303,6 +306,8 @@ const register = async (
       !lastName ||
       !email ||
       !phone ||
+      !dateOfBirth ||
+      !recoveryEmail ||
       !password
     ) {
       return res.status(400).json({
@@ -340,6 +345,73 @@ const register = async (
       normalizeRegistrationPhone(
         phone
       );
+
+    /* QSM_REGISTER_IDENTITY_2026 */
+
+    const cleanRecoveryEmail =
+      normalizeEmail(
+        recoveryEmail
+      );
+
+    const cleanConfirmRecoveryEmail =
+      normalizeEmail(
+        confirmRecoveryEmail ||
+        recoveryEmail
+      );
+
+    const parsedDateOfBirth =
+      new Date(
+        String(dateOfBirth) +
+        "T00:00:00.000Z"
+      );
+
+    if (
+      Number.isNaN(
+        parsedDateOfBirth.getTime()
+      ) ||
+      parsedDateOfBirth >
+        new Date()
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "La fecha de nacimiento no es válida."
+      });
+    }
+
+    if (
+      !validator.isEmail(
+        cleanRecoveryEmail
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "El correo de recuperación no es válido."
+      });
+    }
+
+    if (
+      cleanRecoveryEmail ===
+      cleanEmail
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "El correo de recuperación debe ser diferente al correo principal."
+      });
+    }
+
+    if (
+      cleanRecoveryEmail !==
+      cleanConfirmRecoveryEmail
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Los correos de recuperación no coinciden."
+      });
+    }
 
     if (
       cleanFirstName.length < 2 ||
@@ -384,6 +456,9 @@ const register = async (
     }
 
     if (
+      String(password).length < 8 ||
+      String(password).length > 12 ||
+      /\s/.test(String(password)) ||
       !validator.isStrongPassword(
         String(password),
         {
@@ -443,6 +518,12 @@ const register = async (
 
           password:
             hashedPassword,
+
+          dateOfBirth:
+            parsedDateOfBirth,
+
+          pendingRecoveryEmail:
+            cleanRecoveryEmail,
 
           accountType:
             "CUSTOMER",

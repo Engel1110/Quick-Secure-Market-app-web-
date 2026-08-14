@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
@@ -9,21 +9,143 @@ function Register() {
   const [theme, setTheme] = useState(() => localStorage.getItem("qsm_theme") || "dark");
   const isDark = theme === "dark";
 
+  /* QSM_REGISTRO_FINAL_2026 */
+
+  const EMAIL_DOMAINS = [
+    "@gmail.com",
+    "@hotmail.com",
+    "@outlook.com",
+    "@yahoo.com",
+    "@icloud.com",
+    "custom"
+  ];
+
   const [form, setForm] = useState({
     firstName: "",
     lastName: "",
-    email: "",
+
+    emailLocal: "",
+    emailDomain: "@gmail.com",
+    customEmailDomain: "",
+
     phone: "",
+    dateOfBirth: "",
+
+    recoveryEmailLocal: "",
+    recoveryEmailDomain: "@gmail.com",
+    customRecoveryEmailDomain: "",
+
+    confirmRecoveryEmailLocal: "",
+    confirmRecoveryEmailDomain: "@gmail.com",
+    customConfirmRecoveryEmailDomain: "",
+
     password: "",
     confirmPassword: "",
     acceptTerms: false
   });
+
+  const buildEmailAddress = (
+    local,
+    domain,
+    customDomain
+  ) => {
+    const cleanLocal =
+      String(local || "")
+        .trim()
+        .replace(/\s+/g, "");
+
+    let cleanDomain =
+      domain === "custom"
+        ? String(customDomain || "").trim()
+        : String(domain || "").trim();
+
+    if (
+      cleanDomain &&
+      !cleanDomain.startsWith("@")
+    ) {
+      cleanDomain =
+        "@" + cleanDomain;
+    }
+
+    return (
+      cleanLocal +
+      cleanDomain
+    ).toLowerCase();
+  };
+
+  const primaryEmail =
+    buildEmailAddress(
+      form.emailLocal,
+      form.emailDomain,
+      form.customEmailDomain
+    );
+
+  const recoveryEmail =
+    buildEmailAddress(
+      form.recoveryEmailLocal,
+      form.recoveryEmailDomain,
+      form.customRecoveryEmailDomain
+    );
+
+  const confirmRecoveryEmail =
+    buildEmailAddress(
+      form.confirmRecoveryEmailLocal,
+      form.confirmRecoveryEmailDomain,
+      form.customConfirmRecoveryEmailDomain
+    );
+
+  const passwordRules = {
+    length:
+      form.password.length >= 8 &&
+      form.password.length <= 12,
+
+    uppercase:
+      /[A-Z]/.test(form.password),
+
+    lowercase:
+      /[a-z]/.test(form.password),
+
+    number:
+      /\d/.test(form.password),
+
+    symbol:
+      /[^A-Za-z0-9\s]/.test(form.password),
+
+    noSpaces:
+      !/\s/.test(form.password)
+  };
+
+  const strongPassword =
+    Object.values(
+      passwordRules
+    ).every(Boolean);
+
+  const passwordsMatch =
+    Boolean(
+      form.confirmPassword
+    ) &&
+    form.password ===
+      form.confirmPassword;
+
+  const recoveryEmailsMatch =
+    Boolean(
+      recoveryEmail
+    ) &&
+    recoveryEmail ===
+      confirmRecoveryEmail;
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const submitDisabled =
+    loading ||
+    !strongPassword ||
+    !passwordsMatch ||
+    !recoveryEmailsMatch ||
+    !form.acceptTerms;
 
   useEffect(() => {
     localStorage.setItem("qsm_theme", theme);
@@ -47,22 +169,54 @@ function Register() {
     if (
       !form.firstName ||
       !form.lastName ||
-      !form.email ||
+      !form.emailLocal ||
       !form.phone ||
+      !form.dateOfBirth ||
+      !form.recoveryEmailLocal ||
+      !form.confirmRecoveryEmailLocal ||
       !form.password ||
       !form.confirmPassword
     ) {
-      setError("Debes completar todos los campos.");
+      setError(
+        "Debes completar todos los campos obligatorios."
+      );
       return;
     }
 
-    if (form.password.length < 6) {
-      setError("La contraseña debe tener mínimo 6 caracteres.");
+    if (
+      primaryEmail ===
+      recoveryEmail
+    ) {
+      setError(
+        "El correo de recuperación debe ser diferente al correo principal."
+      );
       return;
     }
 
-    if (form.password !== form.confirmPassword) {
-      setError("Las contraseñas no coinciden.");
+    if (
+      !recoveryEmailsMatch
+    ) {
+      setError(
+        "Los correos de recuperación no coinciden."
+      );
+      return;
+    }
+
+    if (
+      !strongPassword
+    ) {
+      setError(
+        "La contraseña debe tener entre 8 y 12 caracteres, una mayúscula, una minúscula, un número, un símbolo y no contener espacios."
+      );
+      return;
+    }
+
+    if (
+      !passwordsMatch
+    ) {
+      setError(
+        "Las contraseñas no coinciden."
+      );
       return;
     }
 
@@ -75,11 +229,30 @@ function Register() {
       setLoading(true);
 
       await register({
-        firstName: form.firstName.trim(),
-        lastName: form.lastName.trim(),
-        email: form.email.trim().toLowerCase(),
-        phone: form.phone.trim(),
-        password: form.password
+        firstName:
+          form.firstName.trim(),
+
+        lastName:
+          form.lastName.trim(),
+
+        email:
+          primaryEmail,
+
+        phone:
+          form.phone.trim(),
+
+        dateOfBirth:
+          form.dateOfBirth,
+
+        recoveryEmail,
+
+        confirmRecoveryEmail,
+
+        password:
+          form.password,
+
+        confirmPassword:
+          form.confirmPassword
       });
 
       setMessage("Cuenta creada correctamente. Redirigiendo...");
@@ -96,10 +269,6 @@ function Register() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleGoogleDemo = () => {
-    setError("Google todavía no está conectado. Usa registro con correo por ahora.");
   };
 
   return (
@@ -196,7 +365,7 @@ function Register() {
       <div className="shell" style={shell}>
         <header className="topbar" style={topbar(isDark)}>
           <Link to="/" style={brand}>
-            <div style={brandIcon(isDark)}>🛡</div>
+            <div style={brandIcon(isDark)}>{"\u{1F6E1}\uFE0F"}</div>
             <div>
               <strong style={brandTitle(isDark)}>QSM</strong>
               <span style={brandSub(isDark)}>Quick Secure Market</span>
@@ -217,7 +386,7 @@ function Register() {
               onClick={() => setTheme(isDark ? "light" : "dark")}
               style={themeButton(isDark)}
             >
-              {isDark ? "☀️ Light" : "🌙 Dark"}
+              {isDark ? "☀ Light" : "🌙 Dark"}
             </button>
 
             <Link to="/login" style={loginTop(isDark)}>
@@ -243,10 +412,10 @@ function Register() {
               </p>
 
               <div className="stats-grid" style={statsGrid}>
-                <MiniCard icon="🧾" title="Identidad" text="Validación segura" dark={isDark} />
-                <MiniCard icon="💰" title="Pago Protegido" text="Dinero retenido" dark={isDark} />
-                <MiniCard icon="🤖" title="IA Antifraude" text="Riesgo menor" dark={isDark} />
-                <MiniCard icon="📦" title="Código QSM" text="Trazabilidad" dark={isDark} />
+                <MiniCard icon={"\u{1F6E1}\uFE0F"} title="Identidad" text="Validación segura" dark={isDark} />
+                <MiniCard icon={"\u{1F512}"} title="Pago Protegido" text="Dinero retenido" dark={isDark} />
+                <MiniCard icon={"\u{1F9E0}"} title="IA Antifraude" text="Riesgo menor" dark={isDark} />
+                <MiniCard icon={"\u{1F4E6}"} title="Código QSM" text="Trazabilidad" dark={isDark} />
               </div>
 
               <div style={trustBanner(isDark)}>
@@ -257,23 +426,14 @@ function Register() {
           </section>
 
           <section className="register-card" style={registerCard(isDark)}>
-            <div style={cardIcon(isDark)}>👤</div>
+            <div style={cardIcon(isDark)}>{"\u{1F464}"}</div>
 
             <h2 style={cardTitle(isDark)}>Crear cuenta segura</h2>
             <p style={cardDescription(isDark)}>
               Regístrate con tu correo. Luego podrás completar la verificación de identidad.
             </p>
 
-            <button type="button" onClick={handleGoogleDemo} style={googleButton(isDark)}>
-              <span></span>
-              Continuar con Google
-            </button>
-
-            <div style={divider(isDark)}>
-              <span></span>
-              <p>o registrarse con correo</p>
-              <span></span>
-            </div>
+            
 
             <form onSubmit={handleSubmit} style={formStyle}>
               <div className="two-columns" style={twoColumns}>
@@ -296,23 +456,111 @@ function Register() {
                 />
               </div>
 
-              <Field
-                name="email"
-                type="email"
-                placeholder="Correo electrónico"
-                value={form.email}
-                onChange={handleChange}
+              <EmailComposer
+                label="Correo electrónico"
+                localValue={form.emailLocal}
+                domainValue={form.emailDomain}
+                customDomainValue={form.customEmailDomain}
+                domains={EMAIL_DOMAINS}
+                onLocalChange={(value) =>
+                  setForm((current) => ({
+                    ...current,
+                    emailLocal: value
+                  }))
+                }
+                onDomainChange={(value) =>
+                  setForm((current) => ({
+                    ...current,
+                    emailDomain: value
+                  }))
+                }
+                onCustomDomainChange={(value) =>
+                  setForm((current) => ({
+                    ...current,
+                    customEmailDomain: value
+                  }))
+                }
                 dark={isDark}
-                icon="✉️"
               />
 
-              <Field
-                name="phone"
-                placeholder="Teléfono"
-                value={form.phone}
-                onChange={handleChange}
+              <div
+                className="two-columns"
+                style={twoColumns}
+              >
+                <Field
+                  name="phone"
+                  type="tel"
+                  placeholder="Teléfono"
+                  value={form.phone}
+                  onChange={handleChange}
+                  dark={isDark}
+                  icon="☎"
+                />
+
+                <Field
+                  name="dateOfBirth"
+                  type="date"
+                  value={form.dateOfBirth}
+                  onChange={handleChange}
+                  dark={isDark}
+                  icon="◷"
+                  aria-label="Fecha de nacimiento"
+                  title="Fecha de nacimiento"
+                />
+              </div>
+
+              <EmailComposer
+                label="Correo de recuperación"
+                localValue={form.recoveryEmailLocal}
+                domainValue={form.recoveryEmailDomain}
+                customDomainValue={form.customRecoveryEmailDomain}
+                domains={EMAIL_DOMAINS}
+                onLocalChange={(value) =>
+                  setForm((current) => ({
+                    ...current,
+                    recoveryEmailLocal: value
+                  }))
+                }
+                onDomainChange={(value) =>
+                  setForm((current) => ({
+                    ...current,
+                    recoveryEmailDomain: value
+                  }))
+                }
+                onCustomDomainChange={(value) =>
+                  setForm((current) => ({
+                    ...current,
+                    customRecoveryEmailDomain: value
+                  }))
+                }
                 dark={isDark}
-                icon="📱"
+              />
+
+              <EmailComposer
+                label="Confirmar correo de recuperación"
+                localValue={form.confirmRecoveryEmailLocal}
+                domainValue={form.confirmRecoveryEmailDomain}
+                customDomainValue={form.customConfirmRecoveryEmailDomain}
+                domains={EMAIL_DOMAINS}
+                onLocalChange={(value) =>
+                  setForm((current) => ({
+                    ...current,
+                    confirmRecoveryEmailLocal: value
+                  }))
+                }
+                onDomainChange={(value) =>
+                  setForm((current) => ({
+                    ...current,
+                    confirmRecoveryEmailDomain: value
+                  }))
+                }
+                onCustomDomainChange={(value) =>
+                  setForm((current) => ({
+                    ...current,
+                    customConfirmRecoveryEmailDomain: value
+                  }))
+                }
+                dark={isDark}
               />
 
               <div className="two-columns" style={twoColumns}>
@@ -337,6 +585,62 @@ function Register() {
                 />
               </div>
 
+              <div
+                style={{
+                  padding: "12px 14px",
+                  borderRadius: "14px",
+                  border: isDark
+                    ? "1px solid rgba(148,163,184,.14)"
+                    : "1px solid rgba(15,23,42,.10)",
+                  background: isDark
+                    ? "rgba(15,23,42,.55)"
+                    : "#f8fafc"
+                }}
+              >
+                <strong
+                  style={{
+                    display: "block",
+                    marginBottom: "8px",
+                    fontSize: "12px"
+                  }}
+                >
+                  Seguridad de la contraseña
+                </strong>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      "repeat(2, minmax(0,1fr))",
+                    gap: "6px 14px",
+                    fontSize: "11px"
+                  }}
+                >
+                  {[
+                    [passwordRules.length, "8 a 12 caracteres"],
+                    [passwordRules.uppercase, "Una mayúscula"],
+                    [passwordRules.lowercase, "Una minúscula"],
+                    [passwordRules.number, "Un número"],
+                    [passwordRules.symbol, "Un símbolo"],
+                    [passwordRules.noSpaces, "Sin espacios"]
+                  ].map(([valid, text]) => (
+                    <span
+                      key={text}
+                      style={{
+                        color: valid
+                          ? "#22c55e"
+                          : isDark
+                            ? "#94a3b8"
+                            : "#64748b",
+                        fontWeight: 800
+                      }}
+                    >
+                      {valid ? "✓" : "○"} {text}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
               <label style={checkRow(isDark)}>
                 <input
                   type="checkbox"
@@ -352,7 +656,7 @@ function Register() {
               {error && <div style={errorBox}>{error}</div>}
               {message && <div style={successBox}>{message}</div>}
 
-              <button type="submit" disabled={loading} style={submitButton(loading)}>
+              <button type="submit" disabled={submitDisabled} style={submitButton(submitDisabled)}>
                 {loading ? "Creando cuenta..." : "Crear cuenta segura →"}
               </button>
             </form>
@@ -376,11 +680,127 @@ function Field({ icon, dark, ...props }) {
   );
 }
 
+function EmailComposer({
+  label,
+  localValue,
+  domainValue,
+  customDomainValue,
+  domains,
+  onLocalChange,
+  onDomainChange,
+  onCustomDomainChange,
+  dark
+}) {
+  return (
+    <div>
+      <label
+        style={{
+          display: "block",
+          marginBottom: "6px",
+          color: dark
+            ? "#cbd5e1"
+            : "#475569",
+          fontSize: "11px",
+          fontWeight: 800
+        }}
+      >
+        {label}
+      </label>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns:
+            domainValue === "custom"
+              ? "1fr 165px 150px"
+              : "1fr 165px",
+          gap: "8px"
+        }}
+      >
+        <div style={inputWrap(dark)}>
+          <span>@</span>
+
+          <input
+            type="text"
+            value={localValue}
+            placeholder="usuario"
+            onChange={(event) =>
+              onLocalChange(
+                event.target.value.replace(
+                  /[@\s]/g,
+                  ""
+                )
+              )
+            }
+            style={input(dark)}
+            required
+          />
+        </div>
+
+        <select
+          value={domainValue}
+          onChange={(event) =>
+            onDomainChange(
+              event.target.value
+            )
+          }
+          style={{
+            ...input(dark),
+            minHeight: "52px",
+            padding: "0 12px",
+            borderRadius: "14px",
+            background: dark
+              ? "#0f172a"
+              : "white"
+          }}
+        >
+          {domains.map((domain) => (
+            <option
+              key={domain}
+              value={domain}
+            >
+              {domain === "custom"
+                ? "Otro dominio..."
+                : domain}
+            </option>
+          ))}
+        </select>
+
+        {domainValue === "custom" && (
+          <input
+            type="text"
+            value={customDomainValue}
+            placeholder="@empresa.com"
+            onChange={(event) =>
+              onCustomDomainChange(
+                event.target.value
+              )
+            }
+            style={{
+              ...input(dark),
+              minHeight: "52px",
+              padding: "0 12px",
+              borderRadius: "14px"
+            }}
+            required
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+
 function PasswordField({ dark, visible, toggle, ...props }) {
   return (
     <div style={inputWrap(dark)}>
-      <span>🔒</span>
-      <input {...props} type={visible ? "text" : "password"} style={input(dark)} required />
+      <span>{"🔒"}</span>
+      <input
+        {...props}
+        type={visible ? "text" : "password"}
+        style={input(dark)}
+        required
+      />
       <button type="button" onClick={toggle} style={eyeButton(dark)}>
         {visible ? "🙈" : "👁️"}
       </button>
@@ -751,3 +1171,7 @@ const loginLink = {
 };
 
 export default Register;
+
+
+
+
