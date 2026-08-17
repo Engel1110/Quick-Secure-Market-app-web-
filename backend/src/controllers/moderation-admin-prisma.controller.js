@@ -1,4 +1,8 @@
-const prisma = require("../utils/prisma");
+﻿const prisma = require("../utils/prisma");
+
+const {
+  createNotification
+} = require("../services/notification.service");
 
 const VIEW_ROLES = [
   "SUPER_ADMIN",
@@ -491,8 +495,8 @@ async function getModerationDashboard(req, res) {
         id: "ACT-" + report.id,
         icon:
           report.priority === "CRITICAL"
-            ? "🚨"
-            : "🛡️",
+            ? "\u{1F6A8}"
+            : "\u{1F6E1}",
         title: "Publicación analizada",
         description:
           report.target.name +
@@ -916,6 +920,44 @@ async function applyModerationAction(req, res) {
 
     const updated = await findProduct(productId);
 
+    /*
+    |--------------------------------------------------------------------------
+    | QSM_SELLER_CORRECTION_NOTIFICATION_FINAL
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+      action === "REQUEST_CORRECTION" &&
+      product.sellerId
+    ) {
+      try {
+
+        await createNotification(
+          product.sellerId,
+          "PRODUCT_CORRECTION_REQUIRED",
+          "Moderación QSM - Corrección requerida",
+          [
+            `Tu publicación "${product.title || "Producto QSM"}" necesita correcciones antes de continuar.`,
+            "",
+            "Indicaciones de Moderación:",
+            reason,
+            "",
+            "Corrige la publicación y vuelve a enviarla para revisión."
+          ].join("\n")
+        );
+
+      } catch (notificationError) {
+
+        console.warn(
+          "[QSM MODERATION][NOTIFICATION_FAILED]",
+          notificationError?.message ||
+          notificationError
+        );
+
+      }
+    }
+
+
     return res.json({
       success: true,
       message:
@@ -943,3 +985,4 @@ module.exports = {
   updateModerationReport,
   applyModerationAction
 };
+
